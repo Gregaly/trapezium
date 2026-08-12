@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom"
 
 import { cx } from "./classes.js"
+import { useTableContext } from "./context.js"
 
 /**
  * A dropdown menu.
@@ -50,6 +51,7 @@ export function Menu({
   width?: number | string
 }) {
   const id = useId()
+  const { theme } = useTableContext()
   const [open, setOpen] = useState(false)
   const triggerRef = useRef<HTMLElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -165,25 +167,34 @@ export function Menu({
       {open &&
         typeof document !== "undefined" &&
         createPortal(
+          /*
+            The wrapper is what makes a portalled menu look like part of the
+            table: it repeats the root class and the theme, so every
+            `--tpz-*` token resolves out here exactly as it does in there.
+          */
           <div
-            id={id}
-            ref={menuRef}
-            role="menu"
-            aria-label={label}
-            tabIndex={-1}
-            className={cx("tpz-menu", className)}
+            className="tpz tpz-portal"
+            data-theme={theme}
             style={{
-              position: "fixed",
               top: position?.top ?? 0,
               left: position?.left ?? 0,
-              width,
               // Hidden for the single frame between mounting and measuring, so
               // the menu never appears in the corner and jumps.
               visibility: position ? "visible" : "hidden",
             }}
-            onKeyDown={onMenuKeyDown}
           >
-            {children(close)}
+            <div
+              id={id}
+              ref={menuRef}
+              role="menu"
+              aria-label={label}
+              tabIndex={-1}
+              className={cx("tpz-menu", className)}
+              style={{ width }}
+              onKeyDown={onMenuKeyDown}
+            >
+              {children(close)}
+            </div>
           </div>,
           document.body,
         )}

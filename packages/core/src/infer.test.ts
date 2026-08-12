@@ -108,3 +108,19 @@ describe("distinctValues", () => {
     expect(distinctValues([null, "", undefined, "a"])).toEqual([{ value: "a", count: 1 }])
   })
 })
+
+describe("key hints that look like other words", () => {
+  it("does not read every word ending in id as an identifier", () => {
+    // `/Id$/i` matches paid, valid, void and grid — which turned a column of
+    // booleans into monospaced "true"/"false" text.
+    expect(inferType("paid", [true, false])).toBe("boolean")
+    expect(inferType("valid", [true])).toBe("boolean")
+    expect(inferType("grid_size", [3])).toBe("number")
+  })
+
+  it("still reads a real id key", () => {
+    expect(inferType("id", ["abc"])).toBe("id")
+    expect(inferType("customerId", ["abc"])).toBe("id")
+    expect(inferType("customer_id", ["abc"])).toBe("id")
+  })
+})

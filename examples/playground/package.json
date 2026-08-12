@@ -1,0 +1,18 @@
+{
+  "name": "@trapezium/playground",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/main.tsx --bundle --outfile=dist/main.js --format=esm --jsx=automatic --target=es2022 --loader:.css=css --define:process.env.NODE_ENV=\\\"development\\\" && cp index.html dist/index.html",
+    "dev": "npm run build -- --watch"
+  },
+  "dependencies": {
+    "@trapezium/react": "workspace:*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

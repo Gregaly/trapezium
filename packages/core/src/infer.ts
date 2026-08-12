@@ -19,7 +19,13 @@ const SAMPLE_SIZE = 50
 
 /** Keys that name their own type unambiguously, whatever the values look like. */
 const KEY_HINTS: Array<[RegExp, string]> = [
-  [/^(id|uuid|guid)$|_id$|_uuid$|Id$/i, "id"],
+  /*
+    Case-sensitive on the camelCase half, and that matters: `/Id$/i` also
+    matches `paid`, `valid`, `void` and `grid`, which is how a column of
+    booleans ends up rendered as identifiers.
+  */
+  [/^(id|uuid|guid)$|_id$|_uuid$/i, "id"],
+  [/[a-z]Id$/, "id"],
   [/e-?mail/i, "email"],
   // Before the url hint, deliberately: `avatar_url` is an image that happens to
   // be addressed by a URL, and rendering it as a link would be the less useful

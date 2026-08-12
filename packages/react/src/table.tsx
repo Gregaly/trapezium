@@ -13,6 +13,7 @@ import {
 
 import { cellText, renderCell } from "./cell.js"
 import { createClasses } from "./classes.js"
+import { TableContext } from "./context.js"
 import { HeaderCell } from "./header-cell.js"
 import { Icon } from "./icon.js"
 import { Pagination } from "./pagination.js"
@@ -196,6 +197,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   const showEmpty = rows.length === 0 && !loading && !error
 
   return (
+    <TableContext.Provider value={{ theme, density: state.density }}>
     <div
       className={classes("root", className)}
       data-theme={theme}
@@ -404,6 +406,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
         )}
       </div>
     </div>
+    </TableContext.Provider>
   )
 }
 
