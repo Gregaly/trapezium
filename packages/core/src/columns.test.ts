@@ -155,3 +155,10 @@ describe("pruneState", () => {
     expect(pruned.pinned).toEqual({})
   })
 })
+
+describe("headerless columns", () => {
+  it("gets no icon, because there is nothing for one to label", () => {
+    const [actions] = resolve([{ key: "actions", header: "" }]).visible
+    expect(actions?.icon).toBe(false)
+  })
+})

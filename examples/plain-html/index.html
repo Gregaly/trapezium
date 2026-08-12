@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trapezium — no build step</title>
+
+    <!--
+      Two files and no build step. In a real page these would be
+      https://unpkg.com/@trapezium/vanilla/styles.css and
+      https://unpkg.com/@trapezium/vanilla — here they point at the local
+      package so the example runs against what is in this repository.
+    -->
+    <link rel="stylesheet" href="../../packages/vanilla/styles.css" />
+
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        max-width: 62rem;
+        margin: 0 auto;
+        padding: 3rem 1.5rem;
+        background: light-dark(#f2eee6, #0a0a0a);
+        color: light-dark(#221e1a, #ededed);
+        font-family: ui-rounded, system-ui, sans-serif;
+      }
+      h1 { font-family: Georgia, serif; font-weight: 400; }
+      p { color: light-dark(#6b6157, #a1a1a1); }
+      pre { overflow-x: auto; font-size: 0.75rem; }
+    </style>
+  </head>
+
+  <body>
+    <h1>Trapezium without a build step</h1>
+    <p>One stylesheet, one script, one call. View source — this page is the whole example.</p>
+
+    <div id="people"></div>
+
+    <!--
+      The self-contained build, with the core bundled in: one file, one global,
+      no import map and no bundler. From a CDN this is
+      https://unpkg.com/@trapezium/vanilla/dist/trapezium.global.js
+    -->
+    <script src="../../packages/vanilla/dist/trapezium.global.js"></script>
+
+    <script type="module">
+      const { createTable } = window.Trapezium
+
+      const response = await fetch("./people.json")
+      const people = await response.json()
+
+      const table = createTable("#people", {
+        data: people,
+        getRowId: (person) => person.id,
+        search: { placeholder: "Search people" },
+        selection: "multiple",
+        export: true,
+        pagination: { mode: "pages", pageSize: 12 },
+        format: { currency: "GBP", locale: "en-GB" },
+        columns: [
+          { key: "name", pin: "start" },
+          { key: "email" },
+          { key: "team", filter: "set" },
+          { key: "salary", type: "currency" },
+          { key: "started", type: "date" },
+          { key: "remote", type: "boolean" },
+          {
+            key: "actions",
+            header: "",
+            sortable: false,
+            filter: false,
+            exportable: false,
+            // A renderer returns a DOM node or a string. No framework needed.
+            render: ({ row }) => {
+              const button = document.createElement("button")
+              button.className = "tpz-btn"
+              button.textContent = "Email"
+              button.addEventListener("click", () => { window.location.href = `mailto:${row.email}` })
+              return button
+            },
+          },
+        ],
+        onSelectionChange: (ids) => {
+          document.title = ids.length ? `${ids.length} selected` : "Trapezium — no build step"
+        },
+      })
+
+      // The instance is yours: replace the data, read the state, tear it down.
+      window.table = table
+    </script>
+  </body>
+</html>

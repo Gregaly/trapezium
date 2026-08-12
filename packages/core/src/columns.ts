@@ -146,7 +146,9 @@ function resolveColumn<TRow extends AnyRow, TNode>(
     mono: merged.mono ?? type.mono ?? false,
     filterKind: filter.kind,
     operators: filter.operators,
-    icon: merged.icon ?? type.icon ?? false,
+    // A column with no header has nothing for an icon to label, and an actions
+    // column showing a stray "text" glyph looks like a mistake.
+    icon: merged.icon ?? (merged.header === "" ? false : (type.icon ?? false)),
     resizable: merged.resizable ?? options.resizable ?? true,
     reorderable: merged.reorderable ?? options.reorderable ?? true,
     width: state.widths[key] ?? merged.width,
