@@ -9,8 +9,8 @@
 import { formatWithType, type TypeRegistry } from "./registry.js"
 import type { AnyRow, CellContext, FormatContext, ResolvedColumn } from "./types.js"
 
-export type ExportOptions<TRow> = {
-  columns: readonly ResolvedColumn<TRow, unknown>[]
+export type ExportOptions<TRow, TNode = unknown> = {
+  columns: readonly ResolvedColumn<TRow, TNode>[]
   types: TypeRegistry
   format: FormatContext
   /** `,` for CSV, `\t` for anything pasted into a spreadsheet. */
@@ -51,16 +51,16 @@ function escapeField(value: string, delimiter: string): string {
 }
 
 /** The text one cell exports as: the column's own rule, or its formatted value. */
-export function exportCell<TRow extends AnyRow>(
+export function exportCell<TRow extends AnyRow, TNode = unknown>(
   row: TRow,
   rowId: string,
   rowIndex: number,
-  column: ResolvedColumn<TRow, unknown>,
+  column: ResolvedColumn<TRow, TNode>,
   types: TypeRegistry,
   format: FormatContext,
 ): string {
   const value = column.accessor(row)
-  const context: CellContext<TRow, unknown> = {
+  const context: CellContext<TRow, TNode> = {
     value,
     row,
     rowIndex,
@@ -76,9 +76,9 @@ export function exportCell<TRow extends AnyRow>(
 }
 
 /** Rows as delimited text, ready to be downloaded or put on the clipboard. */
-export function toDelimitedText<TRow extends AnyRow>(
+export function toDelimitedText<TRow extends AnyRow, TNode = unknown>(
   rows: readonly TRow[],
-  options: ExportOptions<TRow> & { getRowId?: (row: TRow, index: number) => string },
+  options: ExportOptions<TRow, TNode> & { getRowId?: (row: TRow, index: number) => string },
 ): string {
   const delimiter = options.delimiter ?? ","
   const columns = options.columns.filter((column) => column.exportable)
@@ -105,9 +105,9 @@ export function toDelimitedText<TRow extends AnyRow>(
   return lines.join("\r\n")
 }
 
-export function toCsv<TRow extends AnyRow>(
+export function toCsv<TRow extends AnyRow, TNode = unknown>(
   rows: readonly TRow[],
-  options: ExportOptions<TRow> & { getRowId?: (row: TRow, index: number) => string },
+  options: ExportOptions<TRow, TNode> & { getRowId?: (row: TRow, index: number) => string },
 ): string {
   const text = toDelimitedText(rows, { ...options, delimiter: options.delimiter ?? "," })
   return options.bom === false ? text : `﻿${text}`

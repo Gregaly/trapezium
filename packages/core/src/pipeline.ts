@@ -22,9 +22,9 @@ import type {
 } from "./types.js"
 import { clamp, isEmpty, textIncludes } from "./util.js"
 
-export type PipelineOptions<TRow> = {
+export type PipelineOptions<TRow, TNode = unknown> = {
   rows: readonly TRow[]
-  columns: readonly ResolvedColumn<TRow, unknown>[]
+  columns: readonly ResolvedColumn<TRow, TNode>[]
   state: TableState
   types: TypeRegistry
   format: FormatContext
@@ -46,7 +46,9 @@ export type PipelineOptions<TRow> = {
  * the counts are worked out, so the same component renders both ways with the
  * same code path.
  */
-export function getRows<TRow extends AnyRow>(options: PipelineOptions<TRow>): TableRows<TRow> {
+export function getRows<TRow extends AnyRow, TNode = unknown>(
+  options: PipelineOptions<TRow, TNode>,
+): TableRows<TRow> {
   const { rows, columns, state, types, format, server } = options
 
   if (server) {
@@ -97,9 +99,9 @@ export function pageCount(total: number, pageSize: number): number {
  * searching "Aug" finds a date and "Yes" finds a checkbox — the words on the
  * screen are the words a user will type.
  */
-export function searchRows<TRow extends AnyRow>(
+export function searchRows<TRow extends AnyRow, TNode = unknown>(
   rows: readonly TRow[],
-  columns: readonly ResolvedColumn<TRow, unknown>[],
+  columns: readonly ResolvedColumn<TRow, TNode>[],
   search: string,
   types: TypeRegistry,
   format: FormatContext,
@@ -137,9 +139,9 @@ export function searchRows<TRow extends AnyRow>(
  * and mutating the caller's data is how a table starts changing the app around
  * it. `toSorted` would be neater and is not available everywhere yet.
  */
-export function sortRows<TRow extends AnyRow>(
+export function sortRows<TRow extends AnyRow, TNode = unknown>(
   rows: readonly TRow[],
-  columns: readonly ResolvedColumn<TRow, unknown>[],
+  columns: readonly ResolvedColumn<TRow, TNode>[],
   state: TableState,
   types: TypeRegistry,
   format: FormatContext,

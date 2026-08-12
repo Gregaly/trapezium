@@ -255,9 +255,9 @@ function toArray(value: FilterValue | undefined): unknown[] {
  * as unsatisfiable: a saved view outliving a renamed column should show more
  * than nothing.
  */
-export function filterRows<TRow>(
+export function filterRows<TRow, TNode = unknown>(
   rows: readonly TRow[],
-  columns: readonly ResolvedColumn<TRow>[],
+  columns: readonly ResolvedColumn<TRow, TNode>[],
   filters: readonly ColumnFilter[],
   match: "all" | "any",
   types: (name: string) => TypeDef,
@@ -269,7 +269,7 @@ export function filterRows<TRow>(
       const column = columns.find((candidate) => candidate.key === filter.key)
       return column ? { filter, column, type: types(column.type) } : undefined
     })
-    .filter((entry): entry is { filter: ColumnFilter; column: ResolvedColumn<TRow>; type: TypeDef } =>
+    .filter((entry): entry is { filter: ColumnFilter; column: ResolvedColumn<TRow, TNode>; type: TypeDef } =>
       entry !== undefined,
     )
 
