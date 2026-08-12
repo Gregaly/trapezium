@@ -6,6 +6,9 @@ export default defineConfig({
     environment: "node",
     // The DOM-dependent tests say so themselves with a docblock, so the default
     // stays fast: the core has no DOM and never should.
-    environmentMatchGlobs: [["packages/react/**", "jsdom"]],
+    environmentMatchGlobs: [
+      ["packages/react/**", "jsdom"],
+      ["packages/vanilla/**", "jsdom"],
+    ],
   },
 })
