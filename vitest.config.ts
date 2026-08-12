@@ -9,6 +9,8 @@ export default defineConfig({
     environmentMatchGlobs: [
       ["packages/react/**", "jsdom"],
       ["packages/vanilla/**", "jsdom"],
+      ["packages/vue/**", "jsdom"],
+      ["packages/svelte/**", "jsdom"],
     ],
   },
 })
