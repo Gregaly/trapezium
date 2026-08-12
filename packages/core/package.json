@@ -1,0 +1,50 @@
+{
+  "name": "@trapezium/core",
+  "version": "0.1.0",
+  "description": "Framework-agnostic engine behind Trapezium tables: column model, type registry, filtering, sorting, pagination, selection and URL state. Zero dependencies.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gregaly/trapezium.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/Gregaly/trapezium#readme",
+  "keywords": [
+    "table",
+    "data-table",
+    "datagrid",
+    "headless",
+    "sorting",
+    "filtering",
+    "pagination"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist",
+    "styles.css",
+    "themes"
+  ],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./styles.css": "./styles.css",
+    "./themes/shadcn.css": "./themes/shadcn.css",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
