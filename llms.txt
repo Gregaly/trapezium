@@ -1,0 +1,130 @@
+# Trapezium
+
+> A data table library for React, Vue, Svelte and plain JavaScript. Zero-config columns with type
+> inference, per-column filters, global search, four pagination modes, selection, custom renderers,
+> SSR, URL state and CSS-variable theming. No runtime dependencies.
+
+Packages: @trapezium/react, @trapezium/vue, @trapezium/svelte, @trapezium/vanilla, @trapezium/core
+Licence: MIT. Repository: https://github.com/Gregaly/trapezium
+
+## Minimal usage
+
+    import { Table } from "@trapezium/react"
+    import "@trapezium/react/styles.css"
+
+    <Table data={rows} />
+
+Columns, headers, types, alignment, formatting, sorting, search and pagination are all inferred from
+the data. Add configuration only to override a default.
+
+## Common usage
+
+    <Table
+      data={rows}
+      getRowId={(row) => row.id}
+      search
+      selection
+      onSelectionChange={(ids, rows) => {}}
+      export
+      pagination={{ mode: "pages", pageSize: 25 }}
+      format={{ locale: "en-AU", timeZone: "Australia/Sydney", currency: "AUD" }}
+      columns={[
+        { key: "reference", header: "Invoice", pin: "start" },
+        { key: "customer.name", header: "Customer" },
+        { key: "amount", type: "currency", filter: "range" },
+        { key: "status", type: "badge", formatOptions: { options: STATUSES } },
+        { key: "due_date", type: "date" },
+        { key: "actions", header: "", sortable: false, render: ({ row }) => <Menu id={row.id} /> },
+      ]}
+    />
+
+## Column definition
+
+key (required, supports dotted paths and synthetic ids) · header · type · accessor(row) ·
+format(ctx)=>string · formatOptions · render(ctx)=>node · renderHeader(ctx)=>node · sortable ·
+compare(a,b) · searchable · filter · align · width · minWidth · maxWidth · pin("start"|"end") ·
+hidden · resizable · reorderable · wrap · mono · icon · exportable · exportValue(ctx) · className ·
+headerClassName · meta
+
+`format` replaces the cell text and keeps sorting/filtering on the raw value.
+`render` replaces the cell markup. CellContext = { value, row, rowIndex, rowId, column, text, format }.
+
+## Types
+
+text longText number currency percent boolean date datetime time relativeTime select badge tags
+email url phone image id code address file json
+
+Snake_case aliases accepted (long_text, multi_select→tags, timestamptz→datetime, money→currency,
+uuid→id, jsonb→json, int8→number).
+
+Custom type:
+
+    defineType({ name: "rating", align: "end", format: (v) => "*".repeat(Number(v)),
+                 normalise: (v) => Number(v), filter: "range" })
+    <Table types={{ rating }} columns={[{ key: "stars", type: "rating" }]} />
+
+`normalise` reduces a value to something orderable; sorting and filtering both use it.
+
+## Filters
+
+Kinds: text, set (checkbox list of values present in the data), range, date, boolean, none.
+Operators: eq ne contains notContains startsWith endsWith gt gte lt lte between in notIn empty notEmpty.
+A date filter written as a day matches the whole day. Empty cells satisfy no comparison. 0 and false
+are not empty.
+
+## Pagination
+
+pagination={{ mode: "pages" | "simple" | "loadMore" | "infinite", pageSize, pageSizeOptions, siblings }}
+pagination={false} shows every row. Changing anything that affects matching rows resets to page 1.
+
+## State
+
+One serialisable object:
+
+    { sort: [{key, direction}], filters: [{key, operator, value}], match: "all"|"any", search,
+      page /* 1-based */, pageSize, selection: string[], order: string[], hidden: string[],
+      widths: Record<string, number>, pinned: Record<string, "start"|"end">, density }
+
+Controlled with `state` + `onStateChange`; uncontrolled with `defaultState`.
+URL: stateToQueryString(state, { prefix?, include? }) and stateFromUrl(searchParams).
+Saved views are JSON.stringify(state).
+
+## Server-side data
+
+    <Table data={page} total={total} server onStateChange={(state) => refetch(state)} />
+
+In server mode nothing is filtered, sorted or paged by the table; `total` drives pagination.
+
+## Server rendering
+
+Renders completely on a server with the correct rows in the markup, no effects and no layout shift.
+Formatting defaults (locale "en", timeZone "UTC") are fixed rather than read from the runtime, so a
+server and a browser produce the same string. With `buildHref`, controls render as links and the
+table works with no client JavaScript.
+
+## Styling
+
+CSS custom properties on `.tpz` (--tpz-surface, --tpz-muted, --tpz-border, --tpz-primary,
+--tpz-row-height, --tpz-font-mono, …). Dark mode follows the page's color-scheme, or `.dark` /
+[data-theme="dark"] on an ancestor, or theme="dark" on the table.
+classNames={{ root, frame, toolbar, search, scroll, table, thead, tbody, headerRow, headerCell, row,
+cell, selectCell, pagination, empty, loading, footer }} adds classes; `unstyled` drops the defaults.
+responsive="cards" stacks rows below 40rem of container width, in pure CSS.
+Bridge to shadcn/ui: import "@trapezium/react/themes/shadcn.css".
+
+## Headless
+
+`useTable(props)` returns { rows, rowIds, total, pageCount, filtered, columns, hiddenColumns,
+allColumns, state, update, patch, types, format, pagination, selection, server }.
+`@trapezium/core` has the whole engine with no renderer.
+
+## Not included, on purpose
+
+Grouping, aggregation, pivoting, tree data, formulas, Excel export. Inline editing and expandable
+rows are planned but not in v1.
+
+## Docs
+
+docs/getting-started.md docs/columns.md docs/types.md docs/filtering.md docs/pagination.md
+docs/selection.md docs/rendering.md docs/styling.md docs/server-data.md docs/ssr.md
+docs/accessibility.md docs/api.md docs/recipes.md docs/migrating.md
