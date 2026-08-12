@@ -21,9 +21,12 @@ const SAMPLE_SIZE = 50
 const KEY_HINTS: Array<[RegExp, string]> = [
   [/^(id|uuid|guid)$|_id$|_uuid$|Id$/i, "id"],
   [/e-?mail/i, "email"],
+  // Before the url hint, deliberately: `avatar_url` is an image that happens to
+  // be addressed by a URL, and rendering it as a link would be the less useful
+  // reading of a column whose name says what it holds.
+  [/avatar|photo|picture|image|thumbnail|logo/i, "image"],
   [/^(url|link|href|website|homepage)$|_url$|Url$/i, "url"],
   [/phone|mobile|^tel$|_tel$|fax/i, "phone"],
-  [/avatar|photo|picture|image|thumbnail|logo/i, "image"],
   [/^(status|state)$|_status$|Status$/i, "badge"],
   [/^(notes?|description|summary|comment|body|content|bio|message)$/i, "longText"],
   [/percent|_pct$|Pct$/i, "percent"],

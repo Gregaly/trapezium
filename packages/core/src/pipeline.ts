@@ -155,10 +155,26 @@ export function sortRows<TRow extends AnyRow>(
 
   return [...rows].sort((a, b) => {
     for (const { sort, column, type } of levels) {
+      const left = column.accessor(a)
+      const right = column.accessor(b)
+
+      /*
+        Empties sort last in *both* directions, so they are handled before the
+        direction is applied. Negating the whole comparison for a descending
+        sort would drag every blank row to the top — the user asked for the
+        newest first, not for the ones with no date at all.
+      */
+      const leftEmpty = isEmpty(left)
+      const rightEmpty = isEmpty(right)
+      if (leftEmpty || rightEmpty) {
+        if (leftEmpty && rightEmpty) continue
+        return leftEmpty ? 1 : -1
+      }
+
       const context = { ...format, ...column.formatOptions }
       const comparison = column.compare
-        ? column.compare(column.accessor(a), column.accessor(b))
-        : compareWithType(type, column.accessor(a), column.accessor(b), context)
+        ? column.compare(left, right)
+        : compareWithType(type, left, right, context)
 
       if (comparison !== 0) return sort.direction === "asc" ? comparison : -comparison
     }
