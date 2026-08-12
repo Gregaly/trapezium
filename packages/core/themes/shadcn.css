@@ -1,0 +1,50 @@
+/*
+  shadcn/ui bridge.
+
+  Import this after `styles.css` and the table adopts the host application's
+  palette — light mode, dark mode, and any theme switch it already has — because
+  every colour becomes a reference to a token shadcn has already defined.
+
+      import "@trapezium/react/styles.css"
+      import "@trapezium/core/themes/shadcn.css"
+
+  Nothing here sets a colour of its own. That is the point: one import, no
+  duplicated palette, and a table that changes when the app's theme does.
+*/
+
+.tpz {
+  --tpz-bg: var(--background);
+  --tpz-fg: var(--foreground);
+
+  --tpz-surface: var(--card);
+  --tpz-surface-fg: var(--card-foreground);
+
+  --tpz-muted: var(--muted);
+  --tpz-muted-fg: var(--muted-foreground);
+
+  --tpz-accent: var(--accent);
+  --tpz-accent-fg: var(--accent-foreground);
+
+  --tpz-primary: var(--primary);
+  --tpz-primary-fg: var(--primary-foreground);
+
+  --tpz-border: var(--border);
+  --tpz-input: var(--input);
+  --tpz-ring: var(--ring);
+
+  --tpz-danger: var(--destructive);
+
+  /*
+    shadcn ships no success or warning token, so these stay as Trapezium's own
+    unless the application defines them. Referencing a variable that does not
+    exist would resolve to nothing and paint the check mark invisible.
+  */
+  --tpz-success: var(--success, light-dark(#3f6b4a, #82b491));
+  --tpz-warning: var(--warning, light-dark(#9a6b1f, #d9a95c));
+
+  --tpz-radius: var(--radius, 0.625rem);
+
+  /* Inherit the app's typefaces rather than the system stack. */
+  --tpz-font-sans: var(--font-sans, ui-rounded, system-ui, sans-serif);
+  --tpz-font-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}

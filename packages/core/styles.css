@@ -1,0 +1,1020 @@
+/*
+  Trapezium — the default look.
+
+  One stylesheet, shipped from the core and shared by every adapter, because
+  each of them renders the same DOM with the same class names. Fixing a border
+  here fixes it in React, Vue, Svelte and vanilla at once.
+
+  Everything is a custom property. Retheming is overriding variables, never
+  overriding rules, and a Tailwind user who wants to take over entirely can pass
+  their own classes per slot or drop the defaults with `unstyled`.
+
+  Three things to know before editing:
+
+  1. Colours are `light-dark()` pairs resolved by the page's `color-scheme`, so
+     the palette stays one list rather than two that drift apart.
+  2. The table uses `border-separate` with borders on the cells, not on the
+     table. That is what lets the header and the leading columns be sticky
+     without their borders scrolling away.
+  3. A sticky cell must be opaque or the content scrolling under it shows
+     through. Hover and selection tints are therefore painted *above* it with a
+     pseudo-element rather than replacing its background.
+*/
+
+.tpz {
+  /* ── Palette ─────────────────────────────────────────────────────────── */
+
+  --tpz-bg: light-dark(#f2eee6, #0a0a0a);
+  --tpz-fg: light-dark(#221e1a, #ededed);
+
+  /* The table's own panel, above the page ground. */
+  --tpz-surface: light-dark(#fbf8f2, #141414);
+  --tpz-surface-fg: light-dark(#221e1a, #ededed);
+
+  /* Header strips, toolbars, anything recessed. */
+  --tpz-muted: light-dark(#e9e3d8, #1f1f1f);
+  --tpz-muted-fg: light-dark(#6b6157, #a1a1a1);
+
+  /* Hover and pressed states. */
+  --tpz-accent: light-dark(#e8e0d2, #262626);
+  --tpz-accent-fg: light-dark(#221e1a, #ededed);
+
+  --tpz-primary: light-dark(#6a2e46, #d98fae);
+  --tpz-primary-fg: light-dark(#fdf8f5, #2a1119);
+
+  --tpz-border: light-dark(#e0d8c8, rgb(255 255 255 / 10%));
+  --tpz-input: light-dark(#e0d8c8, rgb(255 255 255 / 15%));
+  --tpz-ring: light-dark(#6a2e46, #d98fae);
+
+  --tpz-success: light-dark(#3f6b4a, #82b491);
+  --tpz-warning: light-dark(#9a6b1f, #d9a95c);
+  --tpz-danger: light-dark(#97362b, #e0857a);
+
+  /* ── Shape ───────────────────────────────────────────────────────────── */
+
+  --tpz-radius: 0.625rem;
+  --tpz-radius-sm: calc(var(--tpz-radius) - 4px);
+  --tpz-radius-md: calc(var(--tpz-radius) - 2px);
+
+  --tpz-row-height: 2rem;
+  --tpz-cell-padding-x: 0.5rem;
+  --tpz-col-min-width: 8rem;
+  --tpz-col-max-width: 20rem;
+  --tpz-lead-min-width: 12rem;
+  --tpz-lead-max-width: 18rem;
+  --tpz-select-width: 2.25rem;
+
+  /* ── Type ────────────────────────────────────────────────────────────── */
+
+  --tpz-font-sans: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --tpz-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --tpz-text-header: 0.75rem;
+  /* One step below the smallest common size. A table is the one place it earns
+     its keep: more rows on screen without losing legibility. */
+  --tpz-text-cell: 0.6875rem;
+  --tpz-text-cell-leading: 1rem;
+  --tpz-text-ui: 0.75rem;
+
+  /* ── Motion ──────────────────────────────────────────────────────────── */
+
+  --tpz-transition: 120ms ease;
+
+  /* ── Derived ─────────────────────────────────────────────────────────── */
+
+  --tpz-hover: color-mix(in oklab, var(--tpz-accent) 40%, transparent);
+  --tpz-selected: color-mix(in oklab, var(--tpz-primary) 5%, transparent);
+  --tpz-focus: 0 0 0 2px color-mix(in oklab, var(--tpz-ring) 45%, transparent);
+
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  color: var(--tpz-surface-fg);
+  font-family: var(--tpz-font-sans);
+  font-variant-numeric: tabular-nums;
+  container-type: inline-size;
+  container-name: tpz;
+}
+
+/*
+  Theme.
+
+  By default the page's own `color-scheme` decides, which is what makes the
+  table match an app that already has a dark mode without configuring anything.
+  The class and attribute selectors below cover apps that switch themes with a
+  class but never declare `color-scheme` — Tailwind's `dark` class being the
+  common case.
+*/
+.tpz[data-theme="light"] {
+  color-scheme: light;
+}
+
+.tpz[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+:where(.dark, [data-theme="dark"], [data-mode="dark"]) .tpz:not([data-theme]) {
+  color-scheme: dark;
+}
+
+/* ── Density ───────────────────────────────────────────────────────────── */
+
+.tpz[data-density="compact"] {
+  --tpz-row-height: 1.75rem;
+}
+
+.tpz[data-density="relaxed"] {
+  --tpz-row-height: 2.5rem;
+  --tpz-cell-padding-x: 0.75rem;
+  --tpz-text-cell: 0.75rem;
+}
+
+/* ── Frame ─────────────────────────────────────────────────────────────── */
+
+.tpz-frame {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--tpz-border);
+  border-radius: var(--tpz-radius);
+  background: var(--tpz-surface);
+}
+
+.tpz-toolbar {
+  display: flex;
+  min-height: 2.25rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--tpz-border);
+  padding: 0.375rem 0.5rem;
+}
+
+.tpz-toolbar-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.tpz-count {
+  padding-inline: 0.25rem;
+  color: var(--tpz-muted-fg);
+  font-size: var(--tpz-text-ui);
+  white-space: nowrap;
+}
+
+/* ── Scroll area ───────────────────────────────────────────────────────── */
+
+.tpz-scroll {
+  position: relative;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+}
+
+.tpz[data-sticky-header="true"] .tpz-scroll {
+  max-height: var(--tpz-max-height, none);
+}
+
+/* ── Table ─────────────────────────────────────────────────────────────── */
+
+.tpz-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: var(--tpz-text-cell);
+  text-align: left;
+}
+
+.tpz-th,
+.tpz-td {
+  height: var(--tpz-row-height);
+  max-width: var(--tpz-col-max-width);
+  min-width: var(--tpz-col-min-width);
+  overflow: hidden;
+  border-right: 1px solid var(--tpz-border);
+  border-bottom: 1px solid var(--tpz-border);
+  padding: 0 var(--tpz-cell-padding-x);
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.tpz-tr > :last-child {
+  border-right: 0;
+}
+
+.tpz-tbody .tpz-tr:last-child > * {
+  border-bottom: 0;
+}
+
+.tpz-td {
+  color: var(--tpz-surface-fg);
+  font-family: var(--tpz-font-mono);
+  font-size: var(--tpz-text-cell);
+  line-height: var(--tpz-text-cell-leading);
+}
+
+/*
+  Prose and anything a caller renders itself reads better in the interface
+  font. Monospace is for data — identifiers, money, dates, counts — where a
+  fixed advance width is what makes a column line up down the page.
+*/
+.tpz-td[data-mono="false"] {
+  font-family: var(--tpz-font-sans);
+}
+
+.tpz-td[data-wrap="true"] {
+  height: auto;
+  padding-block: 0.375rem;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+.tpz-th[data-align="end"],
+.tpz-td[data-align="end"] {
+  text-align: right;
+}
+
+.tpz-th[data-align="center"],
+.tpz-td[data-align="center"] {
+  text-align: center;
+}
+
+/* ── Header ────────────────────────────────────────────────────────────── */
+
+.tpz-th {
+  position: sticky;
+  z-index: 20;
+  top: 0;
+  padding: 0;
+  background: var(--tpz-muted);
+  color: var(--tpz-muted-fg);
+  font-size: var(--tpz-text-header);
+  font-weight: 500;
+}
+
+.tpz-th-inner {
+  display: flex;
+  height: var(--tpz-row-height);
+  min-width: 0;
+  align-items: center;
+}
+
+.tpz-th-icon {
+  display: flex;
+  height: 100%;
+  flex: none;
+  align-items: center;
+  padding-inline: var(--tpz-cell-padding-x);
+  color: var(--tpz-muted-fg);
+}
+
+.tpz-th-icon[data-draggable="true"] {
+  cursor: grab;
+}
+
+.tpz-th-icon[data-draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.tpz-th-button {
+  display: flex;
+  height: var(--tpz-row-height);
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 0.375rem;
+  border: 0;
+  background: none;
+  padding: 0 var(--tpz-cell-padding-x) 0 0;
+  color: inherit;
+  font: inherit;
+  font-weight: 500;
+  text-align: inherit;
+  cursor: pointer;
+}
+
+.tpz-th-button:hover {
+  color: var(--tpz-fg);
+}
+
+.tpz-th-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tpz-th-marker {
+  flex: none;
+  opacity: 0.85;
+}
+
+.tpz-th-chevron {
+  flex: none;
+  margin-left: auto;
+  opacity: 0.4;
+}
+
+.tpz-th[aria-sort]:not([aria-sort="none"]) {
+  color: var(--tpz-fg);
+}
+
+/* A filtered column says so, so nobody wonders where their rows went. */
+.tpz-th[data-filtered="true"] .tpz-th-icon {
+  color: var(--tpz-primary);
+}
+
+/* ── Resize handle ─────────────────────────────────────────────────────── */
+
+.tpz-resizer {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.tpz-resizer::after {
+  position: absolute;
+  top: 15%;
+  left: 3px;
+  width: 1px;
+  height: 70%;
+  border-radius: 1px;
+  background: transparent;
+  content: "";
+  transition: background var(--tpz-transition);
+}
+
+.tpz-resizer:hover::after,
+.tpz-resizer[data-resizing="true"]::after {
+  background: var(--tpz-primary);
+}
+
+.tpz-th {
+  position: sticky;
+}
+
+.tpz-th-wrap {
+  position: relative;
+}
+
+/* ── Rows ──────────────────────────────────────────────────────────────── */
+
+.tpz-tr {
+  transition: background var(--tpz-transition);
+}
+
+.tpz-tbody .tpz-tr:hover .tpz-td {
+  background: var(--tpz-hover);
+}
+
+.tpz-tbody .tpz-tr[data-selected="true"] .tpz-td {
+  background: var(--tpz-selected);
+}
+
+.tpz-tr[data-clickable="true"] {
+  cursor: pointer;
+}
+
+/* ── Pinned columns ────────────────────────────────────────────────────── */
+
+.tpz-th[data-pin],
+.tpz-td[data-pin] {
+  position: sticky;
+  /*
+    Opaque, because content scrolls underneath. The tints below are painted
+    over the top rather than replacing this — a translucent background on the
+    same element *replaces* the opaque one, which is exactly how a frozen
+    column ends up showing the rows sliding beneath it.
+  */
+  background: var(--tpz-surface);
+}
+
+.tpz-th[data-pin] {
+  z-index: 30;
+  background: var(--tpz-muted);
+}
+
+.tpz-td[data-pin] {
+  z-index: 10;
+}
+
+.tpz-td[data-pin]::after,
+.tpz-th[data-pin]::after {
+  position: absolute;
+  z-index: -1;
+  background: transparent;
+  content: "";
+  inset: 0;
+  pointer-events: none;
+}
+
+.tpz-tbody .tpz-tr:hover .tpz-td[data-pin]::after {
+  background: var(--tpz-hover);
+}
+
+.tpz-tbody .tpz-tr[data-selected="true"] .tpz-td[data-pin]::after {
+  background: var(--tpz-selected);
+}
+
+/* The edge of the frozen region, so it reads as frozen rather than misaligned. */
+.tpz-th[data-pin-edge="start"],
+.tpz-td[data-pin-edge="start"] {
+  border-right-color: var(--tpz-border);
+  box-shadow: 4px 0 6px -6px rgb(0 0 0 / 25%);
+}
+
+.tpz-th[data-pin-edge="end"],
+.tpz-td[data-pin-edge="end"] {
+  border-left: 1px solid var(--tpz-border);
+  box-shadow: -4px 0 6px -6px rgb(0 0 0 / 25%);
+}
+
+/* ── Selection column ──────────────────────────────────────────────────── */
+
+.tpz-select-cell {
+  width: var(--tpz-select-width);
+  min-width: var(--tpz-select-width);
+  max-width: var(--tpz-select-width);
+  padding: 0;
+  text-align: center;
+}
+
+.tpz-checkbox {
+  display: inline-flex;
+  width: 0.875rem;
+  height: 0.875rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--tpz-input);
+  border-radius: 3px;
+  background: var(--tpz-surface);
+  color: var(--tpz-primary-fg);
+  vertical-align: middle;
+  cursor: pointer;
+  appearance: none;
+  transition: background var(--tpz-transition), border-color var(--tpz-transition);
+}
+
+.tpz-checkbox:checked,
+.tpz-checkbox:indeterminate {
+  border-color: var(--tpz-primary);
+  background: var(--tpz-primary);
+}
+
+.tpz-checkbox:checked::after {
+  width: 100%;
+  height: 100%;
+  background: currentcolor;
+  content: "";
+  clip-path: polygon(21% 52%, 16% 58%, 39% 79%, 85% 27%, 79% 21%, 38% 66%);
+}
+
+.tpz-checkbox:indeterminate::after {
+  width: 55%;
+  height: 1.5px;
+  border-radius: 1px;
+  background: currentcolor;
+  content: "";
+}
+
+.tpz-checkbox:focus-visible {
+  outline: none;
+  box-shadow: var(--tpz-focus);
+}
+
+/* ── Cell contents ─────────────────────────────────────────────────────── */
+
+.tpz-link {
+  color: var(--tpz-primary);
+  text-decoration: none;
+  text-underline-offset: 3px;
+}
+
+.tpz-link:hover {
+  text-decoration: underline;
+}
+
+.tpz-lead {
+  min-width: var(--tpz-lead-min-width);
+  max-width: var(--tpz-lead-max-width);
+  font-weight: 500;
+}
+
+.tpz-empty-value {
+  color: var(--tpz-muted-fg);
+}
+
+.tpz-badge {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--tpz-accent);
+  padding: 0.0625rem 0.4375rem;
+  color: var(--tpz-accent-fg);
+  font-family: var(--tpz-font-sans);
+  font-size: var(--tpz-text-ui);
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.tpz-badge[data-colour]::before {
+  width: 0.375rem;
+  height: 0.375rem;
+  flex: none;
+  border-radius: 999px;
+  background: var(--tpz-badge-colour, currentcolor);
+  content: "";
+}
+
+.tpz-tags {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 0.25rem;
+  overflow: hidden;
+}
+
+.tpz-avatar {
+  display: inline-block;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 999px;
+  background: var(--tpz-muted);
+  object-fit: cover;
+  vertical-align: middle;
+}
+
+.tpz-boolean-true {
+  color: var(--tpz-success);
+}
+
+.tpz-boolean-false {
+  color: var(--tpz-muted-fg);
+}
+
+.tpz-code {
+  font-family: var(--tpz-font-mono);
+}
+
+/* ── Buttons and menus ─────────────────────────────────────────────────── */
+
+.tpz-btn {
+  display: inline-flex;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border: 1px solid transparent;
+  border-radius: var(--tpz-radius-sm);
+  background: none;
+  padding-inline: 0.5rem;
+  color: var(--tpz-muted-fg);
+  font-family: var(--tpz-font-sans);
+  font-size: var(--tpz-text-ui);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background var(--tpz-transition), color var(--tpz-transition);
+}
+
+.tpz-btn:hover:not(:disabled) {
+  background: var(--tpz-accent);
+  color: var(--tpz-accent-fg);
+}
+
+.tpz-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--tpz-focus);
+}
+
+.tpz-btn:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.tpz-btn[data-variant="outline"] {
+  border-color: var(--tpz-border);
+  background: var(--tpz-surface);
+}
+
+.tpz-btn[data-variant="primary"] {
+  background: var(--tpz-primary);
+  color: var(--tpz-primary-fg);
+}
+
+.tpz-btn[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--tpz-primary);
+  opacity: 0.9;
+}
+
+.tpz-btn[data-active="true"] {
+  border-color: var(--tpz-border);
+  background: var(--tpz-accent);
+  color: var(--tpz-accent-fg);
+}
+
+.tpz-btn-icon {
+  width: 1.75rem;
+  padding-inline: 0;
+}
+
+.tpz-input {
+  height: 1.75rem;
+  min-width: 0;
+  border: 1px solid var(--tpz-input);
+  border-radius: var(--tpz-radius-sm);
+  background: var(--tpz-surface);
+  padding-inline: 0.5rem;
+  color: var(--tpz-surface-fg);
+  font-family: var(--tpz-font-sans);
+  font-size: var(--tpz-text-ui);
+}
+
+.tpz-input:focus-visible {
+  outline: none;
+  border-color: var(--tpz-ring);
+  box-shadow: var(--tpz-focus);
+}
+
+.tpz-search {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.tpz-search .tpz-input {
+  width: 12rem;
+  padding-left: 1.75rem;
+}
+
+.tpz-search-icon {
+  position: absolute;
+  left: 0.4375rem;
+  color: var(--tpz-muted-fg);
+  pointer-events: none;
+}
+
+.tpz-menu {
+  z-index: 50;
+  min-width: 11rem;
+  border: 1px solid var(--tpz-border);
+  border-radius: var(--tpz-radius-md);
+  background: var(--tpz-surface);
+  padding: 0.25rem;
+  box-shadow: 0 8px 24px -12px rgb(0 0 0 / 35%), 0 2px 6px -4px rgb(0 0 0 / 25%);
+  color: var(--tpz-surface-fg);
+  font-family: var(--tpz-font-sans);
+  font-size: var(--tpz-text-ui);
+}
+
+.tpz-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  border: 0;
+  border-radius: var(--tpz-radius-sm);
+  background: none;
+  padding: 0.3125rem 0.5rem;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.tpz-menu-item:hover:not(:disabled),
+.tpz-menu-item:focus-visible {
+  outline: none;
+  background: var(--tpz-accent);
+}
+
+.tpz-menu-item:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.tpz-menu-label {
+  padding: 0.375rem 0.5rem 0.25rem;
+  color: var(--tpz-muted-fg);
+  font-size: var(--tpz-text-ui);
+  font-weight: 500;
+}
+
+.tpz-menu-separator {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--tpz-border);
+}
+
+.tpz-menu-scroll {
+  max-height: 16rem;
+  overflow-y: auto;
+}
+
+/* ── Filter chips ──────────────────────────────────────────────────────── */
+
+.tpz-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.tpz-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid var(--tpz-border);
+  border-radius: var(--tpz-radius-sm);
+  background: var(--tpz-surface);
+  padding: 0.125rem 0.125rem 0.125rem 0.4375rem;
+  font-size: var(--tpz-text-ui);
+  white-space: nowrap;
+}
+
+.tpz-chip-remove {
+  display: inline-flex;
+  width: 1.125rem;
+  height: 1.125rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--tpz-radius-sm);
+  background: none;
+  color: var(--tpz-muted-fg);
+  cursor: pointer;
+}
+
+.tpz-chip-remove:hover {
+  background: var(--tpz-accent);
+  color: var(--tpz-accent-fg);
+}
+
+/* ── States ────────────────────────────────────────────────────────────── */
+
+.tpz-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 3rem 1.5rem;
+  color: var(--tpz-muted-fg);
+  font-size: 0.875rem;
+  text-align: center;
+}
+
+.tpz-state-icon {
+  color: var(--tpz-muted-fg);
+  opacity: 0.6;
+}
+
+.tpz-state[data-tone="danger"] {
+  color: var(--tpz-danger);
+}
+
+.tpz-skeleton {
+  display: block;
+  height: 0.625rem;
+  border-radius: 3px;
+  background: linear-gradient(
+    90deg,
+    var(--tpz-muted) 25%,
+    color-mix(in oklab, var(--tpz-muted) 60%, var(--tpz-surface)) 37%,
+    var(--tpz-muted) 63%
+  );
+  background-size: 400% 100%;
+  animation: tpz-shimmer 1.4s ease infinite;
+}
+
+@keyframes tpz-shimmer {
+  0% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0 50%;
+  }
+}
+
+.tpz-spinner {
+  animation: tpz-spin 700ms linear infinite;
+}
+
+@keyframes tpz-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ── Pagination ────────────────────────────────────────────────────────── */
+
+.tpz-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  border-top: 1px solid var(--tpz-border);
+  padding: 0.375rem 0.5rem;
+  color: var(--tpz-muted-fg);
+  font-size: var(--tpz-text-ui);
+}
+
+.tpz-pages {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.tpz-page {
+  min-width: 1.75rem;
+}
+
+.tpz-page[aria-current="page"] {
+  border-color: var(--tpz-border);
+  background: var(--tpz-accent);
+  color: var(--tpz-accent-fg);
+}
+
+.tpz-ellipsis {
+  padding-inline: 0.25rem;
+  color: var(--tpz-muted-fg);
+}
+
+.tpz-load-more {
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--tpz-border);
+  padding: 0.5rem;
+}
+
+.tpz-sentinel {
+  height: 1px;
+}
+
+/* ── Footer row ────────────────────────────────────────────────────────── */
+
+.tpz-tfoot .tpz-td {
+  position: sticky;
+  bottom: 0;
+  background: var(--tpz-muted);
+  font-weight: 500;
+}
+
+.tpz-append {
+  display: flex;
+  height: var(--tpz-row-height);
+  align-items: center;
+  gap: 0.375rem;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--tpz-muted-fg);
+  font-family: var(--tpz-font-sans);
+  font-size: var(--tpz-text-ui);
+  cursor: pointer;
+}
+
+.tpz-append:hover {
+  color: var(--tpz-fg);
+}
+
+/* ── Screen-reader only ────────────────────────────────────────────────── */
+
+.tpz-sr {
+  position: absolute;
+  overflow: hidden;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/*
+  ── Card layout ────────────────────────────────────────────────────────────
+
+  Below the breakpoint each row becomes a card, with the header text carried
+  into the cell by `data-label`. One DOM, no JavaScript, no second render, and
+  nothing to get wrong between a server and a client — which is why it is done
+  in CSS rather than by measuring the viewport.
+
+  A container query rather than a media query: what matters is how much room the
+  table has, not how wide the window is. A table in a narrow sidebar should
+  stack even on a large screen.
+*/
+@container tpz (width < 40rem) {
+  .tpz[data-responsive="cards"] .tpz-thead {
+    display: none;
+  }
+
+  .tpz[data-responsive="cards"] .tpz-table,
+  .tpz[data-responsive="cards"] .tpz-tbody,
+  .tpz[data-responsive="cards"] .tpz-tr,
+  .tpz[data-responsive="cards"] .tpz-td {
+    display: block;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .tpz[data-responsive="cards"] .tpz-tr {
+    border-bottom: 1px solid var(--tpz-border);
+    padding: 0.375rem 0;
+  }
+
+  .tpz[data-responsive="cards"] .tpz-tbody .tpz-tr:last-child {
+    border-bottom: 0;
+  }
+
+  .tpz[data-responsive="cards"] .tpz-td {
+    display: flex;
+    height: auto;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 0;
+    padding: 0.1875rem 0.75rem;
+    text-align: right;
+    white-space: normal;
+  }
+
+  .tpz[data-responsive="cards"] .tpz-td[data-pin],
+  .tpz[data-responsive="cards"] .tpz-th[data-pin] {
+    position: static;
+    box-shadow: none;
+  }
+
+  .tpz[data-responsive="cards"] .tpz-td::before {
+    flex: none;
+    color: var(--tpz-muted-fg);
+    content: attr(data-label);
+    font-family: var(--tpz-font-sans);
+    font-size: var(--tpz-text-ui);
+    text-align: left;
+  }
+
+  /* A cell with no label to show — the selection box — keeps its own layout. */
+  .tpz[data-responsive="cards"] .tpz-select-cell {
+    justify-content: flex-start;
+    width: auto;
+    max-width: none;
+  }
+
+  .tpz[data-responsive="cards"] .tpz-select-cell::before {
+    content: none;
+  }
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────── */
+
+@media (prefers-reduced-motion: reduce) {
+  .tpz *,
+  .tpz *::before,
+  .tpz *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Print ─────────────────────────────────────────────────────────────── */
+
+@media print {
+  .tpz-toolbar,
+  .tpz-pagination,
+  .tpz-resizer,
+  .tpz-select-cell {
+    display: none;
+  }
+
+  .tpz-scroll {
+    overflow: visible;
+  }
+
+  .tpz-th,
+  .tpz-td {
+    position: static;
+    max-width: none;
+    white-space: normal;
+  }
+}
