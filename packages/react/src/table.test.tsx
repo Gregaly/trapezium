@@ -1,7 +1,7 @@
-import { fireEvent, render, screen, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderToString } from "react-dom/server"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup } from "@testing-library/react"
 
 import { Table } from "./table.js"
@@ -365,5 +365,78 @@ describe("reordering columns by dragging", () => {
     )
     // The last one stays: a table of nothing has no obvious way back.
     expect(headerKeys(container)).toEqual(["age"])
+  })
+})
+
+/**
+ * Infinite scrolling.
+ *
+ * jsdom has no layout and no IntersectionObserver, so the observer is stubbed —
+ * which is enough to assert the two things that were wrong: where the sentinel
+ * lives, and how often it may fire.
+ */
+describe("infinite scrolling", () => {
+  let observed: Array<{ fire: () => void }> = []
+
+  beforeEach(() => {
+    observed = []
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        callback: (entries: Array<{ isIntersecting: boolean }>) => void
+        constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
+          this.callback = callback
+        }
+        observe() {
+          observed.push({ fire: () => this.callback([{ isIntersecting: true }]) })
+        }
+        disconnect() {}
+        unobserve() {}
+        takeRecords() {
+          return []
+        }
+      },
+    )
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  const many = Array.from({ length: 200 }, (_, index) => ({ id: String(index), name: `Person ${String(index)}` }))
+
+  it("puts the sentinel inside the scroll container, not in the pagination bar", () => {
+    const { container } = render(<Table data={many} pagination={{ mode: "infinite", pageSize: 10 }} />)
+
+    const sentinel = container.querySelector(".tpz-sentinel")
+    expect(sentinel).toBeTruthy()
+    // The bug this guards: a sentinel below the table is on screen whenever the
+    // table is, so it fires immediately and loads every page at once.
+    expect(container.querySelector(".tpz-scroll")?.contains(sentinel!)).toBe(true)
+    expect(container.querySelector(".tpz-pagination .tpz-sentinel")).toBeNull()
+  })
+
+  it("loads one page each time it is reached, not every page at once", () => {
+    const { container } = render(<Table data={many} pagination={{ mode: "infinite", pageSize: 10 }} />)
+    const rows = () => container.querySelectorAll("tbody tr").length
+
+    expect(rows()).toBe(10)
+
+    act(() => observed.at(-1)!.fire())
+    expect(rows()).toBe(20)
+
+    act(() => observed.at(-1)!.fire())
+    expect(rows()).toBe(30)
+  })
+
+  it("stops observing once every row is loaded", () => {
+    const few = many.slice(0, 12)
+    const { container } = render(<Table data={few} pagination={{ mode: "infinite", pageSize: 10 }} />)
+
+    act(() => observed.at(-1)!.fire())
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(12)
+
+    const settled = observed.length
+    act(() => observed.at(-1)!.fire())
+    // Nothing left to ask for, so no new observation was set up.
+    expect(observed.length).toBe(settled)
   })
 })

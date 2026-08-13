@@ -49,14 +49,11 @@ export function Pagination({
   if (mode === "loadMore" || mode === "infinite") {
     return (
       <LoadMore
-        mode={mode}
         hasMore={hasMore}
         loading={loading}
         shown={shown}
         total={total}
         onMore={() => update((current) => setPage(current, current.page + 1))}
-        buildHref={buildHref}
-        linkComponent={linkComponent}
       />
     )
   }
@@ -199,51 +196,22 @@ function PageButton({
 }
 
 function LoadMore({
-  mode,
   hasMore,
   loading,
   shown,
   total,
   onMore,
-  buildHref,
-  linkComponent: Link,
 }: {
-  mode: "loadMore" | "infinite"
   hasMore: boolean
   loading?: boolean
   shown: number
   total: number
   onMore: () => void
-  buildHref?: (state: TableState) => string
-  linkComponent?: LinkComponent
 }) {
-  const sentinel = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (mode !== "infinite" || !hasMore || loading) return
-    const node = sentinel.current
-    // No observer, no automatic loading — the button below is still there, so
-    // the feature degrades rather than disappearing.
-    if (!node || typeof IntersectionObserver === "undefined") return
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) onMore()
-      },
-      // Starts loading before the user hits the bottom, so the list feels
-      // continuous rather than stuttering at every page boundary.
-      { rootMargin: "200px" },
-    )
-
-    observer.observe(node)
-    return () => observer.disconnect()
-  }, [mode, hasMore, loading, onMore])
-
   if (!hasMore && shown >= total) return null
 
   return (
     <div className="tpz-load-more">
-      {mode === "infinite" && <div ref={sentinel} className="tpz-sentinel" aria-hidden="true" />}
       {hasMore && (
         <button type="button" className="tpz-btn" data-variant="outline" onClick={onMore} disabled={loading}>
           {loading ? <Icon name="spinner" className="tpz-spinner" /> : null}
@@ -252,6 +220,73 @@ function LoadMore({
       )}
     </div>
   )
+}
+
+/**
+ * What infinite scrolling watches.
+ *
+ * It has to sit at the end of the rows, **inside the scroll container**, and be
+ * observed against that container — not the viewport. A sentinel in the
+ * pagination bar below the table is visible whenever the table is on screen, so
+ * it fires immediately and again on every re-render, which loads the entire
+ * dataset the moment the table appears. That is the bug this component exists
+ * to make impossible.
+ *
+ * It also loads at most one page per render: the observer is disconnected as
+ * soon as it fires, and the effect re-runs once the new rows are in. If the
+ * sentinel is still visible after that — a short page in a tall container — it
+ * fires again, which is the right answer to "there is still empty space".
+ */
+export function InfiniteSentinel({
+  hasMore,
+  loading,
+  onMore,
+  /** Re-observes when this changes, which is what makes it one page per render. */
+  page,
+}: {
+  hasMore: boolean
+  loading?: boolean
+  onMore: () => void
+  page: number
+}) {
+  const sentinel = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    // No observer, no automatic loading — the "load more" button below the
+    // table is still there, so the feature degrades rather than disappearing.
+    if (!hasMore || loading || typeof IntersectionObserver === "undefined") return
+
+    const node = sentinel.current
+    if (!node) return
+
+    /*
+      The scroll container when the table has its own height, and the viewport
+      when it grows with the page. Watching the viewport for a table that
+      scrolls internally is what makes a sentinel fire while the user is
+      nowhere near the end of the rows.
+    */
+    const scroll = node.closest(".tpz-scroll")
+    const scrolls = scroll instanceof HTMLElement && scroll.scrollHeight > scroll.clientHeight + 1
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        observer.disconnect()
+        onMore()
+      },
+      {
+        root: scrolls ? scroll : null,
+        // Enough to start the next page just before the user reaches the end,
+        // and not so much that a table sitting on screen loads everything.
+        rootMargin: "96px",
+      },
+    )
+
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [hasMore, loading, onMore, page])
+
+  return <div ref={sentinel} className="tpz-sentinel" aria-hidden="true" />
 }
 
 /**

@@ -1,9 +1,9 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useTransition } from "react"
 import Link from "next/link"
-import { Table, stateToQueryString, type Column, type TableState } from "@trapezium/react"
+import { Table, applyStateToUrl, type Column, type TableState } from "@trapezium/react"
 
 import { STATUS_OPTIONS, type Invoice } from "../invoices"
 
@@ -11,38 +11,67 @@ import { STATUS_OPTIONS, type Invoice } from "../invoices"
  * The client half.
  *
  * It holds no data and no copy of the state: the server owns both. All it does
- * is turn a state change into a URL, which is what makes the back button, a
- * shared link and a page reload all land on exactly the same view.
+ * is turn a change into a URL, which is what makes the back button, a shared
+ * link and a page reload all land on exactly the same view.
  *
  * `useTransition` keeps the current rows on screen, dimmed, while the next page
  * is fetched — rather than blanking the table on every click.
  */
+
+export type PaginationMode = "pages" | "simple" | "loadMore" | "infinite"
+
+export type View = {
+  mode: PaginationMode
+  setFilters: boolean
+  cards: boolean
+}
+
 export function InvoiceTable({
   rows,
   total,
   state,
+  view,
 }: {
   rows: Invoice[]
   total: number
   state: TableState
+  view: View
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
   /*
-    What the switches change. They are client state rather than URL state
-    because they are a property of this demo, not of the view being shared —
-    the point is to try the props, not to send someone a link to them.
+    The demo's switches are part of the URL too, so every link this component
+    builds has to carry them. `applyStateToUrl` merges the table's state into a
+    URL that already has parameters rather than replacing the query string,
+    which is exactly what a page with its own state needs.
   */
-  const [mode, setMode] = useState<"pages" | "simple" | "loadMore" | "infinite">("pages")
-  const [setFilters, setSetFilters] = useState(false)
-  const [cards, setCards] = useState(false)
+  const base = `/?${new URLSearchParams({
+    mode: view.mode,
+    ...(view.setFilters ? { setf: "1" } : {}),
+    ...(view.cards ? { cards: "1" } : {}),
+  }).toString()}`
+
+  const href = (next: TableState) => applyStateToUrl(base, next)
+
+  const go = (url: string) => startTransition(() => router.push(url, { scroll: false }))
+
+  /** Changing a switch starts the view again from page one. */
+  const setView = (change: Partial<View>) => {
+    const merged = { ...view, ...change }
+    const params = new URLSearchParams({
+      mode: merged.mode,
+      ...(merged.setFilters ? { setf: "1" } : {}),
+      ...(merged.cards ? { cards: "1" } : {}),
+    })
+    go(applyStateToUrl(`/?${params.toString()}`, { ...state, page: 1 }))
+  }
 
   const columns: Column<Invoice>[] = [
     { key: "reference", header: "Invoice", type: "id", pin: "start" },
-    { key: "customer", filter: setFilters ? "set" : true },
+    { key: "customer", filter: view.setFilters ? "set" : true },
     { key: "email" },
-    { key: "amount", type: "currency", filter: setFilters ? "set" : "range" },
+    { key: "amount", type: "currency", filter: view.setFilters ? "set" : "range" },
     {
       key: "status",
       type: "badge",
@@ -70,13 +99,13 @@ export function InvoiceTable({
                 ["loadMore", "Load more"],
                 ["infinite", "Infinite"],
               ] as const
-            ).map(([value, label]) => (
+            ).map(([mode, label]) => (
               <button
-                key={value}
+                key={mode}
                 type="button"
-                data-active={mode === value}
-                aria-pressed={mode === value}
-                onClick={() => setMode(value)}
+                data-active={view.mode === mode}
+                aria-pressed={view.mode === mode}
+                onClick={() => setView({ mode })}
               >
                 {label}
               </button>
@@ -87,15 +116,19 @@ export function InvoiceTable({
         <label className="switch">
           <input
             type="checkbox"
-            checked={setFilters}
-            onChange={(event) => setSetFilters(event.target.checked)}
+            checked={view.setFilters}
+            onChange={(event) => setView({ setFilters: event.target.checked })}
           />
           <span className="switch-track" aria-hidden="true" />
           <span>Set filters</span>
         </label>
 
         <label className="switch">
-          <input type="checkbox" checked={cards} onChange={(event) => setCards(event.target.checked)} />
+          <input
+            type="checkbox"
+            checked={view.cards}
+            onChange={(event) => setView({ cards: event.target.checked })}
+          />
           <span className="switch-track" aria-hidden="true" />
           <span>Card layout</span>
         </label>
@@ -104,34 +137,26 @@ export function InvoiceTable({
       <Table
         data={rows}
         total={total}
-      server
+        server
         loading={pending}
         state={state}
-        onStateChange={(next) => {
-        startTransition(() => router.push(`/?${toQuery(next)}`, { scroll: false }))
-      }}
-        // Every control is also a real link, so the table sorts, filters and pages
-        // before the client bundle has loaded — and keyboard and middle-click
-        // behave the way they do everywhere else on the web.
-        buildHref={(next) => `/?${toQuery(next)}`}
+        onStateChange={(next) => go(href(next))}
+        // Every control is also a real link, so the table sorts, filters and
+        // pages before the client bundle has loaded — and keyboard and
+        // middle-click behave the way they do everywhere else on the web.
+        buildHref={href}
         linkComponent={Link}
         getRowId={(invoice) => invoice.id}
         columns={columns}
         search={{ placeholder: "Search invoices", debounce: 300 }}
-      selection
-      export
-        pagination={{ mode, pageSize: 25, pageSizeOptions: [10, 25, 50, 100] }}
-        responsive={cards ? "cards" : "scroll"}
+        selection
+        export
+        pagination={{ mode: view.mode, pageSize: 25, pageSizeOptions: [10, 25, 50, 100] }}
+        responsive={view.cards ? "cards" : "scroll"}
         format={{ currency: "AUD", locale: "en-AU", timeZone: "Australia/Sydney" }}
         maxHeight={560}
         aria-label="Invoices"
       />
     </>
   )
-}
-
-function toQuery(state: TableState): string {
-  // Imported from the table package so there is one encoding, shared by the
-  // client that writes it and the server that reads it.
-  return stateToQueryString(state)
 }

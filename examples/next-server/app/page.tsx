@@ -1,5 +1,7 @@
 import { stateFromUrl } from "@trapezium/core"
 
+import type { PaginationMode } from "./invoice-table"
+
 import { getInvoices } from "../invoices"
 import { InvoiceTable } from "./invoice-table"
 
@@ -16,8 +18,23 @@ export default async function Page({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  const state = stateFromUrl(await searchParams)
-  const { rows, total } = await getInvoices(state)
+  const query = await searchParams
+  const state = stateFromUrl(query)
+
+  /*
+    The demo's own switches live in the same query string as the table's state.
+    They have to reach the server — how many rows to return depends on the
+    pagination mode — and putting them here means a shared link reproduces the
+    whole page, switches and all.
+  */
+  const view = {
+    mode: asMode(query["mode"]),
+    setFilters: query["setf"] === "1",
+    cards: query["cards"] === "1",
+  }
+
+  const accumulate = view.mode === "loadMore" || view.mode === "infinite"
+  const { rows, total } = await getInvoices(state, { accumulate })
 
   return (
     <main>
@@ -29,7 +46,14 @@ export default async function Page({
         </p>
       </header>
 
-      <InvoiceTable rows={rows} total={total} state={state} />
+      <InvoiceTable rows={rows} total={total} state={state} view={view} />
     </main>
   )
+}
+
+/** Anything unexpected in the URL means the default, never an error page. */
+function asMode(value: string | string[] | undefined): PaginationMode {
+  const modes: PaginationMode[] = ["pages", "simple", "loadMore", "infinite"]
+  const mode = Array.isArray(value) ? value[0] : value
+  return modes.find((entry) => entry === mode) ?? "pages"
 }

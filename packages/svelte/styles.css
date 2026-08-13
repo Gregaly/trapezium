@@ -859,8 +859,14 @@
   padding: 0.5rem;
 }
 
+/*
+  Watched by infinite scrolling, and it has to be the last thing inside the
+  scroll area — a sentinel below the table is on screen whenever the table is,
+  which loads every page at once.
+*/
 .tpz-sentinel {
   height: 1px;
+  margin-top: -1px;
 }
 
 /* ── Footer row ────────────────────────────────────────────────────────── */

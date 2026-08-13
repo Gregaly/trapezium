@@ -80,14 +80,31 @@ A set filter derives its choices from the rows it can see, which in server mode 
 
 ## Load more and infinite scroll
 
-The table asks for the next page; you append:
+In server mode the table renders exactly what it is handed, so append pagination only works if **`data` holds every page loaded so far**. If each page replaces the last, the table appears to reload the same rows forever — Trapezium says so in the console rather than leaving you to work it out.
+
+Two ways to do it, and the second is usually better.
+
+**Append in the client**, when the rows arrive through a fetch you control:
 
 ```tsx
 onStateChange={(next) => {
-  if (next.page > state.page) fetchPage(next).then((page) => setRows((rows) => [...rows, ...page.rows]))
   setState(next)
+  fetchPage(next).then((page) =>
+    setRows((rows) => (next.page > 1 ? [...rows, ...page.rows] : page.rows)),
+  )
 }}
 ```
+
+Reset to the new page whenever anything but the page changed — a filter, a sort, a search — or the old rows stay underneath the new ones.
+
+**Or return every loaded page from the query**, which is one line and keeps the URL honest:
+
+```ts
+const from = accumulate ? 0 : (state.page - 1) * state.pageSize
+const rows = await db.invoices.findMany({ skip: from, take: state.page * state.pageSize - from })
+```
+
+Nothing is kept in the browser, a shared link reproduces exactly what the sender saw, and the back button works. It costs a slightly larger query as the user goes deeper, which for the first few pages of a list is nothing. This is what `examples/next-server` does.
 
 ## Counting
 

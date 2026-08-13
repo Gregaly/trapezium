@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 
 import { resolveColumns } from "./columns.js"
 import { DEFAULT_FORMAT } from "./format.js"
@@ -184,5 +184,26 @@ describe("resolveRowId", () => {
 
   it("uses the caller's function when given", () => {
     expect(resolveRowId({ ref: 9 }, 0, (row) => `r${String(row["ref"])}`)).toBe("r9")
+  })
+})
+
+describe("server mode with append pagination", () => {
+  it("warns when the caller did not accumulate, because the symptom is baffling", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { state, columns } = setup({ page: 3, pageSize: 2 })
+
+    getRows({
+      rows: people.slice(0, 2),
+      columns,
+      state,
+      types: defaultTypeRegistry,
+      format: DEFAULT_FORMAT,
+      server: true,
+      total: 400,
+      accumulate: true,
+    })
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("every page loaded so far"))
+    warn.mockRestore()
   })
 })

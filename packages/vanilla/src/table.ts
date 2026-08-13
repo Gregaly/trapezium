@@ -145,6 +145,12 @@ export function createTable<TRow extends AnyRow>(
   const count = el("span", { class: "tpz-count", "aria-live": "polite" })
   const chips = el("div", { class: "tpz-chips" })
   const scroll = el("div", { class: "tpz-scroll" })
+  /*
+    Watched by infinite scrolling. It lives at the end of the scroll area — a
+    sentinel in the pagination bar below the table is visible whenever the
+    table is on screen, so it fires immediately and loads every page at once.
+  */
+  const sentinel = el("div", { class: "tpz-sentinel", "aria-hidden": "true" })
   const table = el("table", { class: "tpz-table" })
   const head = el("thead", { class: "tpz-thead" })
   const body = el("tbody", { class: "tpz-tbody" })
@@ -153,7 +159,7 @@ export function createTable<TRow extends AnyRow>(
   toolbarStart.append(count, chips)
   toolbar.append(toolbarStart, toolbarEnd)
   table.append(head, body)
-  scroll.append(table)
+  scroll.append(table, sentinel)
   frame.append(toolbar, scroll, paginationBar)
   root.append(frame)
   host.append(root)
@@ -962,7 +968,10 @@ export function createTable<TRow extends AnyRow>(
     paginationBar.style.display = ""
 
     if (pagination.mode === "loadMore" || pagination.mode === "infinite") {
-      if (state.page >= pageCount) {
+      const hasMore = state.page < pageCount
+      if (pagination.mode === "infinite") observeSentinel(hasMore)
+
+      if (!hasMore) {
         fill(paginationBar, [])
         paginationBar.style.display = "none"
         return
@@ -976,10 +985,10 @@ export function createTable<TRow extends AnyRow>(
       })
       button.addEventListener("click", () => update(setPage(state, state.page + 1)))
       fill(paginationBar, [button])
-
-      if (pagination.mode === "infinite") observeSentinel()
       return
     }
+
+    observer?.disconnect()
 
     if (pageCount <= 1 && !pagination.pageSizeOptions?.length) {
       fill(paginationBar, [])
@@ -1048,19 +1057,39 @@ export function createTable<TRow extends AnyRow>(
   }
 
   let observer: IntersectionObserver | undefined
-  function observeSentinel() {
-    observer?.disconnect()
-    if (typeof IntersectionObserver === "undefined") return
 
-    const sentinel = el("div", { class: "tpz-sentinel", "aria-hidden": "true" })
-    paginationBar.prepend(sentinel)
+  /**
+   * Watches for the end of the rows.
+   *
+   * Rooted on the scroll container when the table has its own height, and on
+   * the viewport when it grows with the page — watching the viewport for a
+   * table that scrolls internally is what makes a sentinel fire while the user
+   * is nowhere near the end.
+   *
+   * Loads at most one page per render: the observer is disconnected the moment
+   * it fires, and the next render sets up a new one. If the sentinel is still
+   * visible then — a short page in a tall container — it fires again, which is
+   * the right answer to "there is still empty space".
+   */
+  function observeSentinel(hasMore: boolean) {
+    observer?.disconnect()
+    observer = undefined
+
+    // No observer, no automatic loading — the button below is still there, so
+    // the feature degrades rather than disappearing.
+    if (!hasMore || settings.loading || typeof IntersectionObserver === "undefined") return
+
+    const scrolls = scroll.scrollHeight > scroll.clientHeight + 1
 
     observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) update(setPage(state, state.page + 1))
+        if (!entries.some((entry) => entry.isIntersecting)) return
+        observer?.disconnect()
+        update(setPage(state, state.page + 1))
       },
-      { rootMargin: "200px" },
+      { root: scrolls ? scroll : null, rootMargin: "96px" },
     )
+
     observer.observe(sentinel)
   }
 

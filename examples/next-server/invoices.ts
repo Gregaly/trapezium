@@ -76,7 +76,10 @@ const INVOICES: Invoice[] = (() => {
  * so "is between", "is any of" and a date meaning a whole day behave the same
  * on both sides of the network.
  */
-export async function getInvoices(state: TableState): Promise<{ rows: Invoice[]; total: number }> {
+export async function getInvoices(
+  state: TableState,
+  options: { accumulate?: boolean } = {},
+): Promise<{ rows: Invoice[]; total: number }> {
   // A little latency, so the loading state is visible in the example.
   await new Promise((resolve) => setTimeout(resolve, 120))
 
@@ -113,9 +116,15 @@ export async function getInvoices(state: TableState): Promise<{ rows: Invoice[];
     return 0
   })
 
-  const from = (state.page - 1) * state.pageSize
+  /*
+    "Load more" and infinite scrolling show every page loaded so far, so the
+    query returns all of them rather than just the last. Doing it here, instead
+    of accumulating in the browser, is what keeps a shared link honest: the URL
+    still describes exactly what the recipient will see.
+  */
+  const from = options.accumulate ? 0 : (state.page - 1) * state.pageSize
 
-  return { rows: sorted.slice(from, from + state.pageSize), total: sorted.length }
+  return { rows: sorted.slice(from, state.page * state.pageSize), total: sorted.length }
 }
 
 function typeOf(key: string): string {

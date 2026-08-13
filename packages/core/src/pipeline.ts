@@ -53,6 +53,7 @@ export function getRows<TRow extends AnyRow, TNode = unknown>(
 
   if (server) {
     const total = options.total ?? rows.length
+    if (options.accumulate) warnIfNotAccumulating(rows.length, state)
     return {
       rows: [...rows],
       total,
@@ -85,6 +86,27 @@ export function getRows<TRow extends AnyRow, TNode = unknown>(
     pageCount: pages,
     filtered: total !== rows.length,
   }
+}
+
+/*
+  In server mode the table renders exactly what it is handed, so "load more" and
+  infinite scrolling only work if the caller appends each page to the last. The
+  symptom when they do not is the same page appearing to reload forever, which
+  is a miserable thing to debug from the outside — so it is said out loud, once.
+*/
+let warned = false
+
+function warnIfNotAccumulating(rowCount: number, state: TableState): void {
+  if (warned || state.page < 2 || rowCount > state.pageSize) return
+  if (typeof process !== "undefined" && process.env["NODE_ENV"] === "production") return
+
+  warned = true
+  console.warn(
+    "[trapezium] Append pagination in server mode expects `data` to hold every page loaded so far, " +
+      `but page ${String(state.page)} arrived with ${String(rowCount)} rows. Append the new page to the ` +
+      "previous rows, or have the query return `page * pageSize` rows from the start. " +
+      "See https://github.com/Gregaly/trapezium/blob/main/docs/server-data.md#load-more-and-infinite-scroll",
+  )
 }
 
 export function pageCount(total: number, pageSize: number): number {

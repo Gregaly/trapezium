@@ -16,7 +16,7 @@ import { createClasses } from "./classes.js"
 import { TableContext } from "./context.js"
 import { HeaderCell } from "./header-cell.js"
 import { Icon } from "./icon.js"
-import { Pagination } from "./pagination.js"
+import { InfiniteSentinel, Pagination } from "./pagination.js"
 import { Toolbar } from "./toolbar.js"
 import type { SearchOptions, TableProps, TableSelection } from "./types.js"
 import { useTable } from "./use-table.js"
@@ -404,6 +404,19 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
               )}
             </tbody>
           </table>
+
+          {/*
+            Inside the scroll area, after the last row — which is the only place
+            a sentinel means "the user has reached the end".
+          */}
+          {pagination?.mode === "infinite" && (
+            <InfiniteSentinel
+              hasMore={state.page < table.pageCount}
+              loading={loading}
+              page={state.page}
+              onMore={() => update((current) => ({ ...current, page: current.page + 1 }))}
+            />
+          )}
         </div>
 
         {footer}

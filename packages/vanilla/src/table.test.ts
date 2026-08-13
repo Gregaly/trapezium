@@ -360,3 +360,71 @@ describe("reordering inside the column list", () => {
     ])
   })
 })
+
+/**
+ * Infinite scrolling.
+ *
+ * jsdom has no layout and no IntersectionObserver, so the observer is stubbed —
+ * which is enough to assert the two things that were wrong: where the sentinel
+ * lives, and how often it may fire.
+ */
+describe("infinite scrolling", () => {
+  let observed: Array<{ root: unknown; fire: () => void }> = []
+
+  beforeEach(() => {
+    observed = []
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        callback: (entries: Array<{ isIntersecting: boolean }>) => void
+        options: { root?: unknown }
+        constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void, options = {}) {
+          this.callback = callback
+          this.options = options
+        }
+        observe() {
+          observed.push({ root: this.options.root ?? null, fire: () => this.callback([{ isIntersecting: true }]) })
+        }
+        disconnect() {}
+        unobserve() {}
+        takeRecords() {
+          return []
+        }
+      },
+    )
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  const many = Array.from({ length: 200 }, (_, index) => ({ id: String(index), name: `Person ${String(index)}` }))
+
+  it("puts the sentinel inside the scroll container, not in the pagination bar", () => {
+    createTable(host, { data: many, pagination: { mode: "infinite", pageSize: 10 } })
+
+    const sentinel = host.querySelector(".tpz-sentinel")
+    expect(sentinel).toBeTruthy()
+    expect(host.querySelector(".tpz-scroll")?.contains(sentinel!)).toBe(true)
+    expect(host.querySelector(".tpz-pagination .tpz-sentinel")).toBeNull()
+  })
+
+  it("loads one page each time it is reached", () => {
+    createTable(host, { data: many, pagination: { mode: "infinite", pageSize: 10 } })
+
+    expect(cells()).toHaveLength(10)
+    observed.at(-1)!.fire()
+    expect(cells()).toHaveLength(20)
+    observed.at(-1)!.fire()
+    expect(cells()).toHaveLength(30)
+  })
+
+  it("stops observing once every row is loaded", () => {
+    createTable(host, { data: many.slice(0, 12), pagination: { mode: "infinite", pageSize: 10 } })
+
+    observed.at(-1)!.fire()
+    expect(cells()).toHaveLength(12)
+
+    const settled = observed.length
+    observed.at(-1)!.fire()
+    expect(observed.length).toBe(settled)
+  })
+})
