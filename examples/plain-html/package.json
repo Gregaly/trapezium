@@ -1,0 +1,9 @@
+{
+  "name": "@trapezium/example-plain-html",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node serve.mjs"
+  }
+}

@@ -102,7 +102,7 @@ Every example in [`examples/`](examples) runs against the local packages.
 | [`next-server`](examples/next-server) | Next.js | Sorting, filtering and paging in the database, all of it in the URL. `pnpm dev` |
 | [`vue-app`](examples/vue-app) | Vue 3 | Including a cell that renders a real Vue component. `pnpm dev` |
 | [`svelte-app`](examples/svelte-app) | Svelte 5 | Runes, `bind:tableState`, and the action. `pnpm dev` |
-| [`plain-html`](examples/plain-html) | None | One file, one script tag, no build step |
+| [`plain-html`](examples/plain-html) | None | One file, one script tag, no build step. `pnpm dev` |
 
 ## Licence
 
