@@ -318,10 +318,11 @@ export const BUILT_IN_TYPES: Record<string, TypeDef> = {
 
   file: {
     name: "file",
-    filter: "none",
-    operators: PRESENCE,
+    // Sortable and searchable by its name, which is the part of a file a
+    // person can see. Only its contents are beyond us.
+    filter: "text",
+    operators: TEXTUAL,
     icon: "file",
-    sortable: false,
     format: (value) => fileName(value),
     normalise: (value) => fileName(value).toLowerCase() || null,
   },

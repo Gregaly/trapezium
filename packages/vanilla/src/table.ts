@@ -742,11 +742,17 @@ export function createTable<TRow extends AnyRow>(
 
     if (column.filterKind === "set") {
       const configured = column.formatOptions?.options
+      // Labelled the way the column labels its cells, so a set filter offers
+      // "Blocker" rather than "blocker" — including for a custom type, whose
+      // formatter is the only thing that knows the difference.
+      const label = (value: unknown) =>
+        formatWithType(registry().get(column.type), value, { ...formatting(), ...column.formatOptions })
+
       const choices = configured?.length
         ? configured.map((option) => ({ value: option.value, label: option.label ?? option.value }))
         : distinctValues(settings.data.map((row) => column.accessor(row))).map((entry) => ({
             value: entry.value,
-            label: optionLabel(entry.value, column.formatOptions?.options),
+            label: label(entry.value) || entry.value,
           }))
 
       const chosen = new Set(

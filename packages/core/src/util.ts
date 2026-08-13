@@ -101,7 +101,34 @@ function collator(): Intl.Collator {
 
 /** Case- and accent-insensitive containment, for search and text filters. */
 export function textIncludes(haystack: string, needle: string): boolean {
-  return fold(haystack).includes(fold(needle))
+  return createTextMatcher(needle)(haystack)
+}
+
+/**
+ * A reusable test for one query.
+ *
+ * Folding a string — decomposing it, stripping the accents, lower-casing it —
+ * costs far more than the comparison it prepares for, and search does it once
+ * per cell. This prepares the query once and takes a fast path for text that
+ * has no accents to strip, which is nearly all of it: for pure ASCII, folding
+ * *is* lower-casing, so the cheap comparison is not an approximation but the
+ * same answer arrived at sooner.
+ */
+export function createTextMatcher(query: string): (text: string) => boolean {
+  const lower = query.toLowerCase()
+  const folded = fold(query)
+  const plainQuery = isAscii(query)
+
+  return (text: string) => {
+    if (plainQuery && isAscii(text)) return text.toLowerCase().includes(lower)
+    return fold(text).includes(folded)
+  }
+}
+
+const NON_ASCII = /[^\u0000-\u007f]/
+
+function isAscii(value: string): boolean {
+  return !NON_ASCII.test(value)
 }
 
 export function textEquals(a: string, b: string): boolean {

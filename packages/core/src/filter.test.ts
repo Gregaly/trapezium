@@ -2,9 +2,10 @@ import { describe, expect, it } from "vitest"
 
 import { resolveColumns } from "./columns.js"
 import { DEFAULT_FORMAT } from "./format.js"
-import { filterRows, matchesFilter } from "./filter.js"
+import { filterRows, matchesFilter, normaliseFilter } from "./filter.js"
 import { BUILT_IN_TYPES, defaultTypeRegistry } from "./registry.js"
-import { createState } from "./state.js"
+import { createState, setFilter } from "./state.js"
+import { stateFromUrl, stateToQueryString } from "./url.js"
 import type { ColumnFilter } from "./types.js"
 
 const format = DEFAULT_FORMAT
@@ -143,5 +144,50 @@ describe("filterRows", () => {
 
   it("ignores an incomplete filter rather than matching nothing", () => {
     expect(run([{ key: "plan", operator: "eq", value: "" }])).toHaveLength(3)
+  })
+})
+
+describe("normaliseFilter", () => {
+  it("gives list operators a list", () => {
+    expect(normaliseFilter({ key: "a", operator: "in", value: "x" })).toEqual({ key: "a", operator: "in", value: ["x"] })
+    expect(normaliseFilter({ key: "a", operator: "between", value: "1" })).toEqual({
+      key: "a",
+      operator: "between",
+      value: ["1"],
+    })
+  })
+
+  it("gives everything else a single value", () => {
+    // A set filter with one value ticked emits `eq` with a one-element array;
+    // left alone, that state no longer round-trips through a URL.
+    expect(normaliseFilter({ key: "a", operator: "eq", value: ["pro"] })).toEqual({
+      key: "a",
+      operator: "eq",
+      value: "pro",
+    })
+  })
+
+  it("drops a value an operator cannot use", () => {
+    expect(normaliseFilter({ key: "a", operator: "notEmpty", value: "left over" })).toEqual({
+      key: "a",
+      operator: "notEmpty",
+    })
+  })
+
+  it("leaves a filter that is already canonical exactly as it is", () => {
+    const filter = { key: "a", operator: "in" as const, value: ["x", "y"] }
+    expect(normaliseFilter(filter)).toBe(filter)
+  })
+})
+
+describe("what the state does with filters", () => {
+  it("normalises whatever a caller hands it", () => {
+    const state = setFilter(createState(), { key: "plan", operator: "eq", value: ["pro"] })
+    expect(state.filters).toEqual([{ key: "plan", operator: "eq", value: "pro" }])
+  })
+
+  it("round-trips through a URL unchanged", () => {
+    const state = setFilter(createState(), { key: "plan", operator: "eq", value: ["pro"] })
+    expect(stateFromUrl(stateToQueryString(state)).filters).toEqual(state.filters)
   })
 })

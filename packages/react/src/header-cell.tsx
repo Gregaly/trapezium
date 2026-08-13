@@ -45,6 +45,7 @@ export function HeaderCell<TRow extends AnyRow>({
   isPinEdge,
   theme,
   onDragStateChange,
+  formatValue,
 }: {
   column: TableColumn<TRow>
   state: TableState
@@ -68,6 +69,8 @@ export function HeaderCell<TRow extends AnyRow>({
   theme?: "light" | "dark"
   /** Lets the table mark itself while a column is in the air. */
   onDragStateChange?: (dragging: boolean) => void
+  /** How a stored value reads on screen, for the set filter's choices. */
+  formatValue: (value: unknown) => string
 }) {
   const [dropEdge, setDropEdge] = useState<"before" | "after" | undefined>()
   const [dragging, setDragging] = useState(false)
@@ -319,6 +322,7 @@ export function HeaderCell<TRow extends AnyRow>({
                       column={column}
                       filter={filter}
                       rows={rows}
+                      label={formatValue}
                       onApply={(next: ColumnFilter) => {
                         apply((current) => setFilterState(current, next))
                         if (column.filterKind !== "set") close()

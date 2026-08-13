@@ -207,3 +207,52 @@ describe("server mode with append pagination", () => {
     warn.mockRestore()
   })
 })
+
+describe("searching structured values", () => {
+  type Structured = {
+    name: string
+    home: { line1: string; city: string } | null
+    file: { name: string } | null
+    payload: Record<string, unknown> | null
+  }
+
+  const structured: Structured[] = [
+    { name: "Ada", home: { line1: "1 Test St", city: "Sydney" }, file: { name: "report.pdf" }, payload: { secret: 1 } },
+    { name: "Tom", home: null, file: null, payload: null },
+  ]
+
+  const state = createState()
+  const columns = resolveColumns<Structured, unknown>({
+    columns: [
+      { key: "name" },
+      { key: "home", type: "address" },
+      { key: "file", type: "file" },
+      { key: "payload", type: "json" },
+    ],
+    rows: structured,
+    state,
+    types: defaultTypeRegistry,
+  }).visible
+
+  const find = (query: string) =>
+    searchRows(structured, columns, query, defaultTypeRegistry, DEFAULT_FORMAT).map((row) => row.name)
+
+  it("looks inside what the cell shows", () => {
+    expect(find("Sydney")).toEqual(["Ada"])
+    expect(find("Test St")).toEqual(["Ada"])
+    expect(find("report.pdf")).toEqual(["Ada"])
+  })
+
+  it("never matches the shape of the value itself", () => {
+    // `String({…})` is "[object Object]", so without care a search for "object"
+    // matches every row with an address, a file or a blob of JSON in it.
+    expect(find("object")).toEqual([])
+    expect(find("[object")).toEqual([])
+  })
+
+  it("does not leak the contents of a column that renders nothing", () => {
+    // A JSON column shows "{…}" and is not searchable; the values inside it are
+    // not something the reader can see.
+    expect(find("secret")).toEqual([])
+  })
+})

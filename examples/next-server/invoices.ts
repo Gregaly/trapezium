@@ -1,5 +1,5 @@
 import type { TableState } from "@trapezium/core"
-import { matchesFilter, BUILT_IN_TYPES } from "@trapezium/core"
+import { matchesFilter, isFilterUsable, BUILT_IN_TYPES } from "@trapezium/core"
 
 /**
  * Stands in for a database.
@@ -85,8 +85,15 @@ export async function getInvoices(
 
   const search = state.search.trim().toLowerCase()
 
+  /*
+    Half-typed filters are dropped, exactly as the client drops them. Keeping
+    one means it matches everything, which under "any" widens the result to the
+    whole table rather than being ignored.
+  */
+  const conditions = state.filters.filter(isFilterUsable)
+
   const matched = INVOICES.filter((invoice) => {
-    const passes = state.filters.map((filter) => {
+    const passes = conditions.map((filter) => {
       const value = invoice[filter.key as keyof Invoice]
       const type = BUILT_IN_TYPES[typeOf(filter.key)] ?? BUILT_IN_TYPES["text"]!
       return matchesFilter(value, filter, type, { locale: "en", timeZone: "UTC", currency: "AUD", currencyInMinorUnits: false, emptyText: "—" })

@@ -23,6 +23,7 @@ import type {
   PartialTableState,
 } from "./types.js"
 import { DEFAULT_STATE } from "./state.js"
+import { normaliseFilter } from "./filter.js"
 
 /** Separates one entry from the next within a parameter. */
 const BETWEEN = "~"
@@ -306,7 +307,7 @@ export function decodeFilters(value: string): ColumnFilter[] {
 
       const filter: ColumnFilter = { key, operator: operator as FilterOperator }
       if (rawValue !== undefined) filter.value = decodeFilterValue(operator, rawValue)
-      return filter
+      return normaliseFilter(filter)
     })
     .filter((filter): filter is ColumnFilter => filter !== undefined)
 }

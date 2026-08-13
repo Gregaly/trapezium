@@ -19,7 +19,7 @@ import type {
   TableState,
   PartialTableState,
 } from "./types.js"
-import { withFilter, withoutFilter } from "./filter.js"
+import { normaliseFilter, withFilter, withoutFilter } from "./filter.js"
 
 /** What a table starts as before anything is configured or remembered. */
 export const DEFAULT_STATE: TableState = {
@@ -79,7 +79,7 @@ export function setFilter(state: TableState, filter: ColumnFilter): TableState {
 
 /** Appends a filter, so a column can carry more than one condition. */
 export function addFilter(state: TableState, filter: ColumnFilter): TableState {
-  return { ...state, filters: [...state.filters, filter], page: 1 }
+  return { ...state, filters: [...state.filters, normaliseFilter(filter)], page: 1 }
 }
 
 export function removeFilter(state: TableState, key: string): TableState {

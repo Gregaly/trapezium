@@ -90,6 +90,7 @@ export {
   isListOperator,
   matchesFilter,
   needsValue,
+  normaliseFilter,
   withFilter,
   withoutFilter,
 } from "./filter.js"
@@ -162,6 +163,7 @@ export type { IconName } from "./icons.js"
 export {
   clamp,
   compareUnknown,
+  createTextMatcher,
   getPath,
   humanise,
   isEmpty,

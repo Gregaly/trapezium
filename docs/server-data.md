@@ -36,13 +36,18 @@ const { data, isLoading } = useQuery({
 The state you receive is plain data, so turning it into SQL is a function you write once:
 
 ```ts
+import { isFilterUsable } from "@trapezium/core"
+
 function toQuery(state) {
   return {
     limit: state.pageSize,
     offset: (state.page - 1) * state.pageSize,
     orderBy: state.sort.map((sort) => `${sort.key} ${sort.direction}`),
     search: state.search,
-    where: state.filters.map(toCondition),
+    // Half-typed filters are dropped, exactly as the client drops them. Keeping
+    // one means it matches everything, which under `match: "any"` widens the
+    // result to the whole table instead of being ignored.
+    where: state.filters.filter(isFilterUsable).map(toCondition),
     match: state.match,          // "all" or "any"
   }
 }

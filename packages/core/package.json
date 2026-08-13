@@ -39,7 +39,12 @@
     },
     "./styles.css": "./styles.css",
     "./themes/shadcn.css": "./themes/shadcn.css",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "require": "./dist/testing/index.cjs"
+    }
   },
   "scripts": {
     "build": "tsup",

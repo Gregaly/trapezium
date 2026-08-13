@@ -11,6 +11,7 @@
  * datetime column by that whole day rather than by an exact instant.
  */
 
+import { toText } from "./format.js"
 import type { TypeDef } from "./registry.js"
 import type {
   ColumnFilter,
@@ -58,6 +59,40 @@ export function isListOperator(operator: FilterOperator): boolean {
   return LIST_OPERATORS.includes(operator)
 }
 
+/**
+ * Puts a filter's value into the shape its operator implies.
+ *
+ * List operators take a list; everything else takes a single value. Without
+ * this, a set filter that emits `eq` with a one-element array produces state
+ * that no longer round-trips through a URL — `["pro"]` goes out and `"pro"`
+ * comes back — and a saved view stops matching the link that would recreate it.
+ *
+ * Applied wherever a filter enters the state, so everything downstream can rely
+ * on it.
+ */
+export function normaliseFilter(filter: ColumnFilter): ColumnFilter {
+  // "Is empty" takes no value, and one left over from a previous operator is
+  // dropped rather than carried — the URL does not encode it either, so keeping
+  // it would make the state and its link disagree.
+  if (!needsValue(filter.operator)) {
+    return filter.value === undefined ? filter : { key: filter.key, operator: filter.operator }
+  }
+
+  const wantsList = LIST_OPERATORS.includes(filter.operator) || RANGE_OPERATORS.includes(filter.operator)
+
+  if (wantsList) {
+    if (filter.value === undefined) return filter
+    return Array.isArray(filter.value) ? filter : { ...filter, value: [filter.value] }
+  }
+
+  if (!Array.isArray(filter.value)) return filter
+
+  // A single value is that value; several were never meaningful here, and the
+  // first is the only one this operator could have used anyway.
+  const [first] = filter.value
+  return first === undefined ? { key: filter.key, operator: filter.operator } : { ...filter, value: first }
+}
+
 /** Whether a filter is complete enough to be worth applying. */
 export function isFilterUsable(filter: ColumnFilter): boolean {
   if (!needsValue(filter.operator)) return true
@@ -92,6 +127,12 @@ function isTemporal(type: TypeDef): boolean {
  *
  * Exported because a caller filtering on the server wants the same semantics as
  * the client, and reimplementing them is how the two drift apart.
+ *
+ * An incomplete filter — an operator that needs a value, with none yet typed —
+ * answers `true`: it asks nothing, so it excludes nothing. **Drop those with
+ * `isFilterUsable` before combining conditions with OR**, exactly as
+ * `filterRows` does, or a half-typed filter will widen the result to
+ * everything instead of being ignored.
  */
 export function matchesFilter(
   value: unknown,
@@ -108,7 +149,18 @@ export function matchesFilter(
   // matching "is less than 10".
   if (isEmpty(value)) return false
 
-  const normalise = (input: unknown) => (type.normalise ? type.normalise(input, context) : input)
+  /*
+    A type with no rule of its own falls back to the value itself — except for
+    an object, where `String(value)` is "[object Object]" and would make
+    "contains object" true of every structured cell. Those are rendered instead,
+    which is what the reader sees.
+  */
+  const normalise = (input: unknown) =>
+    type.normalise
+      ? type.normalise(input, context)
+      : typeof input === "object" && input !== null && !Array.isArray(input)
+        ? (type.format?.(input, context) ?? toText(input, context))
+        : input
 
   switch (filter.operator) {
     case "contains":
@@ -263,30 +315,46 @@ export function filterRows<TRow, TNode = unknown>(
   types: (name: string) => TypeDef,
   context: FormatContext,
 ): TRow[] {
+  /*
+    Everything that does not depend on the row is worked out once. Spreading a
+    context object per row per filter costs more than the comparison it was
+    built for, and over a hundred thousand rows it is most of the work.
+  */
   const usable = filters
     .filter(isFilterUsable)
     .map((filter) => {
       const column = columns.find((candidate) => candidate.key === filter.key)
-      return column ? { filter, column, type: types(column.type) } : undefined
+      if (!column) return undefined
+
+      return {
+        filter,
+        accessor: column.accessor,
+        type: types(column.type),
+        context: column.formatOptions ? { ...context, ...column.formatOptions } : context,
+      }
     })
-    .filter((entry): entry is { filter: ColumnFilter; column: ResolvedColumn<TRow, TNode>; type: TypeDef } =>
-      entry !== undefined,
-    )
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
 
   if (usable.length === 0) return rows as TRow[]
 
-  return rows.filter((row) => {
-    const results = usable.map(({ filter, column, type }) =>
-      matchesFilter(column.accessor(row), filter, type, { ...context, ...column.formatOptions }),
+  // Short-circuited rather than collected: "all" stops at the first refusal and
+  // "any" at the first acceptance, which for several conditions is most of the
+  // comparisons never made.
+  if (match === "any") {
+    return rows.filter((row) =>
+      usable.some((entry) => matchesFilter(entry.accessor(row), entry.filter, entry.type, entry.context)),
     )
-    return match === "any" ? results.some(Boolean) : results.every(Boolean)
-  })
+  }
+
+  return rows.filter((row) =>
+    usable.every((entry) => matchesFilter(entry.accessor(row), entry.filter, entry.type, entry.context)),
+  )
 }
 
 /** Adds or replaces the filter on a column, which is what a column menu does. */
 export function withFilter(filters: readonly ColumnFilter[], filter: ColumnFilter): ColumnFilter[] {
   const others = filters.filter((entry) => entry.key !== filter.key)
-  return [...others, filter]
+  return [...others, normaliseFilter(filter)]
 }
 
 export function withoutFilter(filters: readonly ColumnFilter[], key: string): ColumnFilter[] {

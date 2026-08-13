@@ -4,7 +4,6 @@ import {
   distinctValues,
   isListOperator,
   needsValue,
-  optionLabel,
   type AnyRow,
   type ColumnFilter,
   type FilterOperator,
@@ -28,6 +27,7 @@ export function FilterControl<TRow extends AnyRow>({
   column,
   filter,
   rows,
+  label,
   onApply,
   onClear,
 }: {
@@ -36,11 +36,19 @@ export function FilterControl<TRow extends AnyRow>({
   filter: ColumnFilter | undefined
   /** Every row the table was given, for deriving the choices in a set filter. */
   rows: readonly TRow[]
+  /**
+   * How a stored value reads on screen.
+   *
+   * The same function the cells use, so a set filter offers "Blocker" rather
+   * than "blocker" — including for a custom type, whose formatter is the only
+   * thing that knows the difference.
+   */
+  label: (value: unknown) => string
   onApply: (filter: ColumnFilter) => void
   onClear: () => void
 }) {
   if (column.filterKind === "set") {
-    return <SetFilter column={column} filter={filter} rows={rows} onApply={onApply} onClear={onClear} />
+    return <SetFilter column={column} filter={filter} rows={rows} label={label} onApply={onApply} onClear={onClear} />
   }
   if (column.filterKind === "boolean") {
     return <BooleanFilter filter={filter} column={column} onApply={onApply} onClear={onClear} />
@@ -154,12 +162,14 @@ function SetFilter<TRow extends AnyRow>({
   column,
   filter,
   rows,
+  label,
   onApply,
   onClear,
 }: {
   column: TableColumn<TRow>
   filter: ColumnFilter | undefined
   rows: readonly TRow[]
+  label: (value: unknown) => string
   onApply: (filter: ColumnFilter) => void
   onClear: () => void
 }) {
@@ -170,11 +180,14 @@ function SetFilter<TRow extends AnyRow>({
     if (configured?.length) {
       return configured.map((option) => ({ value: option.value, label: option.label ?? option.value }))
     }
+
+    // Otherwise the choices are the values actually present, labelled the way
+    // the column labels them.
     return distinctValues(rows.map((row) => column.accessor(row))).map((entry) => ({
       value: entry.value,
-      label: optionLabel(entry.value, column.formatOptions?.options),
+      label: label(entry.value) || entry.value,
     }))
-  }, [column, rows])
+  }, [column, rows, label])
 
   const selected = new Set(
     filter && Array.isArray(filter.value) ? filter.value.map(String) : filter?.value !== undefined ? [String(filter.value)] : [],

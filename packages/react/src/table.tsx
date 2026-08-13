@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
+  formatWithType,
   copyText,
   downloadText,
   resolveRowId,
@@ -92,6 +93,19 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   )
 
   const visibleKeys = useMemo(() => columns.map((column) => column.key), [columns])
+
+  /**
+   * How a stored value reads on screen, for whichever column is asking.
+   *
+   * The set filter uses it so its choices match the cells — including for a
+   * custom type, whose formatter is the only thing that knows that "blocker"
+   * is shown as "Blocker".
+   */
+  const formatValue = useCallback(
+    (column: (typeof columns)[number]) => (value: unknown) =>
+      formatWithType(types.get(column.type), value, { ...format, ...column.formatOptions }),
+    [types, format],
+  )
   const columnCount = columns.length + (selection ? 1 : 0)
 
   /*
@@ -287,6 +301,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
                     isPinEdge={isPinEdge(columns, column.key)}
                     theme={theme}
                     onDragStateChange={setDraggingColumn}
+                    formatValue={formatValue(column)}
                     style={{ width: column.width, minWidth: column.minWidth, maxWidth: column.maxWidth }}
                   />
                 ))}

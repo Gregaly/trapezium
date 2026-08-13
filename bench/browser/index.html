@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trapezium — browser benchmark</title>
+    <link rel="stylesheet" href="../../packages/core/styles.css" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        max-width: 84rem;
+        margin: 0 auto;
+        padding: 2rem 1.5rem 6rem;
+        background: light-dark(#f2eee6, #0a0a0a);
+        color: light-dark(#221e1a, #ededed);
+        font-family: ui-rounded, system-ui, sans-serif;
+      }
+      h1 { font-family: Georgia, serif; font-weight: 400; margin: 0 0 0.25rem; }
+      p { color: light-dark(#6b6157, #a1a1a1); margin: 0 0 1.5rem; }
+      #results { font-family: ui-monospace, Menlo, monospace; font-size: 0.75rem; white-space: pre; margin-bottom: 1.5rem; }
+      #table { margin-top: 1rem; }
+    </style>
+  </head>
+
+  <body>
+    <h1>Browser benchmark</h1>
+    <p>
+      Renders a real table and measures what a user waits for: first paint, a sort, a filter, a
+      search, and a page turn — each timed to the frame the browser actually painted.
+    </p>
+
+    <div id="results">Run <code>window.bench(rows)</code> from the console, or wait — it starts on load.</div>
+    <div id="table"></div>
+
+    <script src="../../packages/vanilla/dist/trapezium.global.js"></script>
+    <script type="module">
+      import { makeRows, columns, customTypes } from "../dataset.mjs"
+
+      const { createTable } = window.Trapezium
+      const output = document.querySelector("#results")
+
+      /**
+       * Milliseconds from calling `work` to the browser having laid the result
+       * out.
+       *
+       * Reading `offsetHeight` forces style and layout synchronously, so the
+       * number covers the engine, the DOM work and the layout — everything the
+       * library is responsible for. Paint and compositing happen after and are
+       * the browser's business; measuring them would also mean the tab has to
+       * be visible, which it is not when this is driven from a script.
+       */
+      async function timeToPaint(work) {
+        const host = document.querySelector("#table")
+        const started = performance.now()
+        work()
+        void host.offsetHeight
+        return performance.now() - started
+      }
+
+      async function bench(size) {
+        const host = document.querySelector("#table")
+        host.replaceChildren()
+
+        const rows = makeRows(size, 3)
+        const lines = [`${size.toLocaleString()} rows × ${columns.length} columns`, ""]
+
+        let table
+        const firstPaint = await timeToPaint(() => {
+          table = createTable(host, {
+            data: rows,
+            columns,
+            types: customTypes,
+            getRowId: (row) => row.id,
+            search: { debounce: 0 },
+            selection: "multiple",
+            pagination: { mode: "pages", pageSize: 50 },
+            maxHeight: 460,
+            format: { currency: "AUD" },
+          })
+        })
+        lines.push(`  first paint            ${firstPaint.toFixed(1)} ms`)
+
+        const sortText = await timeToPaint(() =>
+          table.setState({ sort: [{ key: "name", direction: "asc" }] }),
+        )
+        lines.push(`  sort by text           ${sortText.toFixed(1)} ms`)
+
+        const sortDate = await timeToPaint(() =>
+          table.setState({ sort: [{ key: "seenAt", direction: "desc" }] }),
+        )
+        lines.push(`  sort by date           ${sortDate.toFixed(1)} ms`)
+
+        const sortCustom = await timeToPaint(() =>
+          table.setState({ sort: [{ key: "version", direction: "desc" }] }),
+        )
+        lines.push(`  sort by custom type    ${sortCustom.toFixed(1)} ms`)
+
+        const filter = await timeToPaint(() =>
+          table.setState({ filters: [{ key: "plan", operator: "in", value: ["pro", "team"] }], page: 1 }),
+        )
+        lines.push(`  apply a filter         ${filter.toFixed(1)} ms`)
+
+        const searchFirst = await timeToPaint(() => table.setState({ search: "ada", page: 1 }))
+        lines.push(`  search, first time     ${searchFirst.toFixed(1)} ms`)
+
+        const searchAgain = await timeToPaint(() => table.setState({ search: "adam", page: 1 }))
+        lines.push(`  search, second time    ${searchAgain.toFixed(1)} ms`)
+
+        const clear = await timeToPaint(() => table.setState({ search: "", filters: [], page: 1 }))
+        lines.push(`  clear everything       ${clear.toFixed(1)} ms`)
+
+        const nextPage = await timeToPaint(() => table.setState({ page: 2 }))
+        lines.push(`  next page              ${nextPage.toFixed(1)} ms`)
+
+        const pageSize = await timeToPaint(() => table.setState({ pageSize: 200, page: 1 }))
+        lines.push(`  200 rows on one page   ${pageSize.toFixed(1)} ms`)
+
+        lines.push("")
+        lines.push(`  DOM nodes in the table ${host.querySelectorAll("*").length.toLocaleString()}`)
+
+        if (performance.memory) {
+          lines.push(`  JS heap                ${(performance.memory.usedJSHeapSize / 1024 / 1024).toFixed(1)} MB`)
+        }
+
+        table.destroy()
+        return lines.join("\n")
+      }
+
+      window.bench = bench
+
+      window.runAll = async (sizes = [1_000, 10_000, 50_000]) => {
+        const blocks = []
+        for (const size of sizes) blocks.push(await bench(size))
+        output.textContent = blocks.join("\n\n")
+        return output.textContent
+      }
+
+      // Something to look at without touching the console.
+      window.runAll([1_000]).then(() => {
+        output.textContent += "\n\nCall runAll([1000, 10000, 50000]) for the full set."
+      })
+    </script>
+  </body>
+</html>
