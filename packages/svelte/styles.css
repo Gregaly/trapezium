@@ -1108,3 +1108,21 @@
   display: block;
   container-type: normal;
 }
+
+/*
+  A control can be a link rather than a button — that is how a table sorts,
+  filters and pages with no client JavaScript. Anchors bring the browser's own
+  colour and underline with them, so every control that can be either is reset
+  to look like the button it replaces.
+*/
+.tpz a.tpz-th-button,
+.tpz a.tpz-btn,
+.tpz a.tpz-menu-item,
+.tpz-portal a.tpz-menu-item {
+  color: inherit;
+  text-decoration: none;
+}
+
+.tpz a.tpz-th-button:hover {
+  color: var(--tpz-fg);
+}

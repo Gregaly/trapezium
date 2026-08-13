@@ -423,16 +423,10 @@ function SortButton({
   columnHeader: string
 }) {
   if (href) {
-    const content = <span className="tpz-th-button">{children}</span>
-    return Link ? (
-      <Link href={href} aria-label={`Sort by ${columnHeader}`}>
-        {content}
-      </Link>
-    ) : (
-      <a href={href} className="tpz-th-button" aria-label={`Sort by ${columnHeader}`}>
-        {children}
-      </a>
-    )
+    // The class goes on the anchor itself rather than on a span inside it, or
+    // the browser's own link styling underlines every column header.
+    const props = { href, className: "tpz-th-button", "aria-label": `Sort by ${columnHeader}`, children }
+    return Link ? <Link {...props} /> : <a {...props} />
   }
 
   return (

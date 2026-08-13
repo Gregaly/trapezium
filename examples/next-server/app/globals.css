@@ -1,0 +1,17 @@
+:root { color-scheme: light dark; }
+
+* { box-sizing: border-box; }
+
+body {
+  max-width: 76rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  background: light-dark(#f2eee6, #0a0a0a);
+  color: light-dark(#221e1a, #ededed);
+  font-family: ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+}
+
+h1 { margin: 0; font-family: "Iowan Old Style", Palatino, Georgia, serif; font-weight: 400; font-size: 2.25rem; letter-spacing: -0.015em; }
+p  { color: light-dark(#6b6157, #a1a1a1); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.75rem; }
+header { margin-bottom: 2rem; }
