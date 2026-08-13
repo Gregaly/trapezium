@@ -32,3 +32,81 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0
 html[data-theme="light"] { color-scheme: light; }
 html[data-theme="dark"] { color-scheme: dark; }
 .narrow { max-width: 24rem; }
+
+/* The switch panel above each table. Part of the example, not the library. */
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  border: 1px solid light-dark(#e0d8c8, rgb(255 255 255 / 12%));
+  border-radius: 10px;
+  background: light-dark(#fbf8f2, #141414);
+  padding: 0.625rem 0.875rem;
+  font-size: 0.8125rem;
+}
+
+.switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  clip-path: inset(50%);
+}
+
+.switch-track {
+  position: relative;
+  width: 1.875rem;
+  height: 1.0625rem;
+  flex: none;
+  border-radius: 999px;
+  background: light-dark(#ddd4c4, #3a3a3a);
+  transition: background 140ms ease;
+}
+
+.switch-track::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 0.8125rem;
+  height: 0.8125rem;
+  border-radius: 999px;
+  background: light-dark(#fff, #e8e8e8);
+  content: "";
+  transition: transform 140ms ease;
+}
+
+.switch input:checked + .switch-track {
+  background: light-dark(#6a2e46, #d98fae);
+}
+
+.switch input:checked + .switch-track::after {
+  transform: translateX(0.8125rem);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid light-dark(#6a2e46, #d98fae);
+  outline-offset: 2px;
+}
+
+.segmented { display: inline-flex; align-items: center; gap: 0.5rem; }
+.segmented-label { color: light-dark(#6b6157, #a1a1a1); }
+.segmented-options { display: inline-flex; gap: 2px; border: 1px solid light-dark(#e0d8c8, rgb(255 255 255 / 12%)); border-radius: 8px; padding: 2px; }
+.segmented-options button {
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  padding: 0.1875rem 0.5rem;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.segmented-options button[data-active="true"] { background: light-dark(#e8e0d2, #2c2c2c); }

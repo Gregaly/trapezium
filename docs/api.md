@@ -36,7 +36,7 @@ import { Table } from "@trapezium/react"
 | `filters` | `boolean` | `true` | Per-column filters. |
 | `sortable` | `boolean` | `true` | Column sorting. |
 | `resizable` | `boolean` | `true` | Drag column edges. |
-| `reorderable` | `boolean` | `true` | Drag headers. |
+| `reorderable` | `boolean` | `true` | Drag headers to move a column, or out of the table to remove it. |
 | `columnMenu` | `boolean` | `true` | The chevron menu in each header. |
 | `columnControl` | `boolean` | `true` | The "Columns" button. |
 | `pagination` | `boolean \| PaginationOptions` | `{ mode: "pages", pageSize: 25 }` | See below. |
@@ -170,7 +170,7 @@ All pure `(state, …) => state`. Anything that changes which rows match resets 
 
 ### Columns
 
-`resolveColumns(options)` · `moveColumn(keys, key, direction)` · `reorderColumn(keys, key, toIndex)` · `pruneState(state, keys)` · `inferColumns(rows, options?)` · `inferType(key, values)` · `distinctValues(values, limit?)`
+`resolveColumns(options)` · `moveColumn(keys, key, direction)` · `reorderColumn(keys, key, toIndex)` · `reorderColumnTo(keys, dragged, target, "before" | "after")` · `pruneState(state, keys)` · `inferColumns(rows, options?)` · `inferType(key, values)` · `distinctValues(values, limit?)`
 
 ### Types
 
@@ -189,6 +189,10 @@ All pure `(state, …) => state`. Anything that changes which rows match resets 
 ### Export
 
 `toCsv(rows, options)` · `toDelimitedText` · `exportCell` · `downloadText(text, filename, mimeType?)` · `copyText(text)`
+
+### Effects
+
+`poof({ x, y, size?, theme? })` — the puff of smoke shown where a column was dragged out. Does nothing where there is no document, and nothing for anyone who has asked for reduced motion.
 
 ### Store
 

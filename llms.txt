@@ -72,6 +72,13 @@ Operators: eq ne contains notContains startsWith endsWith gt gte lt lte between 
 A date filter written as a day matches the whole day. Empty cells satisfy no comparison. 0 and false
 are not empty.
 
+## Columns: moving and removing
+
+Drag a header sideways to move it (a line shows the landing edge), drag a row in the column list, or
+use "Move left"/"Move right" in the column panel. Drag a header out of the table to remove it, with a
+puff of smoke; the last visible column refuses. All of it lands in state.order / state.hidden.
+Disable with reorderable={false} on the table or a column. Pinned columns are not draggable.
+
 ## Pagination
 
 pagination={{ mode: "pages" | "simple" | "loadMore" | "infinite", pageSize, pageSizeOptions, siblings }}

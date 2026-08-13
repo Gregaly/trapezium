@@ -114,6 +114,27 @@ Widths are in pixels. Columns are content-sized when you do not set one, within 
 
 `wrap` lets a cell take several lines instead of truncating — worth it for a notes column, ruinous for everything else.
 
+## Moving and removing columns
+
+Three ways to move a column, because people reach for different ones:
+
+- **Drag the header sideways.** The whole header is the handle, and a line shows which side of the neighbour it will land on.
+- **Drag a row in the column list.** Better when the column you want is scrolled off the side of the table.
+- **"Move left" and "Move right"** in the column panel, which is the keyboard path.
+
+And two ways to remove one:
+
+- **Drag the header out of the table and let go**, which removes it with a small puff of smoke — the macOS dock gesture. The last visible column refuses, because a table of nothing has no obvious way back.
+- **"Hide column"** in the panel, or the checkbox in the column list.
+
+Everything ends up in `state.order` and `state.hidden`, so an arrangement can be saved, shared and restored like anything else. Turn the whole thing off with `reorderable={false}` on the table, or per column:
+
+```tsx
+{ key: "reference", reorderable: false }
+```
+
+Pinned columns are not draggable: pinning already decides where they go.
+
 ## Pinning and visibility
 
 ```tsx

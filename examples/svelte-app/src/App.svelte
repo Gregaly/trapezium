@@ -4,10 +4,12 @@
    *
    * Two tables: one with nothing configured, and one with everything. The
    * actions column returns a DOM node — which is all a renderer has to be —
-   * and `bind:tableState` keeps the arrangement in a rune you can read.
+   * `bind:tableState` keeps the arrangement in a rune, and the switches change
+   * the props live.
    */
   import { Table, type TableState } from "@trapezium/svelte"
 
+  import Controls from "./Controls.svelte"
   import { makePeople, type Person } from "./data"
 
   const people = makePeople()
@@ -15,11 +17,16 @@
   let selected = $state<string[]>([])
   let tableState = $state<TableState | undefined>()
 
-  const columns = [
+  let mode = $state("pages")
+  let setFilters = $state(false)
+  let selection = $state(true)
+  let cards = $state(false)
+
+  const columns = $derived([
     { key: "name", pin: "start" },
     { key: "email" },
-    { key: "team", filter: "set" },
-    { key: "salary", type: "currency" },
+    { key: "team", filter: setFilters ? "set" : true },
+    { key: "salary", type: "currency", filter: setFilters ? "set" : "range" },
     { key: "started", type: "date" },
     { key: "remote", type: "boolean" },
     {
@@ -37,7 +44,11 @@
         return button
       },
     },
-  ]
+  ])
+
+  const pagination = $derived(
+    mode === "none" ? false : { mode, pageSize: 15, pageSizeOptions: [15, 30, 60] },
+  )
 </script>
 
 <main>
@@ -51,14 +62,46 @@
 
   <section>
     <h2>Everything switched on</h2>
+    <p>Drag a column header sideways to move it, or out of the table to remove it.</p>
+
+    <Controls
+      segments={[
+        {
+          label: "Pagination",
+          value: mode,
+          options: [
+            { value: "pages", label: "Pages" },
+            { value: "simple", label: "Prev / next" },
+            { value: "loadMore", label: "Load more" },
+            { value: "infinite", label: "Infinite" },
+            { value: "none", label: "All rows" },
+          ],
+        },
+      ]}
+      switches={[
+        { label: "Set filters", value: setFilters },
+        { label: "Selection", value: selection },
+        { label: "Card layout", value: cards },
+      ]}
+      onsegment={(label, value) => {
+        if (label === "Pagination") mode = value
+      }}
+      onswitch={(label, value) => {
+        if (label === "Set filters") setFilters = value
+        if (label === "Selection") selection = value
+        if (label === "Card layout") cards = value
+      }}
+    />
+
     <Table
       data={people}
       {columns}
       getRowId={(person) => person.id}
       search={{ placeholder: "Search people" }}
-      selection="multiple"
+      selection={selection ? "multiple" : false}
+      responsive={cards ? "cards" : "scroll"}
       export={true}
-      pagination={{ mode: "pages", pageSize: 15, pageSizeOptions: [15, 30, 60] }}
+      {pagination}
       format={{ currency: "GBP", locale: "en-GB" }}
       maxHeight={420}
       onSelectionChange={(ids) => (selected = ids)}

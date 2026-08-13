@@ -1,18 +1,20 @@
 import { StrictMode, useState } from "react"
 import { createRoot } from "react-dom/client"
-import { Table } from "@trapezium/react"
+import { Table, type Column, type Density, type PaginationOptions } from "@trapezium/react"
 import "@trapezium/react/styles.css"
 
+import { Controls, Segmented, Switch } from "./controls.js"
 import { makeInvoices, STATUS_OPTIONS, type Invoice } from "./data.js"
 import "./playground.css"
 
 const invoices = makeInvoices()
 
 /**
- * Four tables, from the least configured to the most.
+ * The playground.
  *
- * The first one is the whole pitch: one prop, and everything below it is
- * something you only write when the default is not what you wanted.
+ * Every table below is the same component with different props, and the
+ * switches above the big one change those props live — which is the fastest way
+ * to find out what a prop actually does.
  */
 function Playground() {
   const [selected, setSelected] = useState<string[]>([])
@@ -21,6 +23,47 @@ function Playground() {
   // The page follows the toggle too, so the tables are not the only thing that
   // changes when it is pressed.
   document.documentElement.dataset["theme"] = theme ?? ""
+
+  /* What the switches control. */
+  const [mode, setMode] = useState<NonNullable<PaginationOptions["mode"]> | "none">("pages")
+  const [pageSize, setPageSize] = useState(25)
+  const [setFilters, setSetFilters] = useState(false)
+  const [selection, setSelection] = useState(true)
+  const [density, setDensity] = useState<Density>("normal")
+  const [cards, setCards] = useState(false)
+  const [sticky, setSticky] = useState(true)
+
+  const columns: Column<Invoice>[] = [
+    { key: "reference", header: "Invoice", pin: "start", type: "id" },
+    { key: "customer.name", header: "Customer", filter: setFilters ? "set" : true },
+    { key: "customer.email", header: "Email" },
+    { key: "amount", type: "currency", filter: setFilters ? "set" : "range" },
+    {
+      key: "status",
+      type: "badge",
+      formatOptions: { options: STATUS_OPTIONS },
+      filter: setFilters ? "set" : true,
+    },
+    { key: "tags", type: "tags" },
+    { key: "issued_at", header: "Issued", type: "datetime" },
+    { key: "due_date", header: "Due", type: "date" },
+    { key: "paid", type: "boolean" },
+    { key: "owner", filter: setFilters ? "set" : true },
+    { key: "notes", type: "longText", wrap: true, width: 280 },
+    {
+      key: "actions",
+      header: "",
+      sortable: false,
+      filter: false,
+      exportable: false,
+      width: 90,
+      render: ({ row }) => (
+        <button type="button" className="row-action" onClick={() => alert(row.reference)}>
+          Open
+        </button>
+      ),
+    },
+  ]
 
   return (
     <main>
@@ -55,61 +98,69 @@ function Playground() {
       <section>
         <h2>Everything switched on</h2>
         <p className="note">
-          Search, per-column filters, selection, export, pinned and resizable columns, and a custom
-          cell.
+          Drag a column header sideways to move it, or out of the table to remove it. The switches
+          change the props live.
         </p>
+
+        <Controls>
+          <Segmented
+            label="Pagination"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: "pages", label: "Pages" },
+              { value: "simple", label: "Prev / next" },
+              { value: "loadMore", label: "Load more" },
+              { value: "infinite", label: "Infinite" },
+              { value: "none", label: "All rows" },
+            ]}
+          />
+          <Segmented
+            label="Per page"
+            value={String(pageSize)}
+            onChange={(next) => setPageSize(Number(next))}
+            options={[
+              { value: "10", label: "10" },
+              { value: "25", label: "25" },
+              { value: "50", label: "50" },
+            ]}
+          />
+          <Segmented
+            label="Density"
+            value={density}
+            onChange={setDensity}
+            options={[
+              { value: "compact", label: "Compact" },
+              { value: "normal", label: "Normal" },
+              { value: "relaxed", label: "Relaxed" },
+            ]}
+          />
+          <Switch label="Set filters" checked={setFilters} onChange={setSetFilters} />
+          <Switch label="Selection" checked={selection} onChange={setSelection} />
+          <Switch label="Card layout" checked={cards} onChange={setCards} />
+          <Switch label="Sticky header" checked={sticky} onChange={setSticky} />
+        </Controls>
+
         <Table
           theme={theme}
           data={invoices}
           getRowId={(invoice) => invoice.id}
           search={{ placeholder: "Search invoices" }}
-          selection
+          selection={selection}
           onSelectionChange={setSelected}
           export
           densityControl
+          density={density}
+          responsive={cards ? "cards" : "scroll"}
+          stickyHeader={sticky}
           maxHeight={420}
+          pagination={mode === "none" ? false : { mode, pageSize, pageSizeOptions: [10, 25, 50, 100] }}
           format={{ currency: "AUD", locale: "en-AU", timeZone: "Australia/Sydney" }}
-          columns={[
-            { key: "reference", header: "Invoice", pin: "start", type: "id" },
-            { key: "customer.name", header: "Customer" },
-            { key: "customer.email", header: "Email" },
-            { key: "amount", type: "currency", filter: "range" },
-            { key: "status", type: "badge", formatOptions: { options: STATUS_OPTIONS } },
-            { key: "tags", type: "tags" },
-            { key: "issued_at", header: "Issued", type: "datetime" },
-            { key: "due_date", header: "Due", type: "date" },
-            { key: "paid", type: "boolean" },
-            { key: "owner", filter: "set" },
-            { key: "notes", type: "longText", wrap: true, width: 280 },
-            {
-              key: "actions",
-              header: "",
-              sortable: false,
-              filter: false,
-              exportable: false,
-              width: 90,
-              render: ({ row }) => (
-                <button type="button" className="row-action" onClick={() => alert(row.reference)}>
-                  Open
-                </button>
-              ),
-            },
-          ]}
+          columns={columns}
         />
-        <p className="note">{selected.length} selected</p>
-      </section>
-
-      <section>
-        <h2>Infinite scroll</h2>
-        <p className="note">Same table, one prop different.</p>
-        <Table
-          theme={theme}
-          data={invoices}
-          getRowId={(invoice) => invoice.id}
-          pagination={{ mode: "infinite", pageSize: 20 }}
-          maxHeight={320}
-          columns={["reference", "customer.name", "amount", "status"]}
-        />
+        <p className="note">
+          {selected.length} selected · filters are {setFilters ? "set filters" : "whatever each type deserves"}
+        </p>
       </section>
 
       <section>
@@ -134,7 +185,12 @@ function Playground() {
         <div className="grid">
           <Table theme={theme} data={[] as Invoice[]} columns={["reference", "amount"]} />
           <Table theme={theme} data={[] as Invoice[]} columns={["reference", "amount"]} loading />
-          <Table theme={theme} data={[] as Invoice[]} columns={["reference", "amount"]} error="Could not reach the server" />
+          <Table
+            theme={theme}
+            data={[] as Invoice[]}
+            columns={["reference", "amount"]}
+            error="Could not reach the server"
+          />
         </div>
       </section>
     </main>

@@ -26,12 +26,56 @@
       h1 { font-family: Georgia, serif; font-weight: 400; }
       p { color: light-dark(#6b6157, #a1a1a1); }
       pre { overflow-x: auto; font-size: 0.75rem; }
+
+      .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; margin-bottom: 1rem; border: 1px solid light-dark(#e0d8c8, rgb(255 255 255 / 12%)); border-radius: 10px; background: light-dark(#fbf8f2, #141414); padding: 0.625rem 0.875rem; font-size: 0.8125rem; }
+      .switch { display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; user-select: none; }
+      .switch input { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); }
+      .switch-track { position: relative; width: 1.875rem; height: 1.0625rem; flex: none; border-radius: 999px; background: light-dark(#ddd4c4, #3a3a3a); transition: background 140ms ease; }
+      .switch-track::after { position: absolute; top: 2px; left: 2px; width: 0.8125rem; height: 0.8125rem; border-radius: 999px; background: light-dark(#fff, #e8e8e8); content: ""; transition: transform 140ms ease; }
+      .switch input:checked + .switch-track { background: light-dark(#6a2e46, #d98fae); }
+      .switch input:checked + .switch-track::after { transform: translateX(0.8125rem); }
+      .segmented { display: inline-flex; align-items: center; gap: 0.5rem; }
+      .segmented-label { color: light-dark(#6b6157, #a1a1a1); }
+      .segmented-options { display: inline-flex; gap: 2px; border: 1px solid light-dark(#e0d8c8, rgb(255 255 255 / 12%)); border-radius: 8px; padding: 2px; }
+      .segmented-options button { border: 0; border-radius: 6px; background: none; padding: 0.1875rem 0.5rem; color: inherit; font: inherit; font-size: 0.75rem; cursor: pointer; }
+      .segmented-options button[data-active="true"] { background: light-dark(#e8e0d2, #2c2c2c); }
     </style>
   </head>
 
   <body>
     <h1>Trapezium without a build step</h1>
     <p>One stylesheet, one script, one call. View source — this page is the whole example.</p>
+
+    <div class="controls">
+      <div class="segmented">
+        <span class="segmented-label">Pagination</span>
+        <div class="segmented-options" role="group" aria-label="Pagination">
+          <button type="button" data-mode="pages" data-active="true">Pages</button>
+          <button type="button" data-mode="simple">Prev / next</button>
+          <button type="button" data-mode="loadMore">Load more</button>
+          <button type="button" data-mode="infinite">Infinite</button>
+          <button type="button" data-mode="none">All rows</button>
+        </div>
+      </div>
+
+      <label class="switch">
+        <input type="checkbox" id="set-filters" />
+        <span class="switch-track" aria-hidden="true"></span>
+        <span>Set filters</span>
+      </label>
+
+      <label class="switch">
+        <input type="checkbox" id="selection" checked />
+        <span class="switch-track" aria-hidden="true"></span>
+        <span>Selection</span>
+      </label>
+
+      <label class="switch">
+        <input type="checkbox" id="cards" />
+        <span class="switch-track" aria-hidden="true"></span>
+        <span>Card layout</span>
+      </label>
+    </div>
 
     <div id="people"></div>
 
@@ -48,40 +92,78 @@
       const response = await fetch("./people.json")
       const people = await response.json()
 
+      const columns = [
+        { key: "name", pin: "start" },
+        { key: "email" },
+        { key: "team" },
+        { key: "salary", type: "currency" },
+        { key: "started", type: "date" },
+        { key: "remote", type: "boolean" },
+        {
+          key: "actions",
+          header: "",
+          sortable: false,
+          filter: false,
+          exportable: false,
+          // A renderer returns a DOM node or a string. No framework needed.
+          render: ({ row }) => {
+            const button = document.createElement("button")
+            button.className = "tpz-btn"
+            button.textContent = "Email"
+            button.addEventListener("click", () => { window.location.href = `mailto:${row.email}` })
+            return button
+          },
+        },
+      ]
+
       const table = createTable("#people", {
         data: people,
+        columns,
         getRowId: (person) => person.id,
         search: { placeholder: "Search people" },
         selection: "multiple",
         export: true,
         pagination: { mode: "pages", pageSize: 12 },
         format: { currency: "GBP", locale: "en-GB" },
-        columns: [
-          { key: "name", pin: "start" },
-          { key: "email" },
-          { key: "team", filter: "set" },
-          { key: "salary", type: "currency" },
-          { key: "started", type: "date" },
-          { key: "remote", type: "boolean" },
-          {
-            key: "actions",
-            header: "",
-            sortable: false,
-            filter: false,
-            exportable: false,
-            // A renderer returns a DOM node or a string. No framework needed.
-            render: ({ row }) => {
-              const button = document.createElement("button")
-              button.className = "tpz-btn"
-              button.textContent = "Email"
-              button.addEventListener("click", () => { window.location.href = `mailto:${row.email}` })
-              return button
-            },
-          },
-        ],
         onSelectionChange: (ids) => {
           document.title = ids.length ? `${ids.length} selected` : "Trapezium — no build step"
         },
+      })
+
+      /*
+        The switches. `setOptions` merges and re-renders, so changing a prop
+        keeps the sorting, filters and page the user had — which is the whole
+        point of the state living in one place.
+      */
+      const columnsWith = (setFilters) =>
+        columns.map((column) => {
+          if (column.key === "team") return { ...column, filter: setFilters ? "set" : true }
+          if (column.key === "salary") return { ...column, filter: setFilters ? "set" : "range" }
+          return column
+        })
+
+      for (const button of document.querySelectorAll("[data-mode]")) {
+        button.addEventListener("click", () => {
+          for (const other of document.querySelectorAll("[data-mode]")) delete other.dataset.active
+          button.dataset.active = "true"
+
+          const mode = button.dataset.mode
+          table.setOptions({
+            pagination: mode === "none" ? false : { mode, pageSize: 12, pageSizeOptions: [12, 24, 48] },
+          })
+        })
+      }
+
+      document.querySelector("#set-filters").addEventListener("change", (event) => {
+        table.setOptions({ columns: columnsWith(event.target.checked) })
+      })
+
+      document.querySelector("#selection").addEventListener("change", (event) => {
+        table.setOptions({ selection: event.target.checked ? "multiple" : false })
+      })
+
+      document.querySelector("#cards").addEventListener("change", (event) => {
+        table.setOptions({ responsive: event.target.checked ? "cards" : "scroll" })
       })
 
       // The instance is yours: replace the data, read the state, tear it down.

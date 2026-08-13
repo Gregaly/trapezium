@@ -105,6 +105,17 @@ Below 40rem the table becomes stacked cards, with each cell labelled by its head
 
 It is also pure CSS. There is no second render, no measuring, and nothing to disagree about between a server and a browser.
 
+## Drag feedback
+
+While a column is being dragged, the header it came from dims (`[data-dragging]`), the header it is over shows a line on the edge it will land on (`[data-drop="before" | "after"]`), and the table gets a dashed outline (`[data-dragging-out]`) to say that letting go outside will remove it. All three are tokens away from being restyled:
+
+```css
+.tpz-th[data-drop]::after { background: hotpink; }
+.tpz[data-dragging-out="true"] .tpz-scroll { outline-color: hotpink; }
+```
+
+The puff of smoke on removal is `.tpz-poof`, and it does not render at all under `prefers-reduced-motion`.
+
 ## Motion and print
 
 Transitions respect `prefers-reduced-motion`. Printing drops the toolbar, the pagination and the selection column, unfreezes the header and lets cells wrap, so a printed table is the data rather than a screenshot of an interface.

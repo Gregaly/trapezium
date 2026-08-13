@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import Link from "next/link"
 import { Table, stateToQueryString, type Column, type TableState } from "@trapezium/react"
 
@@ -29,11 +29,20 @@ export function InvoiceTable({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
+  /*
+    What the switches change. They are client state rather than URL state
+    because they are a property of this demo, not of the view being shared —
+    the point is to try the props, not to send someone a link to them.
+  */
+  const [mode, setMode] = useState<"pages" | "simple" | "loadMore" | "infinite">("pages")
+  const [setFilters, setSetFilters] = useState(false)
+  const [cards, setCards] = useState(false)
+
   const columns: Column<Invoice>[] = [
     { key: "reference", header: "Invoice", type: "id", pin: "start" },
-    { key: "customer" },
+    { key: "customer", filter: setFilters ? "set" : true },
     { key: "email" },
-    { key: "amount", type: "currency", filter: "range" },
+    { key: "amount", type: "currency", filter: setFilters ? "set" : "range" },
     {
       key: "status",
       type: "badge",
@@ -49,30 +58,75 @@ export function InvoiceTable({
   ]
 
   return (
-    <Table
-      data={rows}
-      total={total}
+    <>
+      <div className="controls">
+        <div className="segmented">
+          <span className="segmented-label">Pagination</span>
+          <div className="segmented-options" role="group" aria-label="Pagination">
+            {(
+              [
+                ["pages", "Pages"],
+                ["simple", "Prev / next"],
+                ["loadMore", "Load more"],
+                ["infinite", "Infinite"],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                data-active={mode === value}
+                aria-pressed={mode === value}
+                onClick={() => setMode(value)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <label className="switch">
+          <input
+            type="checkbox"
+            checked={setFilters}
+            onChange={(event) => setSetFilters(event.target.checked)}
+          />
+          <span className="switch-track" aria-hidden="true" />
+          <span>Set filters</span>
+        </label>
+
+        <label className="switch">
+          <input type="checkbox" checked={cards} onChange={(event) => setCards(event.target.checked)} />
+          <span className="switch-track" aria-hidden="true" />
+          <span>Card layout</span>
+        </label>
+      </div>
+
+      <Table
+        data={rows}
+        total={total}
       server
-      loading={pending}
-      state={state}
-      onStateChange={(next) => {
+        loading={pending}
+        state={state}
+        onStateChange={(next) => {
         startTransition(() => router.push(`/?${toQuery(next)}`, { scroll: false }))
       }}
-      // Every control is also a real link, so the table sorts, filters and pages
-      // before the client bundle has loaded — and keyboard and middle-click
-      // behave the way they do everywhere else on the web.
-      buildHref={(next) => `/?${toQuery(next)}`}
-      linkComponent={Link}
-      getRowId={(invoice) => invoice.id}
-      columns={columns}
-      search={{ placeholder: "Search invoices", debounce: 300 }}
+        // Every control is also a real link, so the table sorts, filters and pages
+        // before the client bundle has loaded — and keyboard and middle-click
+        // behave the way they do everywhere else on the web.
+        buildHref={(next) => `/?${toQuery(next)}`}
+        linkComponent={Link}
+        getRowId={(invoice) => invoice.id}
+        columns={columns}
+        search={{ placeholder: "Search invoices", debounce: 300 }}
       selection
       export
-      pagination={{ mode: "pages", pageSize: 25, pageSizeOptions: [10, 25, 50, 100] }}
-      format={{ currency: "AUD", locale: "en-AU", timeZone: "Australia/Sydney" }}
-      maxHeight={560}
-      aria-label="Invoices"
-    />
+        pagination={{ mode, pageSize: 25, pageSizeOptions: [10, 25, 50, 100] }}
+        responsive={cards ? "cards" : "scroll"}
+        format={{ currency: "AUD", locale: "en-AU", timeZone: "Australia/Sydney" }}
+        maxHeight={560}
+        aria-label="Invoices"
+      />
+    </>
   )
 }
 
