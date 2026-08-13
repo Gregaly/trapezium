@@ -15,6 +15,7 @@ pnpm --filter @trapezium/example-plain-html dev
 ```
 
 - <http://localhost:4330/bench/browser/index.html> — renders a real table and times a first render, a sort, a filter, a search and a page turn, each to the point where the browser has laid the result out.
+- <http://localhost:4330/bench/browser/set-filter.html> — checks that a set filter offers every value in the dataset rather than the page on screen, that the rarest value in five thousand rows is findable by typing, and that choosing it brings its row to the front.
 - <http://localhost:4330/bench/browser/integrity.html> — drives the real table through its own controls and checks that every row is there, exactly once, on exactly one page, in the order the columns imply, at 500 and 5,000 rows.
 
 ## The data

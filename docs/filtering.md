@@ -44,6 +44,27 @@ Give it explicit choices when the stored value is a key and the label lives else
 
 Ticking several values produces an `in` filter. Ticking one produces `eq`. A `tags` column matches when *any* of a row's tags is ticked.
 
+**Pagination does not narrow the choices.** The list comes from every row the table was given, not from the page on screen — so a value that only appears on page twenty-nine is offered on page one, and ticking it brings those rows straight to the front. Applying a filter does not eat the other options either; they stay, or the filter could never be widened again.
+
+**Nor does the length of the list hide anything.** Two hundred choices are drawn at a time, most common first, but the search box above them searches *all* of them. A value that appears once in a hundred thousand rows is one keystroke away rather than unreachable.
+
+### Set filters with server-side data
+
+This is the one case where the choices really are incomplete, and it is worth understanding: in [server mode](server-data.md) the table holds one page, so a set filter built from the data can only offer what that page contained. Trapezium says so in the console rather than letting you find out from a user.
+
+Give it the whole list, which your server knows and the table does not:
+
+```tsx
+{
+  key: "status",
+  type: "badge",
+  formatOptions: { options: STATUSES },
+  filter: { kind: "set", options: STATUSES },
+}
+```
+
+For a column whose values are open-ended — a customer name, a reference — a set filter is the wrong control server-side. Use `filter: "text"` and let the database do the matching.
+
 ### Operators
 
 Which operators a column offers comes from its type, so a checkbox is never asked whether it is greater than something.

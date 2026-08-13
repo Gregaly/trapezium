@@ -499,3 +499,87 @@ describe("cleaning up after itself", () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe("set filters and pagination", () => {
+  /** Three hundred rows, and one owner who appears only near the very end. */
+  const many = Array.from({ length: 300 }, (_, index) => ({
+    id: String(index),
+    name: `Person ${String(index)}`,
+    owner: index === 287 ? "Wren" : index % 3 === 0 ? "Ada" : index % 3 === 1 ? "Tom" : "Zoe",
+  }))
+
+  const openOwnerFilter = () => {
+    host.querySelectorAll<HTMLButtonElement>(".tpz-th-menu")[1]!.click()
+    return document.querySelector<HTMLElement>(".tpz-portal")!
+  }
+
+  it("offers a value that appears only on a much later page", () => {
+    createTable(host, {
+      data: many,
+      columns: ["name", { key: "owner", filter: "set" }],
+      pagination: { pageSize: 10 },
+    })
+
+    expect(cells().map((row) => row[1])).not.toContain("Wren")
+
+    const panel = openOwnerFilter()
+    const labels = [...panel.querySelectorAll(".tpz-filter-option-label")].map((node) => node.textContent)
+    expect(labels).toContain("Wren")
+    expect(labels).toHaveLength(4)
+  })
+
+  it("shows those rows the moment the value is chosen", () => {
+    createTable(host, {
+      data: many,
+      columns: ["name", { key: "owner", filter: "set" }],
+      pagination: { pageSize: 10 },
+    })
+
+    const panel = openOwnerFilter()
+    const wren = [...panel.querySelectorAll<HTMLElement>(".tpz-filter-option")].find(
+      (option) => option.textContent?.trim() === "Wren",
+    )!
+    wren.querySelector("input")!.click()
+
+    expect(cells().map((row) => row[1])).toEqual(["Wren"])
+  })
+
+  it("finds a value beyond the ones it lists, when the user types", () => {
+    const crowded = Array.from({ length: 2_000 }, (_, index) => ({
+      id: String(index),
+      name: `Person ${String(index)}`,
+      owner: index === 1_999 ? "Solitary" : `Owner ${String(index % 250)}`,
+    }))
+
+    createTable(host, {
+      data: crowded,
+      columns: ["name", { key: "owner", filter: "set" }],
+      pagination: { pageSize: 10 },
+    })
+
+    const panel = openOwnerFilter()
+    const search = panel.querySelector<HTMLInputElement>("input[type=search]")!
+    expect(search).toBeTruthy()
+
+    // The rarest value in two thousand rows must still be reachable.
+    search.value = "solitary"
+    search.dispatchEvent(new Event("input"))
+
+    const labels = [...panel.querySelectorAll(".tpz-filter-option-label")].map((node) => node.textContent)
+    expect(labels).toEqual(["Solitary"])
+  })
+
+  it("says how many it is not showing", () => {
+    const crowded = Array.from({ length: 1_000 }, (_, index) => ({
+      id: String(index),
+      owner: `Owner ${String(index)}`,
+    }))
+
+    createTable(host, { data: crowded, columns: [{ key: "owner", filter: "set" }] })
+    host.querySelector<HTMLButtonElement>(".tpz-th-menu")!.click()
+
+    const panel = document.querySelector<HTMLElement>(".tpz-portal")!
+    expect(panel.querySelectorAll(".tpz-filter-option")).toHaveLength(200)
+    expect(panel.textContent).toContain("800 more")
+  })
+})

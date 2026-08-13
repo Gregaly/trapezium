@@ -175,12 +175,17 @@ export function inferColumns<TRow extends AnyRow>(
  *
  * Ordered by how often each appears, so the values a user is most likely to
  * want are at the top of the list rather than wherever the alphabet put them.
- * Capped, because a set filter over ten thousand distinct values is a search
- * box wearing a costume.
+ *
+ * **Uncapped by default, deliberately.** Capping here is the obvious economy
+ * and it is the wrong one: the rarest values are exactly the ones people go
+ * looking for, and a list truncated before the search box sees it makes them
+ * unreachable rather than merely inconvenient. A caller who needs to *render*
+ * fewer should cap the list it draws, after the user's query has been applied
+ * — which is what the adapters do.
  */
 export function distinctValues(
   values: readonly unknown[],
-  limit = 200,
+  limit = Number.POSITIVE_INFINITY,
 ): Array<{ value: string; count: number }> {
   const counts = new Map<string, number>()
 

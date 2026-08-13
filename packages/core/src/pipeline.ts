@@ -55,6 +55,7 @@ export function getRows<TRow extends AnyRow, TNode = unknown>(
   if (server) {
     const total = options.total ?? rows.length
     if (options.accumulate) warnIfNotAccumulating(rows.length, state)
+    warnAboutSetFilters(columns)
     return {
       rows: [...rows],
       total,
@@ -108,6 +109,32 @@ function warnIfNotAccumulating(rowCount: number, state: TableState): void {
       "previous rows, or have the query return `page * pageSize` rows from the start. " +
       "See https://github.com/Gregaly/trapezium/blob/main/docs/server-data.md#load-more-and-infinite-scroll",
   )
+}
+
+/*
+  A set filter offers the values it can see. In server mode that is one page,
+  so its choices are whatever happened to be on screen — which looks like a
+  working filter right up until somebody goes looking for a value that is not on
+  page one. The fix is one property, so it is worth saying out loud.
+*/
+const warnedColumns = new Set<string>()
+
+function warnAboutSetFilters<TRow, TNode>(columns: readonly ResolvedColumn<TRow, TNode>[]): void {
+  if (typeof process !== "undefined" && process.env["NODE_ENV"] === "production") return
+
+  for (const column of columns) {
+    if (column.filterKind !== "set") continue
+    if (column.formatOptions?.options?.length) continue
+    if (warnedColumns.has(column.key)) continue
+
+    warnedColumns.add(column.key)
+    console.warn(
+      `[trapezium] The set filter on "${column.key}" is offering only the values on the page it can ` +
+        "see, because in server mode that is all the table has. Give it the full list — " +
+        `filter: { kind: "set", options } — or the values on later pages will be unfindable. ` +
+        "See https://github.com/Gregaly/trapezium/blob/main/docs/filtering.md#set-filters-with-server-side-data",
+    )
+  }
 }
 
 export function pageCount(total: number, pageSize: number): number {

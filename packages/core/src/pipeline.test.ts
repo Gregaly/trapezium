@@ -256,3 +256,48 @@ describe("searching structured values", () => {
     expect(find("secret")).toEqual([])
   })
 })
+
+describe("set filters in server mode", () => {
+  type Row = { id: string; plan: string }
+  const page: Row[] = [
+    { id: "1", plan: "pro" },
+    { id: "2", plan: "free" },
+  ]
+
+  function run(columns: ColumnDef<Row>[]) {
+    const state = createState({ page: 1, pageSize: 2 })
+    const resolved = resolveColumns<Row, unknown>({ columns, rows: page, state, types: defaultTypeRegistry }).visible
+
+    return getRows<Row, unknown>({
+      rows: page,
+      columns: resolved,
+      state,
+      types: defaultTypeRegistry,
+      format: DEFAULT_FORMAT,
+      server: true,
+      total: 500,
+    })
+  }
+
+  it("warns when a set filter has no choices of its own, because it can only see one page", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    run([{ key: "plan", filter: "set" }])
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("only the values on the page"))
+    warn.mockRestore()
+  })
+
+  it("says nothing when the caller supplied the full list", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    run([
+      {
+        key: "plan",
+        filter: { kind: "set", options: [{ value: "pro" }, { value: "free" }, { value: "team" }] },
+        formatOptions: { options: [{ value: "pro" }, { value: "free" }, { value: "team" }] },
+      },
+    ])
+
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+})

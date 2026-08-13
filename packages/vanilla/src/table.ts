@@ -764,20 +764,71 @@ export function createTable<TRow extends AnyRow>(
       )
 
       const list = el("div", { class: "tpz-menu-scroll tpz-filter-list" })
-      for (const choice of choices) {
-        const box = el("input", { type: "checkbox", class: "tpz-checkbox" }) as HTMLInputElement
-        box.checked = chosen.has(choice.value)
-        box.addEventListener("change", () => {
-          if (box.checked) chosen.add(choice.value)
-          else chosen.delete(choice.value)
+      const note = el("p", { class: "tpz-menu-label" })
 
-          if (chosen.size === 0) onClear()
-          else onApply({ key: column.key, operator: chosen.size === 1 ? "eq" : "in", value: [...chosen] })
-        })
-        list.append(el("label", { class: "tpz-filter-option" }, [box, el("span", { class: "tpz-filter-option-label", text: choice.label })]))
+      /**
+       * Draws the choices matching what has been typed.
+       *
+       * Filtered over every distinct value and then cut down to what is worth
+       * drawing. Cutting the other way round — capping the list and searching
+       * the cap — is what makes a rare value impossible to find, which is the
+       * one thing a set filter must never do.
+       */
+      const draw = (query: string) => {
+        const needle = query.trim().toLowerCase()
+        const matching = needle
+          ? choices.filter(
+              (choice) =>
+                choice.label.toLowerCase().includes(needle) || choice.value.toLowerCase().includes(needle),
+            )
+          : choices
+
+        const visible = matching.slice(0, RENDER_LIMIT)
+        const nodes: Node[] = []
+
+        if (visible.length === 0) nodes.push(el("p", { class: "tpz-menu-label", text: "No values" }))
+
+        for (const choice of visible) {
+          const box = el("input", { type: "checkbox", class: "tpz-checkbox" }) as HTMLInputElement
+          box.checked = chosen.has(choice.value)
+          box.addEventListener("change", () => {
+            if (box.checked) chosen.add(choice.value)
+            else chosen.delete(choice.value)
+
+            if (chosen.size === 0) onClear()
+            else onApply({ key: column.key, operator: chosen.size === 1 ? "eq" : "in", value: [...chosen] })
+          })
+
+          nodes.push(
+            el("label", { class: "tpz-filter-option" }, [
+              box,
+              el("span", { class: "tpz-filter-option-label", text: choice.label }),
+            ]),
+          )
+        }
+
+        fill(list, nodes)
+
+        const hidden = matching.length - visible.length
+        note.textContent = hidden > 0 ? `${hidden.toLocaleString()} more — keep typing to narrow them down` : ""
+        note.style.display = hidden > 0 ? "" : "none"
       }
 
-      wrap.append(list)
+      // The same threshold as the other adapters: a panel's worth fits without
+      // one, and anything more wants a way to be narrowed.
+      if (choices.length > 8) {
+        const search = el("input", {
+          class: "tpz-input",
+          type: "search",
+          "aria-label": `Search ${column.header} values`,
+          placeholder: "Search values",
+        }) as HTMLInputElement
+        search.addEventListener("input", () => draw(search.value))
+        wrap.append(search)
+      }
+
+      draw("")
+      wrap.append(list, note)
       if (filter) {
         const clear = el("button", { type: "button", class: "tpz-btn", text: "Clear" })
         clear.addEventListener("click", onClear)
@@ -1252,6 +1303,15 @@ function badge(value: string, options: Array<{ value: string; label?: string; co
   }
   return node
 }
+
+/**
+ * How many set-filter choices are drawn at once.
+ *
+ * Enough that a normal column shows all of it, few enough that a column of ten
+ * thousand distinct values does not put ten thousand checkboxes in the
+ * document. Everything beyond it is still searchable.
+ */
+const RENDER_LIMIT = 200
 
 /** Which page numbers to show: first, last, the current one and its neighbours. */
 export function pageWindow(page: number, pageCount: number, siblings: number): Array<number | "gap"> {

@@ -202,9 +202,18 @@ function SetFilter<TRow extends AnyRow>({
     else onApply({ key: column.key, operator: next.size === 1 ? "eq" : "in", value: [...next] })
   }
 
-  const visible = query
-    ? choices.filter((choice) => choice.label.toLowerCase().includes(query.toLowerCase()))
+  /*
+    Filtered over every distinct value, then cut down to what is worth drawing.
+    Cutting the other way round — capping the list and searching the cap — is
+    what makes a rare value impossible to find, which is the one thing a set
+    filter must never do.
+  */
+  const matching = query
+    ? choices.filter((choice) => matchesQuery(choice.label, query) || matchesQuery(choice.value, query))
     : choices
+
+  const visible = matching.slice(0, RENDER_LIMIT)
+  const hidden = matching.length - visible.length
 
   return (
     <div className="tpz-filter">
@@ -235,6 +244,12 @@ function SetFilter<TRow extends AnyRow>({
         ))}
       </div>
 
+      {hidden > 0 && (
+        <p className="tpz-menu-label">
+          {`${hidden.toLocaleString()} more — keep typing to narrow them down`}
+        </p>
+      )}
+
       {filter && (
         <div className="tpz-filter-actions">
           <button type="button" className="tpz-btn" onClick={onClear}>
@@ -244,6 +259,19 @@ function SetFilter<TRow extends AnyRow>({
       )}
     </div>
   )
+}
+
+/**
+ * How many choices are drawn at once.
+ *
+ * Enough that a normal column shows all of it, few enough that a column of ten
+ * thousand distinct values does not put ten thousand checkboxes in the
+ * document. Everything beyond it is still searchable.
+ */
+const RENDER_LIMIT = 200
+
+function matchesQuery(text: string, query: string): boolean {
+  return text.toLowerCase().includes(query.toLowerCase())
 }
 
 function BooleanFilter<TRow extends AnyRow>({

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trapezium — set filters across pages</title>
+    <link rel="stylesheet" href="../../packages/core/styles.css" />
+    <style>
+      :root { color-scheme: light dark; }
+      body { max-width: 70rem; margin: 0 auto; padding: 2rem 1.5rem; background: light-dark(#f2eee6,#0a0a0a); color: light-dark(#221e1a,#ededed); font-family: ui-rounded, system-ui, sans-serif; }
+      #results { font-family: ui-monospace, Menlo, monospace; font-size: 0.75rem; white-space: pre; }
+      .pass { color: light-dark(#3f6b4a,#82b491); }
+      .fail { color: light-dark(#97362b,#e0857a); }
+    </style>
+  </head>
+  <body>
+    <h1>Set filters across pages</h1>
+    <div id="results">running…</div>
+    <div id="table"></div>
+
+    <script src="../../packages/vanilla/dist/trapezium.global.js"></script>
+    <script type="module">
+      const { createTable } = window.Trapezium
+      const host = document.querySelector("#table")
+      const checks = []
+      const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail })
+
+      /* 5,000 rows; "Solitary" is one row, near the very end. */
+      const rows = Array.from({ length: 5000 }, (_, index) => ({
+        id: String(index),
+        name: `Person ${index}`,
+        owner: index === 4987 ? "Solitary" : `Owner ${index % 300}`,
+      }))
+
+      const table = createTable(host, {
+        data: rows,
+        columns: ["name", { key: "owner", filter: "set" }],
+        getRowId: (row) => row.id,
+        pagination: { pageSize: 25 },
+      })
+
+      const openPanel = () => {
+        host.querySelectorAll(".tpz-th-menu")[1].click()
+        return document.querySelector(".tpz-portal")
+      }
+      const labels = (panel) => [...panel.querySelectorAll(".tpz-filter-option-label")].map((n) => n.textContent)
+      const shownOwners = () =>
+        [...host.querySelectorAll("tbody tr")].map((row) => row.querySelectorAll("td")[1]?.textContent?.trim())
+
+      /* On page one, the panel must know about all 301 owners. */
+      let panel = openPanel()
+      const search = panel.querySelector("input[type=search]")
+      check("a search box appears for a long list", Boolean(search))
+      check("only a bounded number is drawn", labels(panel).length === 200, `${labels(panel).length} drawn`)
+      const note = [...panel.querySelectorAll(".tpz-menu-label")].map((n) => n.textContent).find((t) => t.includes("more"))
+      check("it says how many more there are", note === "101 more — keep typing to narrow them down", note ?? "(none)")
+
+      /* The rarest value, on page 200 of the data, is findable by typing. */
+      search.value = "solitary"
+      search.dispatchEvent(new Event("input"))
+      const found = labels(panel)
+      check("the rarest value is findable", found.includes("Solitary"), found.join(", ") || "(none)")
+
+      /* Choosing it brings its row to the front. */
+      const option = [...panel.querySelectorAll(".tpz-filter-option")].find((entry) => entry.textContent.trim() === "Solitary")
+      option.querySelector("input").click()
+      check("choosing it shows the row", shownOwners().join() === "Solitary", shownOwners().join(", "))
+      check(
+        "the count follows the filter, and the pagination bar stands down",
+        host.querySelector(".tpz-count").textContent.trim() === "1 row" &&
+          host.querySelector(".tpz-pagination").style.display === "none",
+        `${host.querySelector(".tpz-count").textContent.trim()}, bar ${host.querySelector(".tpz-pagination").style.display || "shown"}`,
+      )
+
+      /* The other choices are still on offer, so the filter can be widened. */
+      document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+      panel = openPanel()
+      check("the other values are still offered", labels(panel).length === 200, `${labels(panel).length} drawn`)
+
+      /* And moving to a later page changes nothing about the choices. */
+      document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+      table.setState({ filters: [], page: 40 })
+      panel = openPanel()
+      const search2 = panel.querySelector("input[type=search]")
+      search2.value = "solitary"
+      search2.dispatchEvent(new Event("input"))
+      check("still findable from a later page", labels(panel).includes("Solitary"))
+
+      document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+
+      document.querySelector("#results").innerHTML = checks
+        .map((entry) => `<span class="${entry.ok ? "pass" : "fail"}">${entry.ok ? "✓" : "✗"} ${entry.name}${entry.detail ? ` — ${entry.detail}` : ""}</span>`)
+        .join("\n")
+
+      window.__setFilter = { total: checks.length, failed: checks.filter((entry) => !entry.ok).length }
+    </script>
+  </body>
+</html>

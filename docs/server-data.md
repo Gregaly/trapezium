@@ -77,11 +77,15 @@ function toCondition(filter) {
 
 ## Set filters in server mode
 
-A set filter derives its choices from the rows it can see, which in server mode is one page. Supply the choices explicitly so the list is the whole list:
+A set filter derives its choices from the rows it can see, and in server mode that is one page — so without help it offers whatever happened to be on screen, and a value on a later page cannot be chosen at all. Trapezium warns about this in development rather than letting it reach a user.
+
+Supply the choices, which your server knows:
 
 ```tsx
 { key: "status", filter: { kind: "set", options: statusesFromServer } }
 ```
+
+In client mode none of this applies: the table has every row, so the list is complete no matter which page is showing.
 
 ## Load more and infinite scroll
 
