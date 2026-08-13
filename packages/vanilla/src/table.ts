@@ -14,11 +14,13 @@ import {
   optionLabel,
   removeFilter,
   removeFilterAt,
+  reorderColumn,
   resolveColumns,
   resolveRowId,
   setFilter,
   setOrder,
   setPage,
+  setPageSize,
   setPin,
   setSearch,
   setSelected,
@@ -513,7 +515,48 @@ export function createTable<TRow extends AnyRow>(
     if (column.width) cell.style.width = `${String(column.width)}px`
 
     const inner = el("div", { class: "tpz-th-inner" })
-    const glyph = el("span", { class: "tpz-th-icon" }, [icon(column.icon)])
+    const reorderable = settings.reorderable !== false && column.reorderable !== false && !column.pin
+
+    /*
+      The drag handle is the type icon rather than the whole cell: a draggable
+      element swallows the pointer events its children need, so a draggable
+      header and a clickable header cannot be the same element.
+    */
+    const glyph = el("span", {
+      class: "tpz-th-icon",
+      "data-draggable": reorderable ? "true" : undefined,
+      // An enumerated attribute, not a boolean one: `draggable=""` is invalid
+      // and browsers fall back to "auto", which does not drag.
+      draggable: reorderable ? "true" : undefined,
+      // Dragging is a pointer affordance; the keyboard equivalent is "Move
+      // left" and "Move right" in the column panel, so there is nothing here
+      // for a screen reader to announce.
+      "aria-hidden": "true",
+    }, [icon(column.icon)])
+
+    if (reorderable) {
+      glyph.addEventListener("dragstart", (event) => {
+        event.dataTransfer?.setData("text/tpz-column", column.key)
+        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
+      })
+
+      cell.addEventListener("dragover", (event) => {
+        event.preventDefault()
+        cell.dataset["dragOver"] = "true"
+      })
+
+      cell.addEventListener("dragleave", () => delete cell.dataset["dragOver"])
+
+      cell.addEventListener("drop", (event) => {
+        event.preventDefault()
+        delete cell.dataset["dragOver"]
+
+        const dragged = event.dataTransfer?.getData("text/tpz-column")
+        if (!dragged || dragged === column.key) return
+        update(setOrder(state, reorderColumn(keys, dragged, keys.indexOf(column.key))))
+      })
+    }
+
     inner.append(glyph)
 
     const label = el(sortable ? "button" : "span", { class: "tpz-th-button", type: sortable ? "button" : undefined }, [
@@ -869,6 +912,24 @@ export function createTable<TRow extends AnyRow>(
       text: total === 0 ? "No rows" : `${first.toLocaleString()}–${last.toLocaleString()} of ${total.toLocaleString()}`,
     })
 
+    const start = el("div", { class: "tpz-toolbar-group" }, [info])
+
+    if (pagination.pageSizeOptions && pagination.pageSizeOptions.length > 0) {
+      const select = el(
+        "select",
+        { class: "tpz-input" },
+        pagination.pageSizeOptions.map((size) =>
+          el("option", { value: size, text: `${String(size)} per page` }),
+        ),
+      ) as HTMLSelectElement
+      select.value = String(state.pageSize)
+      select.addEventListener("change", () => update(setPageSize(state, Number(select.value))))
+
+      start.append(
+        el("label", { class: "tpz-count" }, [el("span", { class: "tpz-sr", text: "Rows per page" }), select]),
+      )
+    }
+
     const nav = el("nav", { class: "tpz-pages", "aria-label": "Pagination" })
 
     const pageButton = (page: number, label: string, content: Node | string, disabled = false, isCurrent = false) => {
@@ -899,7 +960,7 @@ export function createTable<TRow extends AnyRow>(
 
     nav.append(pageButton(state.page + 1, "Next page", icon("chevronRight") ?? "›", state.page >= pageCount))
 
-    fill(paginationBar, [el("div", { class: "tpz-toolbar-group" }, [info]), nav])
+    fill(paginationBar, [start, nav])
   }
 
   let observer: IntersectionObserver | undefined

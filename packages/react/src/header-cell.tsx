@@ -163,7 +163,12 @@ export function HeaderCell<TRow extends AnyRow>({
           className="tpz-th-icon"
           data-draggable={reorderable ? "true" : undefined}
           draggable={reorderable}
-          aria-hidden={!reorderable}
+          /*
+            Dragging is a pointer affordance; the keyboard equivalent is "Move
+            left" and "Move right" in the column panel, so there is nothing
+            here for a screen reader to announce.
+          */
+          aria-hidden="true"
           onDragStart={
             reorderable
               ? (event) => {

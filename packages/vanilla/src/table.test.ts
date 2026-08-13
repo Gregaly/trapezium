@@ -191,3 +191,32 @@ describe("pageWindow", () => {
     expect(pageWindow(1, 20, 1)).toEqual([1, 2, "gap", 20])
   })
 })
+
+describe("parity with the other adapters", () => {
+  it("offers a rows-per-page picker when asked", () => {
+    createTable(host, {
+      data: Array.from({ length: 40 }, (_, index) => ({ id: String(index), name: `P${String(index)}` })),
+      pagination: { pageSize: 10, pageSizeOptions: [10, 20] },
+    })
+
+    const select = host.querySelector<HTMLSelectElement>(".tpz-pagination select")!
+    expect(select).toBeTruthy()
+
+    select.value = "20"
+    select.dispatchEvent(new Event("change"))
+    expect(cells()).toHaveLength(20)
+  })
+
+  it("makes the header icon a drag handle for reordering", () => {
+    createTable(host, { data: people, columns: ["name", "plan"] })
+
+    const handles = [...host.querySelectorAll<HTMLElement>(".tpz-th-icon")]
+    expect(handles[0]?.dataset["draggable"]).toBe("true")
+    expect(handles[0]?.getAttribute("draggable")).toBe("true")
+  })
+
+  it("leaves a pinned column undraggable, as pinning already decides its place", () => {
+    createTable(host, { data: people, columns: [{ key: "name", pin: "start" }, "plan"] })
+    expect(host.querySelector<HTMLElement>(".tpz-th-icon")?.dataset["draggable"]).toBeUndefined()
+  })
+})
