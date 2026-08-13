@@ -25,7 +25,7 @@ beforeEach(() => {
 
 afterEach(() => {
   host.remove()
-  document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+  document.querySelectorAll(".tpz-portal, .tpz-poof").forEach((node) => node.remove())
 })
 
 function cells(): string[][] {
@@ -426,5 +426,76 @@ describe("infinite scrolling", () => {
     const settled = observed.length
     observed.at(-1)!.fire()
     expect(observed.length).toBe(settled)
+  })
+})
+
+describe("cleaning up after itself", () => {
+  it("leaves nothing behind after many tables have come and gone", () => {
+    const listeners = { added: 0, removed: 0 }
+    const originalAdd = document.addEventListener.bind(document)
+    const originalRemove = document.removeEventListener.bind(document)
+
+    document.addEventListener = ((...args: Parameters<typeof originalAdd>) => {
+      listeners.added += 1
+      return originalAdd(...args)
+    }) as typeof document.addEventListener
+
+    document.removeEventListener = ((...args: Parameters<typeof originalRemove>) => {
+      listeners.removed += 1
+      return originalRemove(...args)
+    }) as typeof document.removeEventListener
+
+    for (let index = 0; index < 25; index += 1) {
+      const container = document.createElement("div")
+      document.body.append(container)
+
+      const table = createTable(container, {
+        data: people,
+        search: true,
+        selection: "multiple",
+        pagination: { mode: "infinite", pageSize: 2 },
+      })
+
+      // Open a panel, which is what attaches document-level listeners.
+      container.querySelector<HTMLButtonElement>(".tpz-th-menu")?.click()
+      table.destroy()
+      container.remove()
+    }
+
+    document.addEventListener = originalAdd
+    document.removeEventListener = originalRemove
+
+    // Every panel that opened has closed, and taken its listeners with it.
+    // (The puff of smoke shown when a column is dragged out carries the root
+    // class too — it needs the tokens — and removes itself on its own.)
+    expect(document.querySelectorAll(".tpz-portal")).toHaveLength(0)
+    expect(document.querySelectorAll(".tpz-frame")).toHaveLength(0)
+    expect(listeners.removed).toBeGreaterThanOrEqual(listeners.added)
+  })
+
+  it("stops observing when it is taken apart mid-scroll", () => {
+    let disconnected = 0
+    vi.stubGlobal(
+      "IntersectionObserver",
+      class {
+        observe() {}
+        disconnect() {
+          disconnected += 1
+        }
+        unobserve() {}
+        takeRecords() {
+          return []
+        }
+      },
+    )
+
+    const table = createTable(host, {
+      data: Array.from({ length: 50 }, (_, index) => ({ id: String(index), name: `P${String(index)}` })),
+      pagination: { mode: "infinite", pageSize: 10 },
+    })
+
+    table.destroy()
+    expect(disconnected).toBeGreaterThan(0)
+    vi.unstubAllGlobals()
   })
 })

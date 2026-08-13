@@ -12,10 +12,11 @@
  * Vue and Svelte wrap the DOM renderer, so proving these two agree proves all
  * four.
  */
+import React from "react"
 import { act, cleanup, render } from "@testing-library/react"
 import { createTable, type VanillaColumn } from "@trapezium/vanilla"
 import { columns as fullColumns, customTypes, makeRows, type Row } from "@trapezium/core/testing"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { Table } from "./table.js"
 import type { Column } from "./types.js"
@@ -174,5 +175,64 @@ describe("the two renderers agree", () => {
     expect(host.querySelector(".tpz-state")?.textContent).toEqual(
       container.querySelector(".tpz-state")?.textContent,
     )
+  })
+})
+
+describe("server rendering, with every type", () => {
+  it("renders the finished table as HTML and hydrates it without a mismatch", async () => {
+    const { renderToString } = await import("react-dom/server")
+    const { hydrateRoot } = await import("react-dom/client")
+
+    const element = (
+      <Table
+        {...options}
+        defaultState={{
+          sort: [{ key: "version", direction: "desc" }],
+          filters: [{ key: "plan", operator: "in", value: ["pro", "team"] }],
+          pageSize: 8,
+        }}
+        aria-label="Parity"
+      />
+    )
+
+    const html = renderToString(element)
+
+    // The server sent finished rows, not a shell to be filled in later.
+    expect(html).toContain("<table")
+    expect(html.match(/<tr/g)?.length ?? 0).toBeGreaterThan(5)
+
+    const container = document.createElement("div")
+    container.innerHTML = html
+    document.body.append(container)
+
+    const problems: unknown[] = []
+    const spy = vi.spyOn(console, "error").mockImplementation((...args) => problems.push(args))
+
+    act(() => {
+      hydrateRoot(container, element)
+    })
+
+    spy.mockRestore()
+    container.remove()
+
+    expect(problems).toEqual([])
+  })
+})
+
+describe("under React's strictness", () => {
+  it("renders the same table when everything happens twice", () => {
+    const { StrictMode } = React
+
+    const { container } = render(
+      <StrictMode>
+        <Table {...options} aria-label="Parity" />
+      </StrictMode>,
+    )
+
+    // Double-invoked renders and effects must not duplicate rows, columns or
+    // the sentinel — the usual symptoms of state built during render.
+    expect(container.querySelectorAll("tbody tr")).toHaveLength(10)
+    expect(container.querySelectorAll("thead tr")).toHaveLength(1)
+    expect(container.querySelectorAll(".tpz-table")).toHaveLength(1)
   })
 })
