@@ -1182,10 +1182,15 @@
   right: -1px;
 }
 
-/* A column dragged out of the table is removed, and says so. */
-.tpz[data-dragging-out="true"] .tpz-scroll {
-  outline: 1px dashed var(--tpz-danger);
-  outline-offset: -1px;
+/*
+  A column dragged out of the table is removed, and the table says where "out"
+  is. On the frame rather than the scroll area, because the frame is the edge a
+  person is aiming to cross — and just outside it, so it reads as a boundary
+  rather than a border that has changed colour.
+*/
+.tpz[data-dragging-out="true"] .tpz-frame {
+  outline: 1px dashed color-mix(in oklab, var(--tpz-danger) 60%, transparent);
+  outline-offset: 3px;
 }
 
 /* Reordering inside the column list, where the same rules apply vertically. */
