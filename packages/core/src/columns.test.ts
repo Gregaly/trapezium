@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { moveColumn, pruneState, reorderColumn, resolveColumns } from "./columns.js"
+import { moveColumn, pruneState, reorderColumn, reorderColumnTo, resolveColumns } from "./columns.js"
 import { createTypeRegistry, defaultTypeRegistry, defineType } from "./registry.js"
 import { createState } from "./state.js"
 import type { ColumnDef } from "./types.js"
@@ -160,5 +160,29 @@ describe("headerless columns", () => {
   it("gets no icon, because there is nothing for one to label", () => {
     const [actions] = resolve([{ key: "actions", header: "" }]).visible
     expect(actions?.icon).toBe(false)
+  })
+})
+
+describe("reorderColumnTo", () => {
+  const keys = ["a", "b", "c", "d"]
+
+  it("places a column before another", () => {
+    expect(reorderColumnTo(keys, "d", "b", "before")).toEqual(["a", "d", "b", "c"])
+  })
+
+  it("places a column after another", () => {
+    expect(reorderColumnTo(keys, "a", "c", "after")).toEqual(["b", "c", "a", "d"])
+  })
+
+  it("counts the target's position after the dragged column has left", () => {
+    // The off-by-one this guards: dropping "a" after "b" must put it second,
+    // not third, because removing "a" moved "b" up.
+    expect(reorderColumnTo(keys, "a", "b", "after")).toEqual(["b", "a", "c", "d"])
+  })
+
+  it("does nothing when dropped on itself, or on something it does not know", () => {
+    expect(reorderColumnTo(keys, "a", "a", "after")).toEqual(keys)
+    expect(reorderColumnTo(keys, "a", "z", "after")).toEqual(keys)
+    expect(reorderColumnTo(keys, "z", "a", "after")).toEqual(keys)
   })
 })

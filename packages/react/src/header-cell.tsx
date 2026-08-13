@@ -2,7 +2,8 @@ import { useRef, useState } from "react"
 import {
   hideColumn as hideColumnState,
   moveColumn,
-  reorderColumn,
+  poof,
+  reorderColumnTo,
   setFilter as setFilterState,
   setOrder,
   setPin,
@@ -42,6 +43,8 @@ export function HeaderCell<TRow extends AnyRow>({
   style,
   pinOffset,
   isPinEdge,
+  theme,
+  onDragStateChange,
 }: {
   column: TableColumn<TRow>
   state: TableState
@@ -61,8 +64,13 @@ export function HeaderCell<TRow extends AnyRow>({
   style?: React.CSSProperties
   pinOffset?: number
   isPinEdge?: boolean
+  /** Copied onto the puff, so it is themed like the table it came from. */
+  theme?: "light" | "dark"
+  /** Lets the table mark itself while a column is in the air. */
+  onDragStateChange?: (dragging: boolean) => void
 }) {
-  const [dragOver, setDragOver] = useState(false)
+  const [dropEdge, setDropEdge] = useState<"before" | "after" | undefined>()
+  const [dragging, setDragging] = useState(false)
   const headerRef = useRef<HTMLTableCellElement | null>(null)
 
   const sort = state.sort.find((entry) => entry.key === column.key)
@@ -88,6 +96,12 @@ export function HeaderCell<TRow extends AnyRow>({
     const target = event.currentTarget as HTMLElement
     target.setPointerCapture(event.pointerId)
     target.dataset["resizing"] = "true"
+    /*
+      The whole header is draggable, and a press-and-move on the resize handle
+      is exactly what starts a drag. Turning it off for the duration is what
+      lets the two gestures share the same cell.
+    */
+    cell.draggable = false
 
     const onMove = (move: PointerEvent) => {
       apply((current) => setWidth(current, column.key, startWidth + (move.clientX - startX)))
@@ -96,6 +110,7 @@ export function HeaderCell<TRow extends AnyRow>({
     const onUp = () => {
       target.releasePointerCapture(event.pointerId)
       delete target.dataset["resizing"]
+      cell.draggable = reorderable
       target.removeEventListener("pointermove", onMove)
       target.removeEventListener("pointerup", onUp)
     }
@@ -125,59 +140,84 @@ export function HeaderCell<TRow extends AnyRow>({
       scope="col"
       className="tpz-th"
       data-align={column.align}
+      data-key={column.key}
       data-pin={column.pin}
       data-pin-edge={isPinEdge ? column.pin : undefined}
       data-filtered={filter ? "true" : undefined}
-      data-drag-over={dragOver ? "true" : undefined}
+      data-draggable={reorderable ? "true" : undefined}
+      data-dragging={dragging ? "true" : undefined}
+      data-drop={dropEdge}
+      draggable={reorderable}
       aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
       style={{
         ...style,
         ...(column.pin === "start" ? { left: pinOffset } : {}),
         ...(column.pin === "end" ? { right: pinOffset } : {}),
       }}
+      onDragStart={
+        reorderable
+          ? (event) => {
+              event.dataTransfer.setData("text/tpz-column", column.key)
+              event.dataTransfer.effectAllowed = "move"
+              setDragging(true)
+              onDragStateChange?.(true)
+            }
+          : undefined
+      }
+      onDragEnd={
+        reorderable
+          ? (event) => {
+              setDragging(false)
+              setDropEdge(undefined)
+              onDragStateChange?.(false)
+
+              /*
+                Nothing accepted the drop, so it landed outside the table —
+                which is how a column is removed, the same gesture as dragging
+                something off the macOS dock. The last visible column is
+                refused: a table of nothing has no obvious way back.
+              */
+              if (event.dataTransfer.dropEffect !== "none") return
+              if (!isOutside(headerRef.current, event.clientX, event.clientY)) return
+              if (visibleKeys.length <= 1) return
+
+              poof({ x: event.clientX, y: event.clientY, theme })
+              apply((current) => hideColumnState(current, column.key))
+            }
+          : undefined
+      }
       onDragOver={
         reorderable
           ? (event) => {
               event.preventDefault()
-              setDragOver(true)
+              event.dataTransfer.dropEffect = "move"
+              // Which side of the middle the pointer is on decides where the
+              // column lands, so a drop is never a guess.
+              const rect = event.currentTarget.getBoundingClientRect()
+              setDropEdge(event.clientX < rect.left + rect.width / 2 ? "before" : "after")
             }
           : undefined
       }
-      onDragLeave={reorderable ? () => setDragOver(false) : undefined}
+      onDragLeave={reorderable ? () => setDropEdge(undefined) : undefined}
       onDrop={
         reorderable
           ? (event) => {
               event.preventDefault()
-              setDragOver(false)
+              const edge = dropEdge ?? "before"
+              setDropEdge(undefined)
+
               const dragged = event.dataTransfer.getData("text/tpz-column")
               if (!dragged || dragged === column.key) return
+
               apply((current) =>
-                setOrder(current, reorderColumn(visibleKeys, dragged, visibleKeys.indexOf(column.key))),
+                setOrder(current, reorderColumnTo(visibleKeys, dragged, column.key, edge)),
               )
             }
           : undefined
       }
     >
       <div className="tpz-th-inner">
-        <span
-          className="tpz-th-icon"
-          data-draggable={reorderable ? "true" : undefined}
-          draggable={reorderable}
-          /*
-            Dragging is a pointer affordance; the keyboard equivalent is "Move
-            left" and "Move right" in the column panel, so there is nothing
-            here for a screen reader to announce.
-          */
-          aria-hidden="true"
-          onDragStart={
-            reorderable
-              ? (event) => {
-                  event.dataTransfer.setData("text/tpz-column", column.key)
-                  event.dataTransfer.effectAllowed = "move"
-                }
-              : undefined
-          }
-        >
+        <span className="tpz-th-icon" aria-hidden="true">
           <Icon name={column.icon} />
         </span>
 
@@ -439,4 +479,19 @@ function SortButton({
       {children}
     </button>
   )
+}
+
+/**
+ * Whether a point is outside the table the header belongs to.
+ *
+ * The scroll container rather than the header: a drop a few pixels below the
+ * last row is still inside the table, and removing a column for that would be
+ * infuriating.
+ */
+function isOutside(header: HTMLElement | null, x: number, y: number): boolean {
+  const table = header?.closest(".tpz-frame")
+  if (!table) return false
+
+  const rect = table.getBoundingClientRect()
+  return x < rect.left || x > rect.right || y < rect.top || y > rect.bottom
 }

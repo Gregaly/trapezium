@@ -1126,3 +1126,171 @@
 .tpz a.tpz-th-button:hover {
   color: var(--tpz-fg);
 }
+
+/*
+  ── Dragging a column ──────────────────────────────────────────────────────
+
+  The whole header is the handle, not a grip inside it. A 28px target for
+  something as physical as moving a column is a fiddle, and every table people
+  have used lets them grab the header itself.
+
+  The controls inside keep their own cursor, so the header reads as draggable
+  in the space around them and clickable on them.
+*/
+.tpz-th[data-draggable="true"] {
+  cursor: grab;
+}
+
+.tpz-th[data-draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.tpz-th-button,
+.tpz-th-menu {
+  cursor: pointer;
+}
+
+.tpz-resizer {
+  cursor: col-resize;
+}
+
+.tpz-th[data-dragging="true"] {
+  opacity: 0.45;
+}
+
+/*
+  Where it will land, drawn on the edge the pointer is nearest. A line between
+  two columns is the only feedback that answers the question being asked while
+  dragging — "does it go here, or after this one?"
+*/
+.tpz-th[data-drop]::after {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  width: 2px;
+  height: 100%;
+  background: var(--tpz-primary);
+  content: "";
+  pointer-events: none;
+}
+
+.tpz-th[data-drop="before"]::after {
+  left: -1px;
+}
+
+.tpz-th[data-drop="after"]::after {
+  right: -1px;
+}
+
+/* A column dragged out of the table is removed, and says so. */
+.tpz[data-dragging-out="true"] .tpz-scroll {
+  outline: 1px dashed var(--tpz-danger);
+  outline-offset: -1px;
+}
+
+/* Reordering inside the column list, where the same rules apply vertically. */
+.tpz-filter-option[draggable="true"] {
+  cursor: grab;
+}
+
+.tpz-filter-option[data-dragging="true"] {
+  opacity: 0.45;
+}
+
+.tpz-filter-option[data-drop]::after {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: var(--tpz-primary);
+  content: "";
+  pointer-events: none;
+}
+
+.tpz-filter-option {
+  position: relative;
+}
+
+.tpz-filter-option[data-drop="before"]::after {
+  top: -1px;
+}
+
+.tpz-filter-option[data-drop="after"]::after {
+  bottom: -1px;
+}
+
+.tpz-grip {
+  flex: none;
+  color: var(--tpz-muted-fg);
+  opacity: 0.5;
+}
+
+/*
+  ── The puff ───────────────────────────────────────────────────────────────
+
+  Where a column went when it was dragged out. Three offset clouds rather than
+  one, because a single expanding circle reads as a ripple; overlapping ones
+  read as smoke.
+*/
+.tpz-poof {
+  position: fixed;
+  z-index: 60;
+  display: block;
+  container-type: normal;
+  pointer-events: none;
+}
+
+.tpz-poof,
+.tpz-poof::before,
+.tpz-poof::after {
+  border-radius: 50%;
+  background: radial-gradient(
+    circle at 50% 50%,
+    color-mix(in oklab, var(--tpz-muted-fg) 55%, transparent) 0%,
+    color-mix(in oklab, var(--tpz-muted-fg) 30%, transparent) 45%,
+    transparent 70%
+  );
+  animation: tpz-poof 420ms cubic-bezier(0.2, 0.6, 0.3, 1) forwards;
+}
+
+.tpz-poof::before,
+.tpz-poof::after {
+  position: absolute;
+  width: 70%;
+  height: 70%;
+  content: "";
+}
+
+.tpz-poof::before {
+  top: -18%;
+  left: 8%;
+  animation-delay: 40ms;
+}
+
+.tpz-poof::after {
+  top: 22%;
+  left: 38%;
+  animation-delay: 80ms;
+}
+
+@keyframes tpz-poof {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+
+  25% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.7) translateY(-18%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tpz-poof {
+    display: none;
+  }
+}

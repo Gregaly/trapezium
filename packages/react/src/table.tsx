@@ -104,6 +104,10 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   const headRef = useRef<HTMLTableSectionElement | null>(null)
   const [pinOffsets, setPinOffsets] = useState<Record<string, number>>({})
 
+  // Marks the table while a column is being dragged, so it can show that
+  // letting go outside will remove it.
+  const [draggingColumn, setDraggingColumn] = useState(false)
+
   useLayoutEffect(() => {
     const head = headRef.current
     if (!head) return
@@ -218,6 +222,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
       data-responsive={responsive}
       data-sticky-header={stickyHeader ? "true" : undefined}
       data-loading={loading ? "true" : undefined}
+      data-dragging-out={draggingColumn ? "true" : undefined}
       style={maxHeight ? ({ "--tpz-max-height": typeof maxHeight === "number" ? `${String(maxHeight)}px` : maxHeight } as React.CSSProperties) : undefined}
     >
       <div className={classes("frame")}>
@@ -280,6 +285,8 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
                     linkComponent={Link}
                     pinOffset={pinOffsets[column.key]}
                     isPinEdge={isPinEdge(columns, column.key)}
+                    theme={theme}
+                    onDragStateChange={setDraggingColumn}
                     style={{ width: column.width, minWidth: column.minWidth, maxWidth: column.maxWidth }}
                   />
                 ))}

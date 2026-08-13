@@ -5,6 +5,8 @@ import {
   optionLabel,
   removeFilterAt,
   setDensity,
+  reorderColumnTo,
+  setOrder,
   setSearch,
   showColumn,
   toggleColumn,
@@ -214,19 +216,12 @@ function ColumnMenu<TRow extends AnyRow>({
         <div className="tpz-menu-scroll">
           <MenuLabel>Shown</MenuLabel>
           {columns.map((column) => (
-            <label key={column.key} className="tpz-filter-option">
-              <input
-                type="checkbox"
-                className="tpz-checkbox"
-                checked
-                // The last visible column cannot be hidden: a table with no
-                // columns is a box of nothing, and the way back is not obvious.
-                disabled={columns.length === 1}
-                onChange={() => update((current) => toggleColumn(current, column.key))}
-              />
-              <Icon name={column.icon} />
-              <span className="tpz-filter-option-label">{column.header || column.key}</span>
-            </label>
+            <ShownColumn
+              key={column.key}
+              column={column}
+              columns={columns}
+              update={update}
+            />
           ))}
 
           {hiddenColumns.length > 0 && (
@@ -361,5 +356,75 @@ function FilterChips<TRow extends AnyRow>({
         Clear
       </button>
     </div>
+  )
+}
+
+/**
+ * One row of the column list.
+ *
+ * Draggable, because a list of columns is the other place people expect to be
+ * able to reorder them — and the one that works when the column you want to
+ * move is scrolled off the side of the table.
+ */
+function ShownColumn<TRow extends AnyRow>({
+  column,
+  columns,
+  update,
+}: {
+  column: TableColumn<TRow>
+  columns: TableColumn<TRow>[]
+  update: (next: (current: TableState) => TableState) => void
+}) {
+  const [dropEdge, setDropEdge] = useState<"before" | "after" | undefined>()
+  const [dragging, setDragging] = useState(false)
+
+  const keys = columns.map((entry) => entry.key)
+  const reorderable = column.reorderable !== false && !column.pin
+
+  return (
+    <label
+      className="tpz-filter-option"
+      draggable={reorderable}
+      data-dragging={dragging ? "true" : undefined}
+      data-drop={dropEdge}
+      onDragStart={(event) => {
+        event.dataTransfer.setData("text/tpz-column", column.key)
+        event.dataTransfer.effectAllowed = "move"
+        setDragging(true)
+      }}
+      onDragEnd={() => {
+        setDragging(false)
+        setDropEdge(undefined)
+      }}
+      onDragOver={(event) => {
+        event.preventDefault()
+        const rect = event.currentTarget.getBoundingClientRect()
+        setDropEdge(event.clientY < rect.top + rect.height / 2 ? "before" : "after")
+      }}
+      onDragLeave={() => setDropEdge(undefined)}
+      onDrop={(event) => {
+        event.preventDefault()
+        const edge = dropEdge ?? "before"
+        setDropEdge(undefined)
+
+        const dragged = event.dataTransfer.getData("text/tpz-column")
+        if (!dragged || dragged === column.key) return
+
+        update((current) => setOrder(current, reorderColumnTo(keys, dragged, column.key, edge)))
+      }}
+    >
+      {reorderable && <Icon name="grip" className="tpz-grip" />}
+      <input
+        type="checkbox"
+        className="tpz-checkbox"
+        checked
+        // The last visible column cannot be hidden: a table with no columns is
+        // a box of nothing, and the way back is not obvious.
+        disabled={columns.length === 1}
+        onChange={() => update((current) => toggleColumn(current, column.key))}
+      />
+      <Icon name={column.icon} />
+      <span className="tpz-filter-option-label">{column.header || column.key}</span>
+    </label>
   )
 }

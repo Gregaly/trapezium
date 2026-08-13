@@ -207,16 +207,156 @@ describe("parity with the other adapters", () => {
     expect(cells()).toHaveLength(20)
   })
 
-  it("makes the header icon a drag handle for reordering", () => {
+  it("makes the whole header the drag handle", () => {
     createTable(host, { data: people, columns: ["name", "plan"] })
 
-    const handles = [...host.querySelectorAll<HTMLElement>(".tpz-th-icon")]
-    expect(handles[0]?.dataset["draggable"]).toBe("true")
-    expect(handles[0]?.getAttribute("draggable")).toBe("true")
+    const headers = [...host.querySelectorAll<HTMLElement>(".tpz-th")]
+    expect(headers[0]?.dataset["draggable"]).toBe("true")
+    expect((headers[0] as HTMLTableCellElement).draggable).toBe(true)
   })
 
   it("leaves a pinned column undraggable, as pinning already decides its place", () => {
     createTable(host, { data: people, columns: [{ key: "name", pin: "start" }, "plan"] })
-    expect(host.querySelector<HTMLElement>(".tpz-th-icon")?.dataset["draggable"]).toBeUndefined()
+    expect(host.querySelector<HTMLElement>(".tpz-th")?.dataset["draggable"]).toBeUndefined()
+  })
+})
+
+/**
+ * jsdom has no drag-and-drop, so these build the events by hand. That is
+ * honest enough: the handlers only ever read `dataTransfer`, the pointer
+ * position and the element's own rectangle, and all three are supplied here
+ * exactly as a browser would.
+ */
+function dragEvent(type: string, dataTransfer: Partial<DataTransfer>, point: { x: number; y: number }) {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: point.x, clientY: point.y })
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer })
+  return event
+}
+
+function transfer(payload: Record<string, string> = {}, dropEffect: string = "move") {
+  return {
+    dropEffect,
+    effectAllowed: "move",
+    setData: (format: string, value: string) => {
+      payload[format] = value
+    },
+    getData: (format: string) => payload[format] ?? "",
+  } as unknown as DataTransfer
+}
+
+describe("reordering columns by dragging the header", () => {
+  function headers() {
+    return [...host.querySelectorAll<HTMLElement>(".tpz-th")]
+  }
+
+  function rect(node: HTMLElement, left: number, width: number) {
+    // jsdom lays nothing out, so every rectangle is zero unless it is told.
+    node.getBoundingClientRect = () =>
+      ({ left, right: left + width, top: 0, bottom: 32, width, height: 32, x: left, y: 0, toJSON: () => ({}) }) as DOMRect
+  }
+
+  it("drops a column after the one it was released on", () => {
+    createTable(host, { data: people, columns: ["name", "plan", "email"] })
+    const [name, , email] = headers()
+
+    const payload = {}
+    name!.dispatchEvent(dragEvent("dragstart", transfer(payload), { x: 0, y: 0 }))
+
+    rect(email!, 200, 100)
+    email!.dispatchEvent(dragEvent("dragover", transfer(payload), { x: 280, y: 10 }))
+    email!.dispatchEvent(dragEvent("drop", transfer(payload), { x: 280, y: 10 }))
+
+    expect(headers().map((cell) => cell.dataset["key"])).toEqual(["plan", "email", "name"])
+  })
+
+  it("drops it before, when released on the left half", () => {
+    createTable(host, { data: people, columns: ["name", "plan", "email"] })
+    const [name, , email] = headers()
+
+    const payload = {}
+    name!.dispatchEvent(dragEvent("dragstart", transfer(payload), { x: 0, y: 0 }))
+
+    rect(email!, 200, 100)
+    email!.dispatchEvent(dragEvent("dragover", transfer(payload), { x: 220, y: 10 }))
+    email!.dispatchEvent(dragEvent("drop", transfer(payload), { x: 220, y: 10 }))
+
+    expect(headers().map((cell) => cell.dataset["key"])).toEqual(["plan", "name", "email"])
+  })
+
+  it("marks the edge the column will land on while it is in the air", () => {
+    createTable(host, { data: people, columns: ["name", "plan"] })
+    const [, plan] = headers()
+
+    rect(plan!, 100, 100)
+    plan!.dispatchEvent(dragEvent("dragover", transfer(), { x: 190, y: 10 }))
+    expect(plan!.dataset["drop"]).toBe("after")
+
+    plan!.dispatchEvent(dragEvent("dragover", transfer(), { x: 110, y: 10 }))
+    expect(plan!.dataset["drop"]).toBe("before")
+
+    plan!.dispatchEvent(new MouseEvent("dragleave", { bubbles: true }))
+    expect(plan!.dataset["drop"]).toBeUndefined()
+  })
+})
+
+describe("removing a column by dragging it out", () => {
+  function frameRect() {
+    const frame = host.querySelector<HTMLElement>(".tpz-frame")!
+    frame.getBoundingClientRect = () =>
+      ({ left: 0, right: 400, top: 0, bottom: 200, width: 400, height: 200, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+  }
+
+  it("hides the column when it is released outside the table", () => {
+    createTable(host, { data: people, columns: ["name", "plan"] })
+    frameRect()
+
+    const name = host.querySelector<HTMLElement>(".tpz-th")!
+    name.dispatchEvent(dragEvent("dragend", transfer({}, "none"), { x: 900, y: 600 }))
+
+    expect([...host.querySelectorAll(".tpz-th")].map((cell) => (cell as HTMLElement).dataset["key"])).toEqual(["plan"])
+  })
+
+  it("keeps it when the drop landed inside the table", () => {
+    createTable(host, { data: people, columns: ["name", "plan"] })
+    frameRect()
+
+    const name = host.querySelector<HTMLElement>(".tpz-th")!
+    name.dispatchEvent(dragEvent("dragend", transfer({}, "none"), { x: 120, y: 40 }))
+
+    expect(host.querySelectorAll(".tpz-th")).toHaveLength(2)
+  })
+
+  it("refuses to remove the last column, which would leave nothing to look at", () => {
+    createTable(host, { data: people, columns: ["name"] })
+    frameRect()
+
+    const name = host.querySelector<HTMLElement>(".tpz-th")!
+    name.dispatchEvent(dragEvent("dragend", transfer({}, "none"), { x: 900, y: 600 }))
+
+    expect(host.querySelectorAll(".tpz-th")).toHaveLength(1)
+  })
+})
+
+describe("reordering inside the column list", () => {
+  it("drags one row above another", () => {
+    createTable(host, { data: people, columns: ["name", "plan", "email"] })
+    host.querySelectorAll<HTMLButtonElement>(".tpz-toolbar .tpz-btn")[0]!.click()
+
+    const rows = [...document.querySelectorAll<HTMLElement>(".tpz-portal .tpz-filter-option")]
+    expect(rows.map((row) => row.textContent?.trim())).toEqual(["Name", "Plan", "Email"])
+
+    const payload = {}
+    rows[2]!.dispatchEvent(dragEvent("dragstart", transfer(payload), { x: 0, y: 0 }))
+
+    rows[0]!.getBoundingClientRect = () =>
+      ({ left: 0, right: 200, top: 0, bottom: 24, width: 200, height: 24, x: 0, y: 0, toJSON: () => ({}) }) as DOMRect
+    rows[0]!.dispatchEvent(dragEvent("dragover", transfer(payload), { x: 10, y: 4 }))
+    rows[0]!.dispatchEvent(dragEvent("drop", transfer(payload), { x: 10, y: 4 }))
+
+    expect([...host.querySelectorAll(".tpz-th")].map((cell) => (cell as HTMLElement).dataset["key"])).toEqual([
+      "email",
+      "name",
+      "plan",
+    ])
   })
 })

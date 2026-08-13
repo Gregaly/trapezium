@@ -75,6 +75,7 @@ export {
   moveColumn,
   pruneState,
   reorderColumn,
+  reorderColumnTo,
   resolveColumns,
 } from "./columns.js"
 export type { ColumnInput, ResolveColumnsOptions, ResolvedColumns } from "./columns.js"
@@ -151,6 +152,8 @@ export {
 export type { UrlOptions, UrlStateKey } from "./url.js"
 
 export { copyText, downloadText, exportCell, toCsv, toDelimitedText } from "./csv.js"
+export { poof } from "./effects.js"
+export type { PoofOptions } from "./effects.js"
 export type { ExportOptions } from "./csv.js"
 
 export { ICONS, iconPath } from "./icons.js"

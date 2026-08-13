@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
@@ -264,6 +264,106 @@ describe("server rendering", () => {
     hydrateRoot(container, element)
 
     spy.mockRestore()
+    container.remove()
     expect(errors).toEqual([])
+  })
+})
+
+/**
+ * jsdom has no drag-and-drop, so these build the events by hand. The handlers
+ * only ever read `dataTransfer`, the pointer position and the element's own
+ * rectangle, and all three are supplied here exactly as a browser would.
+ */
+function transfer(payload: Record<string, string> = {}, dropEffect = "move") {
+  return {
+    dropEffect,
+    effectAllowed: "move",
+    setData: (format: string, value: string) => {
+      payload[format] = value
+    },
+    getData: (format: string) => payload[format] ?? "",
+  }
+}
+
+/**
+ * A drag event with a pointer position on it.
+ *
+ * Testing Library builds drag events from `window.DragEvent`, which jsdom does
+ * not have — so it falls back to a plain `Event`, and `clientX` never arrives.
+ * A `MouseEvent` of the right type carries the coordinates the handlers
+ * actually read.
+ */
+function drag(
+  type: string,
+  dataTransfer: unknown,
+  point: { x: number; y: number } = { x: 0, y: 0 },
+): Event {
+  const event = new MouseEvent(type, { bubbles: true, cancelable: true, clientX: point.x, clientY: point.y })
+  Object.defineProperty(event, "dataTransfer", { value: dataTransfer })
+  return event
+}
+
+function measure(node: Element, box: { left: number; width: number }) {
+  node.getBoundingClientRect = () =>
+    ({
+      left: box.left,
+      right: box.left + box.width,
+      top: 0,
+      bottom: 32,
+      width: box.width,
+      height: 32,
+      x: box.left,
+      y: 0,
+      toJSON: () => ({}),
+    }) as DOMRect
+}
+
+describe("reordering columns by dragging", () => {
+  const headerKeys = (container: HTMLElement) =>
+    [...container.querySelectorAll("thead .tpz-th")].map((cell) => (cell as HTMLElement).dataset["key"])
+
+  it("moves a column to where it was dropped", () => {
+    const { container } = render(<Table data={people} columns={["name", "age", "plan"]} />)
+    const [name, , plan] = [...container.querySelectorAll("thead .tpz-th")]
+
+    const payload = {}
+    fireEvent(name!, drag("dragstart", transfer(payload)))
+
+    measure(plan!, { left: 200, width: 100 })
+    fireEvent(plan!, drag("dragover", transfer(payload), { x: 280, y: 10 }))
+    fireEvent(plan!, drag("drop", transfer(payload), { x: 280, y: 10 }))
+
+    expect(headerKeys(container)).toEqual(["age", "plan", "name"])
+  })
+
+  it("shows which edge it will land on", () => {
+    const { container } = render(<Table data={people} columns={["name", "age"]} />)
+    const age = [...container.querySelectorAll("thead .tpz-th")][1]!
+
+    measure(age, { left: 100, width: 100 })
+    fireEvent(age, drag("dragover", transfer(), { x: 110, y: 10 }))
+    expect((age as HTMLElement).dataset["drop"]).toBe("before")
+
+    fireEvent(age, drag("dragover", transfer(), { x: 190, y: 10 }))
+    expect((age as HTMLElement).dataset["drop"]).toBe("after")
+  })
+
+  it("hides a column dragged out of the table, and keeps one dropped inside it", () => {
+    const { container } = render(<Table data={people} columns={["name", "age"]} />)
+    measure(container.querySelector(".tpz-frame")!, { left: 0, width: 400 })
+
+    fireEvent(
+      container.querySelector("thead .tpz-th")!,
+      drag("dragend", transfer({}, "none"), { x: 900, y: 600 }),
+    )
+    expect(headerKeys(container)).toEqual(["age"])
+
+    measure(container.querySelector(".tpz-frame")!, { left: 0, width: 400 })
+    fireEvent(
+      container.querySelector("thead .tpz-th")!,
+      drag("dragend", transfer({}, "none"), { x: 900, y: 600 }),
+    )
+    // The last one stays: a table of nothing has no obvious way back.
+    expect(headerKeys(container)).toEqual(["age"])
   })
 })

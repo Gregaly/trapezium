@@ -271,6 +271,31 @@ export function reorderColumn(
   return next
 }
 
+/**
+ * Places a column beside another one, which is what a drag between two headers
+ * means.
+ *
+ * Computed after the dragged column has been removed, because the index a
+ * target sits at changes once something in front of it is gone — the classic
+ * off-by-one that makes a column land one place to the left of where it was
+ * dropped.
+ */
+export function reorderColumnTo(
+  visibleKeys: readonly string[],
+  dragged: string,
+  target: string,
+  position: "before" | "after",
+): string[] {
+  if (dragged === target || !visibleKeys.includes(dragged)) return [...visibleKeys]
+
+  const next = visibleKeys.filter((key) => key !== dragged)
+  const index = next.indexOf(target)
+  if (index === -1) return [...visibleKeys]
+
+  next.splice(position === "before" ? index : index + 1, 0, dragged)
+  return next
+}
+
 /** Drops references to columns that no longer exist, so state cannot accumulate junk. */
 export function pruneState(state: TableState, keys: readonly string[]): TableState {
   const known = new Set(keys)

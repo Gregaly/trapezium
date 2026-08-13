@@ -12,9 +12,10 @@ import {
   isEmpty,
   moveColumn,
   optionLabel,
+  poof,
   removeFilter,
   removeFilterAt,
-  reorderColumn,
+  reorderColumnTo,
   resolveColumns,
   resolveRowId,
   setFilter,
@@ -517,47 +518,18 @@ export function createTable<TRow extends AnyRow>(
     const inner = el("div", { class: "tpz-th-inner" })
     const reorderable = settings.reorderable !== false && column.reorderable !== false && !column.pin
 
-    /*
-      The drag handle is the type icon rather than the whole cell: a draggable
-      element swallows the pointer events its children need, so a draggable
-      header and a clickable header cannot be the same element.
-    */
-    const glyph = el("span", {
-      class: "tpz-th-icon",
-      "data-draggable": reorderable ? "true" : undefined,
-      // An enumerated attribute, not a boolean one: `draggable=""` is invalid
-      // and browsers fall back to "auto", which does not drag.
-      draggable: reorderable ? "true" : undefined,
-      // Dragging is a pointer affordance; the keyboard equivalent is "Move
-      // left" and "Move right" in the column panel, so there is nothing here
-      // for a screen reader to announce.
-      "aria-hidden": "true",
-    }, [icon(column.icon)])
-
     if (reorderable) {
-      glyph.addEventListener("dragstart", (event) => {
-        event.dataTransfer?.setData("text/tpz-column", column.key)
-        if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
-      })
-
-      cell.addEventListener("dragover", (event) => {
-        event.preventDefault()
-        cell.dataset["dragOver"] = "true"
-      })
-
-      cell.addEventListener("dragleave", () => delete cell.dataset["dragOver"])
-
-      cell.addEventListener("drop", (event) => {
-        event.preventDefault()
-        delete cell.dataset["dragOver"]
-
-        const dragged = event.dataTransfer?.getData("text/tpz-column")
-        if (!dragged || dragged === column.key) return
-        update(setOrder(state, reorderColumn(keys, dragged, keys.indexOf(column.key))))
-      })
+      // The whole header is the handle. A grip inside it is a 28px target for
+      // something as physical as moving a column, and every table people have
+      // used lets them grab the header itself.
+      cell.draggable = true
+      cell.dataset["draggable"] = "true"
+      attachColumnDrag(cell, column.key, keys)
     }
 
-    inner.append(glyph)
+    // Dragging is a pointer affordance; the keyboard equivalent is "Move left"
+    // and "Move right" in the column panel, so the icon announces nothing.
+    inner.append(el("span", { class: "tpz-th-icon", "aria-hidden": "true" }, [icon(column.icon)]))
 
     const label = el(sortable ? "button" : "span", { class: "tpz-th-button", type: sortable ? "button" : undefined }, [
       el("span", { class: "tpz-th-label", text: column.header }),
@@ -589,6 +561,66 @@ export function createTable<TRow extends AnyRow>(
     return cell
   }
 
+  /**
+   * Reordering by drag, and removing by dragging out.
+   *
+   * Which side of the middle the pointer is on decides where the column lands,
+   * so a drop is never a guess. Letting go outside the table removes the
+   * column — the same gesture as dragging something off the macOS dock, with
+   * the same puff of smoke, because a removal with no animation reads as a bug.
+   */
+  function attachColumnDrag(cell: HTMLElement, key: string, keys: string[]) {
+    let edge: "before" | "after" = "before"
+
+    cell.addEventListener("dragstart", (event) => {
+      event.dataTransfer?.setData("text/tpz-column", key)
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
+      cell.dataset["dragging"] = "true"
+      root.dataset["draggingOut"] = "true"
+    })
+
+    cell.addEventListener("dragend", (event) => {
+      delete cell.dataset["dragging"]
+      delete cell.dataset["drop"]
+      delete root.dataset["draggingOut"]
+
+      // Nothing accepted the drop, so it landed outside the table. The last
+      // visible column is refused: a table of nothing has no obvious way back.
+      if (event.dataTransfer?.dropEffect !== "none") return
+      if (keys.length <= 1) return
+
+      const rect = root.querySelector(".tpz-frame")?.getBoundingClientRect()
+      if (!rect) return
+      const outside =
+        event.clientX < rect.left || event.clientX > rect.right ||
+        event.clientY < rect.top || event.clientY > rect.bottom
+      if (!outside) return
+
+      poof({ x: event.clientX, y: event.clientY, theme: settings.theme })
+      update(hideColumn(state, key))
+    })
+
+    cell.addEventListener("dragover", (event) => {
+      event.preventDefault()
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move"
+
+      const rect = cell.getBoundingClientRect()
+      edge = event.clientX < rect.left + rect.width / 2 ? "before" : "after"
+      cell.dataset["drop"] = edge
+    })
+
+    cell.addEventListener("dragleave", () => delete cell.dataset["drop"])
+
+    cell.addEventListener("drop", (event) => {
+      event.preventDefault()
+      delete cell.dataset["drop"]
+
+      const dragged = event.dataTransfer?.getData("text/tpz-column")
+      if (!dragged || dragged === key) return
+      update(setOrder(state, reorderColumnTo(keys, dragged, key, edge)))
+    })
+  }
+
   function resizeHandle(cell: HTMLElement, key: string): HTMLElement {
     const handle = el("button", { type: "button", class: "tpz-resizer", "aria-label": `Resize column` })
 
@@ -598,10 +630,16 @@ export function createTable<TRow extends AnyRow>(
       const startWidth = cell.getBoundingClientRect().width
       handle.setPointerCapture(event.pointerId)
       handle.dataset["resizing"] = "true"
+      // A press-and-move on the handle is exactly what starts a column drag.
+      // Turning it off for the duration is what lets the two gestures share
+      // the same cell.
+      const wasDraggable = cell.draggable
+      cell.draggable = false
 
       const move = (next: PointerEvent) => update(setWidth(state, key, startWidth + (next.clientX - startX)))
       const up = () => {
         delete handle.dataset["resizing"]
+        cell.draggable = wasDraggable
         handle.removeEventListener("pointermove", move)
         handle.removeEventListener("pointerup", up)
       }
@@ -795,18 +833,30 @@ export function createTable<TRow extends AnyRow>(
     openMenuAt({ anchor, align: "end", label: "Columns", theme: settings.theme, width: 220 }, () => {
       const list = el("div", { class: "tpz-menu-scroll" }, [menuLabel("Shown")])
 
+      const keys = columns.map((column) => column.key)
+
       for (const column of columns) {
         const box = el("input", { type: "checkbox", class: "tpz-checkbox" }) as HTMLInputElement
         box.checked = true
         box.disabled = columns.length === 1
         box.addEventListener("change", () => update(hideColumn(state, column.key)))
-        list.append(
-          el("label", { class: "tpz-filter-option" }, [
+
+        const reorderable = column.reorderable !== false && !column.pin
+        const row = el(
+          "label",
+          { class: "tpz-filter-option", draggable: reorderable ? "true" : undefined },
+          [
+            reorderable ? icon("grip", 14, "tpz-grip") : null,
             box,
             icon(column.icon),
             el("span", { class: "tpz-filter-option-label", text: column.header || column.key }),
-          ]),
+          ],
         )
+
+        // The other place people expect to reorder columns, and the one that
+        // works when the column they want is scrolled off the side.
+        if (reorderable) attachListDrag(row, column.key, keys)
+        list.append(row)
       }
 
       if (hidden.length > 0) {
@@ -825,6 +875,40 @@ export function createTable<TRow extends AnyRow>(
       }
 
       return [list]
+    })
+  }
+
+  /** Vertical reordering inside the column list. */
+  function attachListDrag(row: HTMLElement, key: string, keys: string[]) {
+    let edge: "before" | "after" = "before"
+
+    row.addEventListener("dragstart", (event) => {
+      event.dataTransfer?.setData("text/tpz-column", key)
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
+      row.dataset["dragging"] = "true"
+    })
+
+    row.addEventListener("dragend", () => {
+      delete row.dataset["dragging"]
+      delete row.dataset["drop"]
+    })
+
+    row.addEventListener("dragover", (event) => {
+      event.preventDefault()
+      const rect = row.getBoundingClientRect()
+      edge = event.clientY < rect.top + rect.height / 2 ? "before" : "after"
+      row.dataset["drop"] = edge
+    })
+
+    row.addEventListener("dragleave", () => delete row.dataset["drop"])
+
+    row.addEventListener("drop", (event) => {
+      event.preventDefault()
+      delete row.dataset["drop"]
+
+      const dragged = event.dataTransfer?.getData("text/tpz-column")
+      if (!dragged || dragged === key) return
+      update(setOrder(state, reorderColumnTo(keys, dragged, key, edge)))
     })
   }
 
