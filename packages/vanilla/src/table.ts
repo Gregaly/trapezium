@@ -159,7 +159,7 @@ export function createTable<TRow extends AnyRow>(
   toolbarStart.append(count, chips)
   toolbar.append(toolbarStart, toolbarEnd)
   table.append(head, body)
-  scroll.append(table, sentinel)
+  scroll.append(table)
   frame.append(toolbar, scroll, paginationBar)
   root.append(frame)
   host.append(root)
@@ -995,6 +995,7 @@ export function createTable<TRow extends AnyRow>(
     }
 
     observer?.disconnect()
+    sentinel.remove()
 
     if (pageCount <= 1 && !pagination.pageSizeOptions?.length) {
       fill(paginationBar, [])
@@ -1080,6 +1081,11 @@ export function createTable<TRow extends AnyRow>(
   function observeSentinel(hasMore: boolean) {
     observer?.disconnect()
     observer = undefined
+
+    // Present only while infinite scrolling is on, so the markup matches the
+    // other adapters exactly — an element nobody else renders is the beginning
+    // of four packages drifting into four products.
+    if (!scroll.contains(sentinel)) scroll.append(sentinel)
 
     // No observer, no automatic loading — the button below is still there, so
     // the feature degrades rather than disappearing.
