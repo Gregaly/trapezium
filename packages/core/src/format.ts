@@ -292,9 +292,15 @@ export function optionLabel(value: unknown, options: SelectOption[] | undefined)
   return match?.label ?? text
 }
 
-/** Anything that is not a number returns undefined rather than `NaN`. */
+/**
+ * Anything that is not a number returns undefined rather than `NaN`.
+ *
+ * Infinity is a number and is kept: it sorts at the extreme, compares the way
+ * arithmetic says it should, and `Intl` renders it as "∞". Only `NaN` — which
+ * is the absence of a number wearing a number's clothes — is refused.
+ */
 export function toNumber(value: unknown): number | undefined {
-  if (typeof value === "number") return Number.isFinite(value) ? value : undefined
+  if (typeof value === "number") return Number.isNaN(value) ? undefined : value
   if (typeof value === "boolean") return value ? 1 : 0
 
   if (typeof value === "string") {
@@ -307,7 +313,7 @@ export function toNumber(value: unknown): number | undefined {
     // column of text would sort as a column of zeroes and filter as one too.
     if (!/\d/.test(cleaned)) return undefined
     const parsed = Number(cleaned)
-    return Number.isFinite(parsed) ? parsed : undefined
+    return Number.isNaN(parsed) ? undefined : parsed
   }
 
   return undefined
