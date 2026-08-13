@@ -9,7 +9,10 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "pnpm -r --filter \"./packages/*\" typecheck",
-    "check": "pnpm typecheck && pnpm test"
+    "check": "pnpm typecheck && pnpm test",
+    "bench": "node bench/pipeline.mjs",
+    "bench:browser": "node examples/plain-html/serve.mjs # then open /bench/browser/index.html",
+    "bench:prepare": "esbuild packages/core/src/testing/dataset.ts --format=esm --target=es2022 --outfile=bench/dataset.mjs && node scripts/bench-dataset.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^4.0.4",

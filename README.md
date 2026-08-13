@@ -85,6 +85,7 @@ Every property there is optional. Delete any of them and the table still works.
 | [Styling](docs/styling.md) | Tokens, dark mode, Tailwind, shadcn, density |
 | [Server-side data](docs/server-data.md) | Sorting, filtering and paging in your database |
 | [Server rendering and URL state](docs/ssr.md) | SSR, shareable links, tables with no JavaScript |
+| [Performance](docs/performance.md) | Measured numbers, and what they mean for your table |
 | [Accessibility](docs/accessibility.md) | What you get, and what is still yours |
 | [API reference](docs/api.md) | Every prop, type and function |
 | [Recipes](docs/recipes.md) | The things people ask for |

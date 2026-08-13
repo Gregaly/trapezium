@@ -13,7 +13,7 @@
  * four.
  */
 import { act, cleanup, render } from "@testing-library/react"
-import { createTable } from "@trapezium/vanilla"
+import { createTable, type VanillaColumn } from "@trapezium/vanilla"
 import { columns as fullColumns, customTypes, makeRows, type Row } from "@trapezium/core/testing"
 import { afterEach, describe, expect, it } from "vitest"
 
@@ -25,8 +25,16 @@ afterEach(cleanup)
 const NOW = new Date("2026-08-13T12:00:00.000Z")
 const rows = makeRows(40, 9)
 
-/** Every type the two adapters both render, which is all of them. */
+/**
+ * Every type the two adapters both render, which is all of them.
+ *
+ * The two adapters type a cell renderer differently — React nodes on one side,
+ * DOM nodes on the other — so the same array cannot satisfy both signatures at
+ * once. These columns define no renderer at all, which is why handing the same
+ * objects to both is sound; the cast says so at the one place it matters.
+ */
 const columns = fullColumns as Column<Row>[]
+const vanillaColumns = fullColumns as VanillaColumn<Row>[]
 
 const options = {
   data: rows,
@@ -55,7 +63,7 @@ function reactTable(state?: Record<string, unknown>) {
 function vanillaTable(state?: Record<string, unknown>) {
   const host = document.createElement("div")
   document.body.append(host)
-  createTable(host, { ...options, state, export: true, ariaLabel: "Parity" })
+  createTable(host, { ...options, columns: vanillaColumns, state, export: true, ariaLabel: "Parity" })
   return host.querySelector<HTMLElement>(".tpz")!
 }
 
@@ -159,7 +167,7 @@ describe("the two renderers agree", () => {
 
     const host = document.createElement("div")
     document.body.append(host)
-    createTable(host, { ...empty, ariaLabel: "Parity" })
+    createTable(host, { ...empty, columns: vanillaColumns, ariaLabel: "Parity" })
 
     const { container } = render(<Table {...empty} aria-label="Parity" />)
 

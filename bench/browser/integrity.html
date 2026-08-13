@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trapezium — integrity in a browser</title>
+    <link rel="stylesheet" href="../../packages/core/styles.css" />
+    <style>
+      :root { color-scheme: light dark; }
+      body {
+        max-width: 80rem;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+        background: light-dark(#f2eee6, #0a0a0a);
+        color: light-dark(#221e1a, #ededed);
+        font-family: ui-rounded, system-ui, sans-serif;
+      }
+      #results { font-family: ui-monospace, Menlo, monospace; font-size: 0.75rem; white-space: pre; }
+      .pass { color: light-dark(#3f6b4a, #82b491); }
+      .fail { color: light-dark(#97362b, #e0857a); }
+    </style>
+  </head>
+
+  <body>
+    <h1>Integrity</h1>
+    <p>
+      Drives the real table through its own controls and checks what a person would check: that
+      every row is there, exactly once, on exactly one page, in the order the columns imply.
+    </p>
+
+    <div id="results">running…</div>
+    <div id="table"></div>
+
+    <script src="../../packages/vanilla/dist/trapezium.global.js"></script>
+    <script type="module">
+      import { makeRows, columns, customTypes } from "../dataset.mjs"
+
+      const { createTable } = window.Trapezium
+      const output = document.querySelector("#results")
+      const host = document.querySelector("#table")
+
+      const checks = []
+      const check = (name, condition, detail = "") => {
+        checks.push({ name, ok: Boolean(condition), detail })
+      }
+
+      /** The ids on screen right now, read out of the DOM rather than the model. */
+      const shownIds = () =>
+        [...host.querySelectorAll("tbody tr")].map(
+          (row) => row.querySelector('td[data-key="id"]')?.textContent?.trim() ?? "",
+        )
+
+      async function run(size) {
+        host.replaceChildren()
+        const rows = makeRows(size, 21)
+        const pageSize = 25
+
+        const table = createTable(host, {
+          data: rows,
+          columns,
+          types: customTypes,
+          getRowId: (row) => row.id,
+          search: { debounce: 0 },
+          selection: "multiple",
+          pagination: { mode: "pages", pageSize },
+          format: { currency: "AUD" },
+        })
+
+        /* ── Every row, exactly once, across every page ──────────────────── */
+
+        const walk = () => {
+          const seen = []
+          let page = 1
+          for (;;) {
+            table.setState({ page })
+            const ids = shownIds()
+            if (ids.length === 0) break
+            seen.push(...ids)
+            if (ids.length < pageSize) break
+            page += 1
+            // The pagination bar disables "next" at the end; stop there too.
+            const next = host.querySelector('[aria-label="Next page"]')
+            if (!next || next.disabled) break
+          }
+          return seen
+        }
+
+        const everything = walk()
+        check(`${size}: every row appears`, everything.length === size, `${everything.length} of ${size}`)
+        check(`${size}: no row appears twice`, new Set(everything).size === everything.length)
+        check(
+          `${size}: the pages are the data, in order`,
+          everything.join() === rows.map((row) => row.id).join(),
+        )
+
+        /* ── Sorted, the pages are still a partition ─────────────────────── */
+
+        table.setState({ sort: [{ key: "amountCents", direction: "desc" }], page: 1 })
+        const sorted = walk()
+        check(`${size}: sorted, every row still appears once`, new Set(sorted).size === size)
+
+        const byId = new Map(rows.map((row) => [row.id, row]))
+        const amounts = sorted.map((id) => byId.get(id).amountCents)
+        check(
+          `${size}: sorted, the order is right`,
+          amounts.every((value, index) => index === 0 || amounts[index - 1] >= value),
+        )
+
+        /* ── Filtered, the pages cover exactly the matches ───────────────── */
+
+        table.setState({
+          filters: [{ key: "plan", operator: "in", value: ["pro", "team"] }],
+          sort: [],
+          page: 1,
+        })
+        const filtered = walk()
+        const expected = rows.filter((row) => row.plan === "pro" || row.plan === "team").map((row) => row.id)
+        check(`${size}: filtered, the pages are exactly the matches`, filtered.join() === expected.join(), `${filtered.length} vs ${expected.length}`)
+
+        /* ── Searched ────────────────────────────────────────────────────── */
+
+        table.setState({ filters: [], search: "urgent", page: 1 })
+        const searched = walk()
+        const withTag = rows.filter((row) => row.tags.includes("urgent")).map((row) => row.id)
+        check(
+          `${size}: search finds every row with the tag`,
+          withTag.every((id) => searched.includes(id)),
+          `${searched.length} found, ${withTag.length} tagged`,
+        )
+
+        /* ── Selection survives paging ───────────────────────────────────── */
+
+        table.setState({ search: "", page: 1 })
+        const first = shownIds()[0]
+        table.setState({ selection: [first] })
+        table.setState({ page: 3 })
+        check(`${size}: a selection survives paging`, table.getSelection().join() === first)
+
+        table.destroy()
+      }
+
+      for (const size of [500, 5_000]) await run(size)
+
+      const failed = checks.filter((entry) => !entry.ok)
+      output.innerHTML = checks
+        .map(
+          (entry) =>
+            `<span class="${entry.ok ? "pass" : "fail"}">${entry.ok ? "✓" : "✗"} ${entry.name}${entry.detail ? ` — ${entry.detail}` : ""}</span>`,
+        )
+        .join("\n")
+
+      window.__integrity = { total: checks.length, failed: failed.length, failures: failed }
+    </script>
+  </body>
+</html>
