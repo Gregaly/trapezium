@@ -79,6 +79,16 @@ export type ColumnFilter = {
 export type FilterKind = "text" | "set" | "range" | "date" | "boolean" | "none"
 
 /**
+ * Where a set filter's choices come from when the table cannot work them out.
+ *
+ * Called the first time the panel is opened and remembered afterwards, so a
+ * server-side table can answer "what values does this column have?" without
+ * every column's domain being fetched up front. Returning a promise is the
+ * normal case.
+ */
+export type FilterOptionsProvider = () => SelectOption[] | Promise<SelectOption[]>
+
+/**
  * How a column is filtered.
  *
  * `true` picks the control the column's type deserves; a string forces one; an
@@ -91,8 +101,14 @@ export type FilterOption =
       kind?: FilterKind
       /** Operators to offer, narrowing the type's default set. */
       operators?: FilterOperator[]
-      /** Fixed choices for a `set` filter. Derived from the data when omitted. */
-      options?: SelectOption[]
+      /**
+       * Choices for a `set` filter.
+       *
+       * A list, or a function that fetches one. Without either, they are
+       * derived from the data — which is everything in client mode and one
+       * page in server mode.
+       */
+      options?: SelectOption[] | FilterOptionsProvider
       /** Starting operator when the user opens an empty filter. */
       defaultOperator?: FilterOperator
     }
@@ -288,6 +304,14 @@ export type ResolvedColumn<TRow = AnyRow, TNode = unknown> = Omit<
   mono: boolean
   filterKind: FilterKind
   operators: FilterOperator[]
+  /**
+   * The choices a set filter should offer, if the column named any.
+   *
+   * Kept apart from `formatOptions.options`, which is about rendering a value:
+   * a column can label its cells from one list and offer a different, larger
+   * one to filter by — which is exactly what a server-side table needs.
+   */
+  filterOptions?: SelectOption[] | FilterOptionsProvider
   icon: string | false
   /** Position among the visible columns, after ordering and pinning. */
   index: number

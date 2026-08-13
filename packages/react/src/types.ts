@@ -93,11 +93,24 @@ export type ExportOptions<TRow = AnyRow> = {
    */
   scope?: "matching" | "page"
   /**
-   * Takes over the export entirely.
+   * Fetches the rows to export.
    *
-   * The escape hatch for server-side data, where the table holds one page and
-   * cannot honestly export the rest: given the current state, fetch what you
-   * need and write the file yourself.
+   * The answer for server-side data, where the table holds one page and cannot
+   * honestly export the rest. You do the query — it is your database — and the
+   * table writes the file, with the same columns, the same order and the same
+   * rules about what belongs in a spreadsheet.
+   *
+   * ```tsx
+   * export={{ fetchRows: (state) => api.invoices.all(state) }}
+   * ```
+   */
+  fetchRows?: (state: TableState) => readonly TRow[] | Promise<readonly TRow[]>
+
+  /**
+   * Takes over the export entirely, file and all.
+   *
+   * For when the file should come from somewhere else — an endpoint that
+   * already knows how to make it, or a format this library does not write.
    */
   onExport?: (state: TableState, rows: readonly TRow[]) => void
 }

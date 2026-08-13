@@ -63,7 +63,15 @@ Give it the whole list, which your server knows and the table does not:
 }
 ```
 
-For a column whose values are open-ended — a customer name, a reference — a set filter is the wrong control server-side. Use `filter: "text"` and let the database do the matching.
+Or hand it a function, when you would rather not query for every column's values up front:
+
+```tsx
+{ key: "owner", filter: { kind: "set", options: () => api.invoices.distinct("owner") } }
+```
+
+It is called the first time that column's panel is opened, shows "Loading values…" while it works, and is remembered afterwards.
+
+For a column whose values are open-ended — a customer name, a reference — a set filter is the wrong control server-side however you supply it. Use `filter: "text"` and let the database do the matching.
 
 ### Operators
 

@@ -212,20 +212,31 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   */
   const exportRows = exportOptions?.scope === "page" ? rows : matchedRows
 
-  if (exportOptions && props.server) warnAboutServerExport()
+  // Only worth saying when the caller has given it no way to do better.
+  if (exportOptions && props.server && !exportOptions.fetchRows && !exportOptions.onExport) {
+    warnAboutServerExport()
+  }
 
   const exportControl = exportOptions
     ? {
         onDownload: () => {
-          if (exportOptions.onExport) {
-            exportOptions.onExport(state, exportRows)
-            return
-          }
+          void (async () => {
+            // The caller's rows if they have them — a server-side table's real
+            // answer — and otherwise the ones on hand.
+            const rows = exportOptions.fetchRows
+              ? await exportOptions.fetchRows(state)
+              : exportRows
 
-          downloadText(
-            toCsv(exportRows, { columns, types, format, getRowId }),
-            `${exportOptions.filename ?? "table"}.csv`,
-          )
+            if (exportOptions.onExport) {
+              exportOptions.onExport(state, rows)
+              return
+            }
+
+            downloadText(
+              toCsv(rows, { columns, types, format, getRowId }),
+              `${exportOptions.filename ?? "table"}.csv`,
+            )
+          })()
         },
         onCopy:
           exportOptions.clipboard === false
@@ -492,8 +503,8 @@ function warnAboutServerExport(): void {
   warnedAboutExport = true
   console.warn(
     "[trapezium] Exporting in server mode can only include the rows the table has, which is one " +
-      "page. Pass export={{ onExport: (state, rows) => … }} and fetch the rest, or ask your " +
-      "server for the file. See https://github.com/Gregaly/trapezium/blob/main/docs/server-data.md#exporting",
+      "page. Pass export={{ fetchRows: (state) => … }} and the table will write the file from " +
+      "whatever you fetch. See https://github.com/Gregaly/trapezium/blob/main/docs/server-data.md#exporting",
   )
 }
 

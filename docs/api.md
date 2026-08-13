@@ -42,7 +42,7 @@ import { Table } from "@trapezium/react"
 | `pagination` | `boolean \| PaginationOptions` | `{ mode: "pages", pageSize: 25 }` | See below. |
 | `selection` | `boolean \| "single" \| "multiple" \| SelectionOptions` | `false` | |
 | `onSelectionChange` | `(ids: string[], rows: TRow[]) => void` | — | |
-| `export` | `boolean \| { filename?, clipboard?, scope?, onExport? }` | `false` | CSV and clipboard. Contains every matching row, not the page — `scope: "page"` narrows it, `onExport` takes it over. |
+| `export` | `boolean \| { filename?, clipboard?, scope?, fetchRows?, onExport? }` | `false` | CSV and clipboard. Contains every matching row, not the page. `scope: "page"` narrows it; `fetchRows` supplies rows the table does not have and lets it write the file; `onExport` takes the whole thing over. |
 
 `PaginationOptions` — `{ mode?: "pages" \| "simple" \| "loadMore" \| "infinite", pageSize?: number, pageSizeOptions?: number[], siblings?: number }`
 
@@ -96,7 +96,7 @@ import { Table } from "@trapezium/react"
 | `sortable` | `boolean` | the type's |
 | `compare` | `(a, b) => number` | the type's |
 | `searchable` | `boolean` | the type's |
-| `filter` | `boolean \| FilterKind \| { kind?, operators?, options?, defaultOperator? }` | the type's |
+| `filter` | `boolean \| FilterKind \| { kind?, operators?, options?, defaultOperator? }` | the type's | `options` is a list of choices for a set filter, or a function returning one (possibly a promise), fetched on first open and remembered. |
 | `align` | `"start" \| "center" \| "end"` | the type's |
 | `width` / `minWidth` / `maxWidth` | `number` | — |
 | `pin` | `"start" \| "end"` | — |

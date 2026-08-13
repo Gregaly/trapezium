@@ -127,6 +127,9 @@ function warnAboutSetFilters<TRow, TNode>(columns: readonly ResolvedColumn<TRow,
 
   for (const column of columns) {
     if (column.filterKind !== "set") continue
+    // Either a list of its own, a function that fetches one, or labels it can
+    // fall back on.
+    if (column.filterOptions) continue
     if (column.formatOptions?.options?.length) continue
     if (warnedColumns.has(column.key)) continue
 

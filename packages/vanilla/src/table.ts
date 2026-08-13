@@ -44,6 +44,7 @@ import {
   type PaginationOptions,
   type PartialTableState,
   type ResolvedColumn,
+  type SelectOption,
   type TableState,
   type TypeDef,
 } from "@trapezium/core"
@@ -101,7 +102,12 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
          * only what is on screen.
          */
         scope?: "matching" | "page"
-        /** Takes over the export, for server-side data the table cannot see. */
+        /**
+         * Fetches the rows to export — the answer for server-side data, where
+         * the table holds one page. You do the query; it writes the file.
+         */
+        fetchRows?: (state: TableState) => readonly TRow[] | Promise<readonly TRow[]>
+        /** Takes over the export entirely, file and all. */
         onExport?: (state: TableState, rows: readonly TRow[]) => void
       }
 
@@ -236,19 +242,24 @@ export function createTable<TRow extends AnyRow>(
               // Everything the filters and search leave, not the page on
               // screen: an export of twenty-five of four hundred rows is not
               // an export, and nobody notices until the spreadsheet is wrong.
-              const exported = config.scope === "page" ? rows : matched
-
-              if (config.onExport) {
-                config.onExport(state, exported)
-                close()
-                return
-              }
-
-              downloadText(
-                toCsv(exported, { columns, types: registry(), format: formatting(), getRowId: settings.getRowId }),
-                `${config.filename ?? "table"}.csv`,
-              )
+              const onHand = config.scope === "page" ? rows : matched
               close()
+
+              void (async () => {
+                // The caller's rows if they have them — a server-side table's
+                // real answer — and otherwise the ones on hand.
+                const exported = config.fetchRows ? await config.fetchRows(state) : onHand
+
+                if (config.onExport) {
+                  config.onExport(state, exported)
+                  return
+                }
+
+                downloadText(
+                  toCsv(exported, { columns, types: registry(), format: formatting(), getRowId: settings.getRowId }),
+                  `${config.filename ?? "table"}.csv`,
+                )
+              })()
             },
             { icon: icon("download") },
           ),
@@ -774,19 +785,56 @@ export function createTable<TRow extends AnyRow>(
     const wrap = el("div", { class: "tpz-filter" })
 
     if (column.filterKind === "set") {
-      const configured = column.formatOptions?.options
       // Labelled the way the column labels its cells, so a set filter offers
       // "Blocker" rather than "blocker" — including for a custom type, whose
       // formatter is the only thing that knows the difference.
       const label = (value: unknown) =>
         formatWithType(registry().get(column.type), value, { ...formatting(), ...column.formatOptions })
 
-      const choices = configured?.length
-        ? configured.map((option) => ({ value: option.value, label: option.label ?? option.value }))
-        : distinctValues(settings.data.map((row) => column.accessor(row))).map((entry) => ({
-            value: entry.value,
-            label: label(entry.value) || entry.value,
-          }))
+      /*
+        Three places choices can come from, in order of how much they know: the
+        column's own list (or one it fetches), the labels it renders cells with,
+        and — failing both — the values in the data, which is everything in
+        client mode and one page in server mode.
+      */
+      const fromData = () =>
+        distinctValues(settings.data.map((row) => column.accessor(row))).map((entry) => ({
+          value: entry.value,
+          label: label(entry.value) || entry.value,
+        }))
+
+      const asChoices = (options: readonly SelectOption[]) =>
+        options.map((option) => ({ value: option.value, label: option.label ?? option.value }))
+
+      const given = Array.isArray(column.filterOptions)
+        ? column.filterOptions
+        : column.filterOptions === undefined
+          ? column.formatOptions?.options
+          : rememberedOptions.get(column.filterOptions)
+
+      let choices = given?.length ? asChoices(given) : fromData()
+
+      /*
+        A column whose choices are fetched: asked for once, remembered against
+        the function itself, so opening the panel again is free.
+      */
+      if (typeof column.filterOptions === "function" && !rememberedOptions.has(column.filterOptions)) {
+        const provider = column.filterOptions
+        choices = []
+
+        void Promise.resolve(provider())
+          .then((options) => {
+            rememberedOptions.set(provider, options)
+            choices = asChoices(options)
+            note.textContent = ""
+            draw(searchBox?.value ?? "")
+          })
+          .catch(() => {
+            // Left unremembered, so opening the panel again tries once more.
+            note.textContent = "Could not load the values"
+            note.style.display = ""
+          })
+      }
 
       const chosen = new Set(
         filter && Array.isArray(filter.value)
@@ -798,6 +846,7 @@ export function createTable<TRow extends AnyRow>(
 
       const list = el("div", { class: "tpz-menu-scroll tpz-filter-list" })
       const note = el("p", { class: "tpz-menu-label" })
+      let searchBox: HTMLInputElement | undefined
 
       /**
        * Draws the choices matching what has been typed.
@@ -819,7 +868,14 @@ export function createTable<TRow extends AnyRow>(
         const visible = matching.slice(0, RENDER_LIMIT)
         const nodes: Node[] = []
 
-        if (visible.length === 0) nodes.push(el("p", { class: "tpz-menu-label", text: "No values" }))
+        if (visible.length === 0) {
+          nodes.push(
+            el("p", {
+              class: "tpz-menu-label",
+              text: pendingOptions(column) ? "Loading values…" : "No values",
+            }),
+          )
+        }
 
         for (const choice of visible) {
           const box = el("input", { type: "checkbox", class: "tpz-checkbox" }) as HTMLInputElement
@@ -849,15 +905,15 @@ export function createTable<TRow extends AnyRow>(
 
       // The same threshold as the other adapters: a panel's worth fits without
       // one, and anything more wants a way to be narrowed.
-      if (choices.length > 8) {
-        const search = el("input", {
+      if (choices.length > 8 || typeof column.filterOptions === "function") {
+        searchBox = el("input", {
           class: "tpz-input",
           type: "search",
           "aria-label": `Search ${column.header} values`,
           placeholder: "Search values",
         }) as HTMLInputElement
-        search.addEventListener("input", () => draw(search.value))
-        wrap.append(search)
+        searchBox.addEventListener("input", () => draw(searchBox?.value ?? ""))
+        wrap.append(searchBox)
       }
 
       draw("")
@@ -1335,6 +1391,19 @@ function badge(value: string, options: Array<{ value: string; label?: string; co
     node.style.setProperty("--tpz-badge-colour", option.colour)
   }
   return node
+}
+
+/**
+ * Choices fetched on demand, remembered against the function that fetched them.
+ *
+ * A server-side table cannot know a column's domain — it holds one page — so
+ * the caller supplies a function, it is called the first time the panel opens,
+ * and opening it again is free. Changing the function fetches afresh.
+ */
+const rememberedOptions = new WeakMap<object, SelectOption[]>()
+
+function pendingOptions<TRow extends AnyRow>(column: ResolvedColumn<TRow, Node | string>): boolean {
+  return typeof column.filterOptions === "function" && !rememberedOptions.has(column.filterOptions)
 }
 
 /**

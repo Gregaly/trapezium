@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trapezium — server-side, made whole</title>
+    <link rel="stylesheet" href="../../packages/core/styles.css" />
+    <style>
+      :root { color-scheme: light dark; }
+      body { max-width: 74rem; margin: 0 auto; padding: 2rem 1.5rem; background: light-dark(#f2eee6,#0a0a0a); color: light-dark(#221e1a,#ededed); font-family: ui-rounded, system-ui, sans-serif; }
+      #results { font-family: ui-monospace, Menlo, monospace; font-size: 0.75rem; white-space: pre; }
+      .pass { color: light-dark(#3f6b4a,#82b491); }
+      .fail { color: light-dark(#97362b,#e0857a); }
+    </style>
+  </head>
+  <body>
+    <h1>Server-side, made whole</h1>
+    <p>A table holding one page at a time, with a set filter and an export that still work.</p>
+    <div id="results">running…</div>
+    <div id="table"></div>
+
+    <script src="../../packages/vanilla/dist/trapezium.global.js"></script>
+    <script type="module">
+      const { createTable, stateToQueryString } = window.Trapezium
+      const host = document.querySelector("#table")
+      const checks = []
+      const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail })
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms))
+
+      /* Stands in for a database. The browser never sees all of this at once. */
+      const STATUSES = ["draft", "sent", "paid", "overdue"]
+      const everything = Array.from({ length: 4800 }, (_, index) => ({
+        id: String(index),
+        reference: `INV-${String(index).padStart(4, "0")}`,
+        status: STATUSES[index % 4],
+        amount: (index + 1) * 125,
+      }))
+
+      let queries = 0
+      const query = async (state) => {
+        queries += 1
+        await wait(10)
+        const filtered = everything.filter((row) =>
+          state.filters.every((filter) => {
+            const values = Array.isArray(filter.value) ? filter.value : [filter.value]
+            return values.includes(row[filter.key])
+          }),
+        )
+        const from = (state.page - 1) * state.pageSize
+        return { rows: filtered.slice(from, from + state.pageSize), total: filtered.length }
+      }
+
+      let distinctCalls = 0
+      const distinctStatuses = async () => {
+        distinctCalls += 1
+        await wait(10)
+        return STATUSES.map((value) => ({ value, label: value[0].toUpperCase() + value.slice(1) }))
+      }
+
+      /* Catch the exported file. */
+      let downloaded
+      const RealBlob = window.Blob
+      window.Blob = class extends RealBlob {
+        constructor(parts, options) { super(parts, options); downloaded = parts.join("") }
+      }
+      URL.createObjectURL = () => "blob:stubbed"
+
+      let state = { page: 1, pageSize: 25, filters: [], sort: [], search: "", match: "all",
+                    selection: [], order: [], hidden: [], widths: {}, pinned: {}, density: "normal" }
+      let table
+
+      const render = async () => {
+        const { rows, total } = await query(state)
+        if (table) table.destroy()
+        table = createTable(host, {
+          data: rows,
+          total,
+          server: true,
+          state,
+          columns: [
+            "reference",
+            { key: "status", filter: { kind: "set", options: distinctStatuses } },
+            { key: "amount", type: "currency", formatOptions: { currencyInMinorUnits: true } },
+          ],
+          getRowId: (row) => row.id,
+          pagination: { mode: "pages", pageSize: 25 },
+          export: { fetchRows: async (current) => (await query({ ...current, page: 1, pageSize: 1e9 })).rows },
+          onStateChange: (next) => { state = next; void render() },
+        })
+      }
+
+      await render()
+
+      /* The page holds 25 of 4,800 rows, and only some statuses. */
+      const shown = () => [...host.querySelectorAll("tbody tr")].length
+      check("the browser holds one page", shown() === 25, `${shown()} rows of 4,800`)
+
+      /* The set filter fetches the whole domain. */
+      host.querySelectorAll(".tpz-th-menu")[1].click()
+      let panel = document.querySelector(".tpz-portal")
+      check("it says it is loading the values", panel.textContent.includes("Loading values"))
+
+      await wait(60)
+      const labels = () => [...panel.querySelectorAll(".tpz-filter-option-label")].map((n) => n.textContent)
+      check("it offers every status, not the page's", labels().join() === "Draft,Sent,Paid,Overdue", labels().join(", "))
+
+      /* Choosing one asks the server, and rows never seen come back. */
+      const overdue = [...panel.querySelectorAll(".tpz-filter-option")].find((entry) => entry.textContent.trim() === "Overdue")
+      overdue.querySelector("input").click()
+      await wait(80)
+
+      const statuses = new Set([...host.querySelectorAll("tbody tr")].map((row) => row.querySelectorAll("td")[1].textContent.trim()))
+      check("choosing one fetches the matching rows", statuses.size === 1 && statuses.has("overdue"), [...statuses].join(", "))
+      check("the count is the server's, not the page's", host.querySelector(".tpz-count").textContent.includes("1,200"), host.querySelector(".tpz-count").textContent.trim())
+
+      /* Reopening the panel asks nobody anything. */
+      document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+      const before = distinctCalls
+      host.querySelectorAll(".tpz-th-menu")[1].click()
+      panel = document.querySelector(".tpz-portal")
+      await wait(30)
+      check("the values are remembered", distinctCalls === before && labels().length === 4, `${distinctCalls} fetches`)
+      document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+
+      /* The export contains every matching row, fetched for the purpose. */
+      host.querySelector('[aria-label="Export"]').click()
+      ;[...document.querySelectorAll(".tpz-portal [data-menu-item]")].find((n) => n.textContent.includes("Download")).click()
+      await wait(80)
+
+      const lines = (downloaded ?? "").replace(/\r?\n$/, "").split("\r\n")
+      check("the export holds every matching row", lines.length - 1 === 1200, `${lines.length - 1} rows for 1,200 matches`)
+      // Row 3 holds 500 cents, so the file says 5 where the screen says $5.00 —
+      // a number a spreadsheet can add up rather than text it cannot.
+      check("formatted as a spreadsheet wants it", lines[1] === "INV-0003,overdue,5", lines[1])
+
+      window.Blob = RealBlob
+      document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+
+      document.querySelector("#results").innerHTML = checks
+        .map((e) => `<span class="${e.ok ? "pass" : "fail"}">${e.ok ? "✓" : "✗"} ${e.name}${e.detail ? ` — ${e.detail}` : ""}</span>`)
+        .join("\n")
+      window.__serverSide = { total: checks.length, failed: checks.filter((e) => !e.ok).length }
+    </script>
+  </body>
+</html>

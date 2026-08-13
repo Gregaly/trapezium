@@ -79,13 +79,31 @@ function toCondition(filter) {
 
 A set filter derives its choices from the rows it can see, and in server mode that is one page — so without help it offers whatever happened to be on screen, and a value on a later page cannot be chosen at all. Trapezium warns about this in development rather than letting it reach a user.
 
-Supply the choices, which your server knows:
+Two ways to fix it, and both make the filter as complete as it is in the browser.
+
+**Give it the list**, when you already have it:
 
 ```tsx
-{ key: "status", filter: { kind: "set", options: statusesFromServer } }
+{ key: "status", filter: { kind: "set", options: STATUSES } }
 ```
 
-In client mode none of this applies: the table has every row, so the list is complete no matter which page is showing.
+**Or give it a way to fetch one**, when the values live in the database and you would rather not query for every column up front:
+
+```tsx
+{
+  key: "owner",
+  filter: {
+    kind: "set",
+    options: () => api.invoices.distinct("owner"),   // may return a promise
+  },
+}
+```
+
+It is called the first time somebody opens that column's panel, shows "Loading values…" while it works, and is remembered afterwards — so opening the panel again asks nobody anything. Change the function and it fetches afresh.
+
+Once the choices are there, everything else already works: ticking one writes a normal filter into the state, `onStateChange` fires, your query runs, and rows that were never on screen come back.
+
+In client mode none of this applies: the table has every row, so the list is complete whichever page is showing.
 
 ## Load more and infinite scroll
 
@@ -123,27 +141,24 @@ Nothing is kept in the browser, a shared link reproduces exactly what the sender
 
 An export contains **every row matching the current filters and search**, in the current sort order, with the columns as arranged — not the page on screen. In client mode the table has all of that and writes the file itself.
 
-In server mode it does not: it holds one page, and exporting it would hand somebody twenty-five of four hundred rows without saying so. Trapezium warns in development and gives you the job:
+In server mode it does not: it holds one page, and exporting it would hand somebody twenty-five of four hundred rows without saying so. Trapezium warns in development, and gives you the half of the job only you can do:
 
 ```tsx
 <Table
   server
-  export={{
-    onExport: async (state) => {
-      // Your query, your file — the table has told you exactly what the user
-      // is looking at.
-      const rows = await fetchAll(state)
-      downloadCsv(rows)
-    },
-  }}
+  export={{ fetchRows: (state) => api.invoices.all(state) }}
 />
 ```
 
-Or point it at an endpoint that already knows how to make the file:
+**You run the query; the table writes the file** — with the same columns in the same order, the same rules about what belongs in a spreadsheet, and the same escaping. `state` is exactly what the user is looking at, so the same function that fetches a page fetches all of it with the paging left off.
+
+If the file should come from somewhere else entirely — an endpoint that already knows how to make it, or a format this library does not write — take the whole thing:
 
 ```tsx
 export={{ onExport: (state) => { window.location.href = `/api/invoices.csv?${stateToQueryString(state)}` } }}
 ```
+
+With either of those in place there is nothing left to warn about, and the warning stops.
 
 ## Keeping search cheap
 

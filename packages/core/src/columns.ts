@@ -17,8 +17,10 @@ import type {
   ColumnDef,
   FilterKind,
   FilterOperator,
+  FilterOptionsProvider,
   Pin,
   ResolvedColumn,
+  SelectOption,
   TableState,
 } from "./types.js"
 import { getPath, humanise } from "./util.js"
@@ -146,6 +148,7 @@ function resolveColumn<TRow extends AnyRow, TNode>(
     mono: merged.mono ?? type.mono ?? false,
     filterKind: filter.kind,
     operators: filter.operators,
+    filterOptions: filter.options,
     // A column with no header has nothing for an icon to label, and an actions
     // column showing a stray "text" glyph looks like a mistake.
     icon: merged.icon ?? (merged.header === "" ? false : (type.icon ?? false)),
@@ -177,7 +180,7 @@ function inferOwnType<TRow extends AnyRow>(
 function resolveFilter(
   option: ColumnDef["filter"],
   type: TypeDef,
-): { kind: FilterKind; operators: FilterOperator[] } {
+): { kind: FilterKind; operators: FilterOperator[]; options?: SelectOption[] | FilterOptionsProvider } {
   const operators = [...(type.operators ?? ["contains", "eq", "empty", "notEmpty"])]
 
   if (option === undefined || option === true) {
@@ -189,6 +192,7 @@ function resolveFilter(
   return {
     kind: option.kind ?? type.filter ?? "text",
     operators: option.operators ?? operators,
+    options: option.options,
   }
 }
 

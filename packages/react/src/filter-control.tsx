@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import {
   OPERATOR_LABELS,
   distinctValues,
@@ -7,6 +7,8 @@ import {
   type AnyRow,
   type ColumnFilter,
   type FilterOperator,
+  type FilterOptionsProvider,
+  type SelectOption,
 } from "@trapezium/core"
 
 import type { TableColumn } from "./types.js"
@@ -174,20 +176,27 @@ function SetFilter<TRow extends AnyRow>({
   onClear: () => void
 }) {
   const [query, setQuery] = useState("")
+  const fetched = useFetchedOptions(column.filterOptions)
 
   const choices = useMemo(() => {
-    const configured = column.formatOptions?.options
+    /*
+      Three places choices can come from, in order of how much they know:
+      the column's own list (or one it fetched), the labels it renders cells
+      with, and — failing both — the values actually in the data, which is
+      everything in client mode and one page in server mode.
+    */
+    const given = Array.isArray(column.filterOptions) ? column.filterOptions : fetched.options
+    const configured = given ?? column.formatOptions?.options
+
     if (configured?.length) {
       return configured.map((option) => ({ value: option.value, label: option.label ?? option.value }))
     }
 
-    // Otherwise the choices are the values actually present, labelled the way
-    // the column labels them.
     return distinctValues(rows.map((row) => column.accessor(row))).map((entry) => ({
       value: entry.value,
       label: label(entry.value) || entry.value,
     }))
-  }, [column, rows, label])
+  }, [column, rows, label, fetched.options])
 
   const selected = new Set(
     filter && Array.isArray(filter.value) ? filter.value.map(String) : filter?.value !== undefined ? [String(filter.value)] : [],
@@ -230,7 +239,9 @@ function SetFilter<TRow extends AnyRow>({
       )}
 
       <div className="tpz-menu-scroll tpz-filter-list">
-        {visible.length === 0 && <p className="tpz-menu-label">No values</p>}
+        {fetched.loading && <p className="tpz-menu-label">Loading values…</p>}
+        {fetched.error && <p className="tpz-menu-label">Could not load the values</p>}
+        {!fetched.loading && visible.length === 0 && <p className="tpz-menu-label">No values</p>}
         {visible.map((choice) => (
           <label key={choice.value} className="tpz-filter-option">
             <input
@@ -319,4 +330,49 @@ function firstValue(filter: ColumnFilter | undefined): string {
 
 function secondValue(filter: ColumnFilter | undefined): string {
   return Array.isArray(filter?.value) && filter.value.length > 1 ? String(filter.value[1]) : ""
+}
+
+/**
+ * Choices fetched on demand.
+ *
+ * A server-side table cannot know a column's domain — it holds one page — so
+ * the caller supplies a function and it is called the first time the panel is
+ * opened. The answer is remembered against the function itself, so opening the
+ * panel again is free and changing the function fetches afresh.
+ */
+const remembered = new WeakMap<FilterOptionsProvider, SelectOption[]>()
+
+function useFetchedOptions(source: TableColumn["filterOptions"]): {
+  options: SelectOption[] | undefined
+  loading: boolean
+  error: boolean
+} {
+  const provider = typeof source === "function" ? source : undefined
+
+  const [state, setState] = useState<{ options: SelectOption[] | undefined; loading: boolean; error: boolean }>(
+    () => ({ options: provider ? remembered.get(provider) : undefined, loading: false, error: false }),
+  )
+
+  useEffect(() => {
+    if (!provider || remembered.has(provider)) return
+
+    let live = true
+    setState({ options: undefined, loading: true, error: false })
+
+    Promise.resolve(provider())
+      .then((options) => {
+        remembered.set(provider, options)
+        if (live) setState({ options, loading: false, error: false })
+      })
+      .catch(() => {
+        // Left unremembered, so opening the panel again tries once more.
+        if (live) setState({ options: undefined, loading: false, error: true })
+      })
+
+    return () => {
+      live = false
+    }
+  }, [provider])
+
+  return state
 }

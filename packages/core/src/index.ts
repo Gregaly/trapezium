@@ -22,6 +22,7 @@ export type {
   FilterKind,
   FilterOperator,
   FilterOption,
+  FilterOptionsProvider,
   FilterValue,
   FormatContext,
   FormatOptions,
