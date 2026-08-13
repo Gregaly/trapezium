@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Trapezium — what an export contains</title>
+    <link rel="stylesheet" href="../../packages/core/styles.css" />
+    <style>
+      :root { color-scheme: light dark; }
+      body { max-width: 70rem; margin: 0 auto; padding: 2rem 1.5rem; background: light-dark(#f2eee6,#0a0a0a); color: light-dark(#221e1a,#ededed); font-family: ui-rounded, system-ui, sans-serif; }
+      #results { font-family: ui-monospace, Menlo, monospace; font-size: 0.75rem; white-space: pre; }
+      .pass { color: light-dark(#3f6b4a,#82b491); }
+      .fail { color: light-dark(#97362b,#e0857a); }
+    </style>
+  </head>
+  <body>
+    <h1>What an export contains</h1>
+    <div id="results">running…</div>
+    <div id="table"></div>
+
+    <script src="../../packages/vanilla/dist/trapezium.global.js"></script>
+    <script type="module">
+      const { createTable } = window.Trapezium
+      const host = document.querySelector("#table")
+      const checks = []
+      const check = (name, ok, detail = "") => checks.push({ name, ok: Boolean(ok), detail })
+
+      /* Catch the file on its way to the browser. */
+      let downloaded
+      const RealBlob = window.Blob
+      window.Blob = class extends RealBlob {
+        constructor(parts, options) {
+          super(parts, options)
+          downloaded = parts.join("")
+        }
+      }
+      const realCreateObjectURL = URL.createObjectURL.bind(URL)
+      URL.createObjectURL = () => "blob:stubbed"
+
+      const rows = Array.from({ length: 480 }, (_, index) => ({
+        id: String(index),
+        name: `Person ${String(index).padStart(3, "0")}`,
+        plan: index % 3 === 0 ? "pro" : "free",
+        amount: index * 10,
+      }))
+
+      const download = (options = {}) => {
+        host.replaceChildren()
+        downloaded = undefined
+
+        const table = createTable(host, {
+          data: rows,
+          columns: ["name", "plan", "amount"],
+          getRowId: (row) => row.id,
+          pagination: { pageSize: 25 },
+          export: true,
+          ...options,
+        })
+
+        host.querySelector('[aria-label="Export"]').click()
+        const item = [...document.querySelectorAll(".tpz-portal [data-menu-item]")].find((node) =>
+          node.textContent.includes("Download"),
+        )
+        item.click()
+        document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+        table.destroy()
+
+        return (downloaded ?? "").trim().split("\r\n")
+      }
+
+      /* Twenty-five rows on screen; the file must hold all four hundred and eighty. */
+      let lines = download()
+      check("every matching row, not the page", lines.length - 1 === 480, `${lines.length - 1} rows`)
+      check("with a header", lines[0].replace("﻿", "") === "Name,Plan,Amount", lines[0].replace("﻿", ""))
+
+      /* Filtered. */
+      lines = download({ state: { filters: [{ key: "plan", operator: "eq", value: "pro" }] } })
+      check("only what the filter leaves", lines.length - 1 === 160, `${lines.length - 1} rows`)
+
+      /* Sorted. */
+      lines = download({ state: { sort: [{ key: "amount", direction: "desc" }] } })
+      check("in the order it is sorted", lines[1].startsWith("Person 479"), lines[1])
+
+      /* Searched. */
+      lines = download({ state: { search: "Person 01" } })
+      check("only what the search leaves", lines.length - 1 === 10, `${lines.length - 1} rows`)
+
+      /* Just the page, on request. */
+      lines = download({ export: { scope: "page" } })
+      check("just the page when asked", lines.length - 1 === 25, `${lines.length - 1} rows`)
+
+      /* Server mode hands the job over. */
+      let handed
+      download({
+        server: true,
+        total: 4800,
+        export: { onExport: (state, given) => { handed = { page: state.page, rows: given.length } } },
+      })
+      check("server mode hands the job to the caller", handed?.rows === 480, JSON.stringify(handed ?? null))
+
+      window.Blob = RealBlob
+      URL.createObjectURL = realCreateObjectURL
+
+      document.querySelector("#results").innerHTML = checks
+        .map((entry) => `<span class="${entry.ok ? "pass" : "fail"}">${entry.ok ? "✓" : "✗"} ${entry.name}${entry.detail ? ` — ${entry.detail}` : ""}</span>`)
+        .join("\n")
+
+      window.__export = { total: checks.length, failed: checks.filter((entry) => !entry.ok).length }
+    </script>
+  </body>
+</html>

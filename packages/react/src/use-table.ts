@@ -140,6 +140,11 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
   return {
     /** The rows to render, after everything has been applied. */
     rows: result.rows,
+    /**
+     * Every row matching the filters and the search, before pagination — what
+     * an export means by "what I am looking at".
+     */
+    matchedRows: result.matched,
     /** Ids for those rows, in the same order. */
     rowIds,
     /** Matching rows across every page. */

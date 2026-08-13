@@ -58,6 +58,7 @@ export function getRows<TRow extends AnyRow, TNode = unknown>(
     warnAboutSetFilters(columns)
     return {
       rows: [...rows],
+      matched: [...rows],
       total,
       totalUnfiltered: total,
       pageCount: pageCount(total, state.pageSize),
@@ -83,6 +84,8 @@ export function getRows<TRow extends AnyRow, TNode = unknown>(
 
   return {
     rows: paged,
+    // The same array the page was cut from, so this costs nothing.
+    matched: sorted,
     total,
     totalUnfiltered: rows.length,
     pageCount: pages,

@@ -119,6 +119,32 @@ Nothing is kept in the browser, a shared link reproduces exactly what the sender
 
 `total` is what the pagination shows. Exact counts get expensive on large tables — if yours does, count with an estimate and label it in your own UI; Trapezium will page correctly against whatever number you give it.
 
+## Exporting
+
+An export contains **every row matching the current filters and search**, in the current sort order, with the columns as arranged — not the page on screen. In client mode the table has all of that and writes the file itself.
+
+In server mode it does not: it holds one page, and exporting it would hand somebody twenty-five of four hundred rows without saying so. Trapezium warns in development and gives you the job:
+
+```tsx
+<Table
+  server
+  export={{
+    onExport: async (state) => {
+      // Your query, your file — the table has told you exactly what the user
+      // is looking at.
+      const rows = await fetchAll(state)
+      downloadCsv(rows)
+    },
+  }}
+/>
+```
+
+Or point it at an endpoint that already knows how to make the file:
+
+```tsx
+export={{ onExport: (state) => { window.location.href = `/api/invoices.csv?${stateToQueryString(state)}` } }}
+```
+
 ## Keeping search cheap
 
 `onStateChange` fires on every state change, including each debounced keystroke of the search box. Raise the debounce if a query is expensive:

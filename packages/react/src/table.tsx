@@ -65,7 +65,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   } = props
 
   const table = useTable(props)
-  const { rows, rowIds, columns, hiddenColumns, state, update, types, format, pagination, total } = table
+  const { rows, matchedRows, rowIds, columns, hiddenColumns, state, update, types, format, pagination, total } = table
 
   const classes = useMemo(() => createClasses(classNames, unstyled), [classNames, unstyled])
 
@@ -204,20 +204,41 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   /* ── Export ────────────────────────────────────────────────────────────── */
 
   const exportOptions = props.export === true ? {} : props.export || undefined
+
+  /*
+    Everything the filters and the search leave, not the page on screen. An
+    export that hands back twenty-five of four hundred rows is not an export,
+    and it is the sort of thing nobody notices until a spreadsheet is wrong.
+  */
+  const exportRows = exportOptions?.scope === "page" ? rows : matchedRows
+
+  if (exportOptions && props.server) warnAboutServerExport()
+
   const exportControl = exportOptions
     ? {
-        onDownload: () =>
+        onDownload: () => {
+          if (exportOptions.onExport) {
+            exportOptions.onExport(state, exportRows)
+            return
+          }
+
           downloadText(
-            toCsv(rows, { columns, types, format, getRowId }),
+            toCsv(exportRows, { columns, types, format, getRowId }),
             `${exportOptions.filename ?? "table"}.csv`,
-          ),
+          )
+        },
         onCopy:
           exportOptions.clipboard === false
             ? undefined
             : () => {
-                const selected = state.selection.length > 0
-                  ? rows.filter((_, index) => table.selection.has(rowIds[index]!))
-                  : rows
+                // A selection is a deliberate choice of rows, so it wins.
+                const selected =
+                  state.selection.length > 0
+                    ? exportRows.filter((row, index) =>
+                        table.selection.has(resolveRowId(row, index, getRowId)),
+                      )
+                    : exportRows
+
                 void copyText(toDelimitedText(selected, { columns, types, format, delimiter: "\t", getRowId }))
               },
       }
@@ -455,6 +476,24 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
       </div>
     </div>
     </TableContext.Provider>
+  )
+}
+
+/*
+  In server mode the table holds one page, so an export can only contain that
+  page. It is the caller's data to fetch, and `onExport` is where they do it.
+*/
+let warnedAboutExport = false
+
+function warnAboutServerExport(): void {
+  if (warnedAboutExport) return
+  if (typeof process !== "undefined" && process.env["NODE_ENV"] === "production") return
+
+  warnedAboutExport = true
+  console.warn(
+    "[trapezium] Exporting in server mode can only include the rows the table has, which is one " +
+      "page. Pass export={{ onExport: (state, rows) => … }} and fetch the rest, or ask your " +
+      "server for the file. See https://github.com/Gregaly/trapezium/blob/main/docs/server-data.md#exporting",
   )
 }
 

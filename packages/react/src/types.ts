@@ -77,11 +77,29 @@ export type SearchOptions = {
   alwaysVisible?: boolean
 }
 
-export type ExportOptions = {
+export type ExportOptions<TRow = AnyRow> = {
   /** Without the extension. Defaults to `"table"`. */
   filename?: string
   /** Offer "copy to clipboard" alongside the download. Defaults to true. */
   clipboard?: boolean
+  /**
+   * What goes in the file.
+   *
+   * `matching` — every row the filters and search leave, in order, however
+   * many pages that is. This is the default, because an export that hands back
+   * twenty-five of four hundred rows is not an export.
+   *
+   * `page` — only what is on screen.
+   */
+  scope?: "matching" | "page"
+  /**
+   * Takes over the export entirely.
+   *
+   * The escape hatch for server-side data, where the table holds one page and
+   * cannot honestly export the rest: given the current state, fetch what you
+   * need and write the file yourself.
+   */
+  onExport?: (state: TableState, rows: readonly TRow[]) => void
 }
 
 /**
@@ -164,7 +182,7 @@ export type TableProps<TRow extends AnyRow = AnyRow> = {
   onSelectionChange?: (ids: string[], rows: TRow[]) => void
 
   /** CSV download and clipboard copy of the current view. */
-  export?: boolean | ExportOptions
+  export?: boolean | ExportOptions<TRow>
 
   /** Row height. Also settable by the user when `densityControl` is on. */
   density?: Density

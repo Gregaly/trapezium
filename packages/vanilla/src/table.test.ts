@@ -583,3 +583,69 @@ describe("set filters and pagination", () => {
     expect(panel.textContent).toContain("800 more")
   })
 })
+
+describe("what an export contains", () => {
+  const many = Array.from({ length: 120 }, (_, index) => ({
+    id: String(index),
+    name: `Person ${String(index).padStart(3, "0")}`,
+    plan: index % 3 === 0 ? "pro" : "free",
+  }))
+
+  let downloaded: string | undefined
+
+  beforeEach(() => {
+    downloaded = undefined
+    vi.stubGlobal(
+      "Blob",
+      class {
+        constructor(parts: string[]) {
+          downloaded = parts.join("")
+        }
+      },
+    )
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:test", revokeObjectURL: () => {} })
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  const download = (options: Record<string, unknown> = {}) => {
+    createTable(host, {
+      data: many,
+      columns: ["name", "plan"],
+      getRowId: (row) => row.id,
+      pagination: { pageSize: 10 },
+      export: true,
+      ...options,
+    })
+
+    host.querySelector<HTMLButtonElement>('[aria-label="Export"]')!.click()
+    const item = [...document.querySelectorAll<HTMLElement>(".tpz-portal [data-menu-item]")].find((node) =>
+      node.textContent?.includes("Download"),
+    )!
+    item.click()
+
+    return (downloaded ?? "").trim().split("\r\n").slice(1)
+  }
+
+  it("holds every matching row, not the page on screen", () => {
+    // Ten rows are visible; a hundred and twenty must be in the file.
+    expect(download()).toHaveLength(120)
+  })
+
+  it("holds only what a filter leaves", () => {
+    expect(download({ state: { filters: [{ key: "plan", operator: "eq", value: "pro" }] } })).toHaveLength(40)
+  })
+
+  it("holds just the page when that is what was asked for", () => {
+    expect(download({ export: { scope: "page" } })).toHaveLength(10)
+  })
+
+  it("hands the job over when the caller asks to do it", () => {
+    const onExport = vi.fn()
+    download({ export: { onExport } })
+
+    expect(onExport).toHaveBeenCalledTimes(1)
+    expect(onExport.mock.calls[0]?.[1]).toHaveLength(120)
+    expect(downloaded).toBeUndefined()
+  })
+})

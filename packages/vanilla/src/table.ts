@@ -91,7 +91,19 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
   pagination?: boolean | PaginationOptions
   selection?: boolean | "single" | "multiple"
   onSelectionChange?: (ids: string[], rows: TRow[]) => void
-  export?: boolean | { filename?: string }
+  export?:
+    | boolean
+    | {
+        filename?: string
+        /**
+         * What goes in the file. `matching` — every row the filters and search
+         * leave, however many pages that is, which is the default. `page` —
+         * only what is on screen.
+         */
+        scope?: "matching" | "page"
+        /** Takes over the export, for server-side data the table cannot see. */
+        onExport?: (state: TableState, rows: readonly TRow[]) => void
+      }
 
   types?: Record<string, TypeDef>
   format?: Partial<FormatContext>
@@ -220,9 +232,20 @@ export function createTable<TRow extends AnyRow>(
           menuItem(
             "Download CSV",
             () => {
-              const { rows, columns } = current()
+              const { rows, matched, columns } = current()
+              // Everything the filters and search leave, not the page on
+              // screen: an export of twenty-five of four hundred rows is not
+              // an export, and nobody notices until the spreadsheet is wrong.
+              const exported = config.scope === "page" ? rows : matched
+
+              if (config.onExport) {
+                config.onExport(state, exported)
+                close()
+                return
+              }
+
               downloadText(
-                toCsv(rows, { columns, types: registry(), format: formatting(), getRowId: settings.getRowId }),
+                toCsv(exported, { columns, types: registry(), format: formatting(), getRowId: settings.getRowId }),
                 `${config.filename ?? "table"}.csv`,
               )
               close()
@@ -232,9 +255,19 @@ export function createTable<TRow extends AnyRow>(
           menuItem(
             "Copy to clipboard",
             () => {
-              const { rows, columns } = current()
+              const { rows, matched, columns } = current()
+              const exported = config.scope === "page" ? rows : matched
+
+              // A selection is a deliberate choice of rows, so it wins.
+              const chosen =
+                state.selection.length > 0
+                  ? exported.filter((row, index) =>
+                      state.selection.includes(resolveRowId(row, index, settings.getRowId)),
+                    )
+                  : exported
+
               void copyText(
-                toDelimitedText(rows, {
+                toDelimitedText(chosen, {
                   columns,
                   types: registry(),
                   format: formatting(),

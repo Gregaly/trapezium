@@ -93,12 +93,18 @@ Keep the state in your own component and pass it as `state`. Replacing `data` ne
 
 ## Exporting only the selected rows
 
-```tsx
-import { toCsv, downloadText } from "@trapezium/react"
+Copying already prefers the selection when there is one. For a download:
 
-const { rows, columns, types, format } = useTable({ data })
-downloadText(toCsv(rows.filter(isSelected), { columns, types, format }), "selection.csv")
+```tsx
+import { toCsv, downloadText, useTable } from "@trapezium/react"
+
+const { matchedRows, columns, types, format, state } = useTable({ data })
+
+const selected = matchedRows.filter((row) => state.selection.includes(row.id))
+downloadText(toCsv(selected, { columns, types, format }), "selection.csv")
 ```
+
+`matchedRows` is everything the filters and search leave; `rows` is the page on screen. The built-in export uses the former, which is almost always what "export" means.
 
 ## Driving a table from a database schema
 

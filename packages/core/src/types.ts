@@ -331,6 +331,16 @@ export type PartialTableState = Partial<TableState>
 export type TableRows<TRow = AnyRow> = {
   /** The rows to render, already filtered, sorted and paginated. */
   rows: TRow[]
+  /**
+   * Every row matching the filters and the search, in order, with pagination
+   * not yet applied.
+   *
+   * This is what an export means: "the rows I am looking at" is the filtered,
+   * sorted set, not the twenty-five of them that happen to be on screen. In
+   * server mode it is whatever the caller supplied, because that is all there
+   * is.
+   */
+  matched: TRow[]
   /** Rows matching the filters and search, before pagination. */
   total: number
   /** Rows given to the table, before anything was applied. */

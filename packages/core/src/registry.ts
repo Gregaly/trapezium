@@ -20,6 +20,7 @@ import {
   formatPercent,
   formatRelativeTime,
   formatTime,
+  minorUnitScale,
   optionLabel,
   toDate,
   toNumber,
@@ -62,6 +63,19 @@ export type TypeDef = {
 
   /** Value to display. Defaults to plain text. */
   format?: (value: unknown, context: FormatContext & FormatOptions) => string
+
+  /**
+   * Value for a CSV, when it should differ from the value on screen.
+   *
+   * A spreadsheet is not a page. `"$4,790.50"` is right in a cell and useless
+   * in a column somebody wants to sum, and `"Aug 13, 2026"` cannot be sorted
+   * as a date by anything that opens the file. So money, numbers and dates
+   * export as a number and an ISO date, while a select column still exports
+   * its label — the point is a file that both reads and calculates.
+   *
+   * Defaults to whatever `format` produced.
+   */
+  exportValue?: (value: unknown, context: FormatContext & FormatOptions) => string
 
   /**
    * Reduces a value to something orderable and comparable — a number for money
@@ -165,6 +179,9 @@ export const BUILT_IN_TYPES: Record<string, TypeDef> = {
     operators: ORDERED,
     icon: "number",
     format: formatNumber,
+    // No grouping separators: a spreadsheet reads "4,790" as text and 4790 as
+    // a number, and only one of those can be added up.
+    exportValue: (value) => String(toNumber(value) ?? ""),
     normalise: asNumber,
   },
 
@@ -175,6 +192,13 @@ export const BUILT_IN_TYPES: Record<string, TypeDef> = {
     operators: ORDERED,
     icon: "currency",
     format: formatCurrency,
+    // In major units and without the symbol, so the column adds up. Which
+    // currency it is belongs in the column heading, not in every cell.
+    exportValue: (value, context) => {
+      const raw = toNumber(value)
+      if (raw === undefined) return ""
+      return String(context.currencyInMinorUnits ? raw / minorUnitScale(context.currency, context.locale) : raw)
+    },
     normalise: asNumber,
   },
 
@@ -185,6 +209,7 @@ export const BUILT_IN_TYPES: Record<string, TypeDef> = {
     operators: ORDERED,
     icon: "percent",
     format: formatPercent,
+    exportValue: (value) => String(toNumber(value) ?? ""),
     normalise: asNumber,
   },
 
@@ -205,6 +230,8 @@ export const BUILT_IN_TYPES: Record<string, TypeDef> = {
     operators: ORDERED,
     icon: "date",
     format: formatDate,
+    // ISO, so the column sorts and filters as a date wherever the file lands.
+    exportValue: (value) => toDate(value)?.toISOString().slice(0, 10) ?? "",
     normalise: asTime,
   },
 
@@ -214,6 +241,7 @@ export const BUILT_IN_TYPES: Record<string, TypeDef> = {
     operators: ORDERED,
     icon: "datetime",
     format: formatDateTime,
+    exportValue: (value) => toDate(value)?.toISOString() ?? "",
     normalise: asTime,
   },
 
@@ -232,6 +260,8 @@ export const BUILT_IN_TYPES: Record<string, TypeDef> = {
     operators: ORDERED,
     icon: "relativeTime",
     format: formatRelativeTime,
+    // "3 days ago" is meaningless in a file read next week.
+    exportValue: (value) => toDate(value)?.toISOString() ?? "",
     normalise: asTime,
   },
 

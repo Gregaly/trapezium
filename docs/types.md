@@ -104,6 +104,30 @@ A type produces *text*. Rendering markup is a column's job, or the built-in rend
 { key: "stars", type: "rating", render: ({ value }) => <Stars count={Number(value)} /> }
 ```
 
+## What a type puts in a file
+
+A CSV is opened by a spreadsheet, so what belongs in one is not always what belongs on a page:
+
+| Type | On screen | In the file |
+|---|---|---|
+| `number`, `percent` | `1,234,567.5` | `1234567.5` |
+| `currency` | `$4,790.50` | `4790.5` |
+| `date` | `Aug 13, 2026` | `2026-08-13` |
+| `datetime`, `relativeTime` | `Aug 13, 2026, 10:30 PM` / `3 days ago` | `2026-08-13T22:30:00.000Z` |
+| `select`, `badge`, `tags`, `boolean` | the label | the same label |
+
+Amounts add up, dates sort, and the words a person needs are still words. A custom type says its own piece with `exportValue`:
+
+```ts
+defineType({
+  name: "duration",
+  format: (value) => `${value} minutes`,
+  exportValue: (value) => String(Number(value) * 60),   // seconds, for the spreadsheet
+})
+```
+
+A column's own `exportValue` overrides everything.
+
 ## Formatting context
 
 Every formatter receives the table's format context, merged with the column's own `formatOptions`:

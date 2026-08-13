@@ -70,8 +70,17 @@ export function exportCell<TRow extends AnyRow, TNode = unknown>(
     format,
   }
 
+  /*
+    The caller's word first, then the column's own formatter, then whatever the
+    type says belongs in a file — a number rather than "$4,790.50", an ISO date
+    rather than "Aug 13, 2026" — and finally the text on screen.
+  */
   if (column.exportValue) return column.exportValue(context)
   if (column.format) return column.format(context)
+
+  const type = types.get(column.type)
+  if (type.exportValue) return type.exportValue(value, { ...format, ...column.formatOptions })
+
   return context.text
 }
 

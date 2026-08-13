@@ -42,7 +42,7 @@ import { Table } from "@trapezium/react"
 | `pagination` | `boolean \| PaginationOptions` | `{ mode: "pages", pageSize: 25 }` | See below. |
 | `selection` | `boolean \| "single" \| "multiple" \| SelectionOptions` | `false` | |
 | `onSelectionChange` | `(ids: string[], rows: TRow[]) => void` | — | |
-| `export` | `boolean \| { filename?, clipboard? }` | `false` | CSV and clipboard. |
+| `export` | `boolean \| { filename?, clipboard?, scope?, onExport? }` | `false` | CSV and clipboard. Contains every matching row, not the page — `scope: "page"` narrows it, `onExport` takes it over. |
 
 `PaginationOptions` — `{ mode?: "pages" \| "simple" \| "loadMore" \| "infinite", pageSize?: number, pageSizeOptions?: number[], siblings?: number }`
 
@@ -147,7 +147,9 @@ The model with no markup. Takes the same props as `<Table>` and returns:
 
 ```ts
 {
-  rows, rowIds, total, pageCount, filtered,
+  rows,          // the page on screen
+  matchedRows,   // every row the filters and search leave, before pagination
+  rowIds, total, pageCount, filtered,
   columns, hiddenColumns, allColumns,
   state, update, patch,
   types, format, pagination, selection, server,
@@ -191,6 +193,8 @@ All pure `(state, …) => state`. Anything that changes which rows match resets 
 `UrlOptions` — `{ include?: UrlStateKey[], prefix?: string }`
 
 ### Export
+
+A CSV is read by a spreadsheet, not by a person looking at a page, so money and numbers are written as numbers and dates as ISO — a column of amounts adds up, a column of dates sorts. Labels stay readable: a `select` exports "Professional", not "pro". Override per column with `exportValue`, or per type with `TypeDef.exportValue`.
 
 `toCsv(rows, options)` · `toDelimitedText` · `exportCell` · `downloadText(text, filename, mimeType?)` · `copyText(text)`
 
