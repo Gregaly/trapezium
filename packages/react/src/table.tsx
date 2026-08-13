@@ -68,15 +68,28 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
 
   const classes = useMemo(() => createClasses(classNames, unstyled), [classNames, unstyled])
 
-  const selection = normaliseSelection(props.selection, props.onSelectionChange)
-  const search = normaliseSearch(props.search)
-  const features = {
-    sortable: props.sortable !== false,
-    filters: props.filters !== false,
-    menu: props.columnMenu !== false,
-    resizable: props.resizable !== false,
-    reorderable: props.reorderable !== false,
-  }
+  /*
+    Memoised because they are dependencies of effects and callbacks below. A
+    fresh object every render would re-run the selection report and rebuild the
+    header handlers on every keystroke in the search box.
+  */
+  const selection = useMemo(
+    () => normaliseSelection(props.selection, props.onSelectionChange),
+    [props.selection, props.onSelectionChange],
+  )
+
+  const search = useMemo(() => normaliseSearch(props.search), [props.search])
+
+  const features = useMemo(
+    () => ({
+      sortable: props.sortable !== false,
+      filters: props.filters !== false,
+      menu: props.columnMenu !== false,
+      resizable: props.resizable !== false,
+      reorderable: props.reorderable !== false,
+    }),
+    [props.sortable, props.filters, props.columnMenu, props.resizable, props.reorderable],
+  )
 
   const visibleKeys = useMemo(() => columns.map((column) => column.key), [columns])
   const columnCount = columns.length + (selection ? 1 : 0)

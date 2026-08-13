@@ -41,7 +41,9 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
     format: formatOverrides,
   } = props
 
-  const pagination = normalisePagination(props.pagination)
+  // Memoised: it is a dependency of the pipeline below, and a new object every
+  // render would re-run it every render.
+  const pagination = useMemo(() => normalisePagination(props.pagination), [props.pagination])
 
   /*
     An uncontrolled table still needs somewhere to keep state, and a controlled

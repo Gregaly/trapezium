@@ -74,12 +74,7 @@ export function Toolbar<TRow extends AnyRow>({
         {search && <SearchBox state={state} update={update} options={search} />}
 
         {columnControl && (
-          <ColumnMenu
-            state={state}
-            update={update}
-            columns={columns}
-            hiddenColumns={hiddenColumns}
-          />
+          <ColumnMenu update={update} columns={columns} hiddenColumns={hiddenColumns} />
         )}
 
         {densityControl && <DensityMenu state={state} update={update} />}
@@ -195,12 +190,10 @@ function SearchBox({
 
 /** Which columns are shown, and in what order. */
 function ColumnMenu<TRow extends AnyRow>({
-  state,
   update,
   columns,
   hiddenColumns,
 }: {
-  state: TableState
   update: (next: (current: TableState) => TableState) => void
   columns: TableColumn<TRow>[]
   hiddenColumns: TableColumn<TRow>[]
