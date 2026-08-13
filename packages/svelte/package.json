@@ -1,0 +1,65 @@
+{
+  "name": "@trapezium/svelte",
+  "version": "0.1.0",
+  "description": "A data table for Svelte 5 that looks right out of the box: zero-config columns, filtering, search, pagination, selection and custom renderers.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gregaly/trapezium.git",
+    "directory": "packages/svelte"
+  },
+  "homepage": "https://github.com/Gregaly/trapezium#readme",
+  "keywords": [
+    "svelte",
+    "sveltekit",
+    "table",
+    "data-table",
+    "datagrid"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist",
+    "styles.css",
+    "themes"
+  ],
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "svelte": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "import": "./dist/index.js"
+    },
+    "./Table.svelte": {
+      "svelte": "./dist/Table.svelte",
+      "default": "./dist/Table.svelte"
+    },
+    "./styles.css": "./styles.css",
+    "./themes/shadcn.css": "./themes/shadcn.css",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsup && cp src/Table.svelte dist/Table.svelte && cp src/public-types.d.ts dist/index.d.ts && node ../../scripts/copy-styles.mjs svelte",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@trapezium/core": "workspace:*",
+    "@trapezium/vanilla": "workspace:*"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "devDependencies": {
+    "svelte": "^5.0.0",
+    "@sveltejs/vite-plugin-svelte": "^5.0.0",
+    "@testing-library/svelte": "^5.2.6"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
