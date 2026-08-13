@@ -9,10 +9,24 @@
     "directory": "packages/react"
   },
   "homepage": "https://github.com/Gregaly/trapezium#readme",
-  "keywords": ["react", "table", "data-table", "datagrid", "nextjs", "ssr"],
+  "keywords": [
+    "react",
+    "table",
+    "data-table",
+    "datagrid",
+    "nextjs",
+    "ssr"
+  ],
   "type": "module",
-  "sideEffects": ["*.css"],
-  "files": ["dist", "styles.css", "themes"],
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist",
+    "styles.css",
+    "themes",
+    "README.md"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

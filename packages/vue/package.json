@@ -9,10 +9,23 @@
     "directory": "packages/vue"
   },
   "homepage": "https://github.com/Gregaly/trapezium#readme",
-  "keywords": ["vue", "nuxt", "table", "data-table", "datagrid"],
+  "keywords": [
+    "vue",
+    "nuxt",
+    "table",
+    "data-table",
+    "datagrid"
+  ],
   "type": "module",
-  "sideEffects": ["*.css"],
-  "files": ["dist", "styles.css", "themes"],
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist",
+    "styles.css",
+    "themes",
+    "README.md"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -35,7 +48,13 @@
     "@trapezium/core": "workspace:*",
     "@trapezium/vanilla": "workspace:*"
   },
-  "peerDependencies": { "vue": "^3.4.0" },
-  "devDependencies": { "vue": "^3.5.0" },
-  "publishConfig": { "access": "public" }
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "vue": "^3.5.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
 }

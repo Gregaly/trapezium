@@ -1,0 +1,15 @@
+:root { color-scheme: light dark; }
+* { box-sizing: border-box; }
+body {
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 6rem;
+  background: light-dark(#f2eee6, #0a0a0a);
+  color: light-dark(#221e1a, #ededed);
+  font-family: ui-rounded, system-ui, sans-serif;
+}
+h1 { margin: 0; font-family: Georgia, serif; font-weight: 400; font-size: 2.25rem; }
+p { color: light-dark(#6b6157, #a1a1a1); }
+section { margin-top: 2.5rem; }
+.chip { display: inline-flex; gap: .375rem; align-items: center; font-family: ui-rounded, system-ui, sans-serif; }
+.chip button { border: 0; background: none; padding: 0; color: inherit; font: inherit; text-decoration: underline; cursor: pointer; }

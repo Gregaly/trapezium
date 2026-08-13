@@ -71,6 +71,38 @@ importers:
         specifier: ^0.24.0
         version: 0.24.2
 
+  examples/svelte-app:
+    dependencies:
+      '@trapezium/svelte':
+        specifier: workspace:*
+        version: link:../../packages/svelte
+      svelte:
+        specifier: ^5.0.0
+        version: 5.56.8
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^4.0.0
+        version: 4.0.4(svelte@5.56.8)(vite@5.4.21(@types/node@22.20.1))
+      vite:
+        specifier: ^5.4.11
+        version: 5.4.21(@types/node@22.20.1)
+
+  examples/vue-app:
+    dependencies:
+      '@trapezium/vue':
+        specifier: workspace:*
+        version: link:../../packages/vue
+      vue:
+        specifier: ^3.5.0
+        version: 3.5.41(typescript@5.9.3)
+    devDependencies:
+      '@vitejs/plugin-vue':
+        specifier: ^5.2.1
+        version: 5.2.4(vite@5.4.21(@types/node@22.20.1))(vue@3.5.41(typescript@5.9.3))
+      vite:
+        specifier: ^5.4.11
+        version: 5.4.21(@types/node@22.20.1)
+
   packages/core: {}
 
   packages/react:
@@ -1114,6 +1146,13 @@ packages:
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
+
+  '@vitejs/plugin-vue@5.2.4':
+    resolution: {integrity: sha512-7Yx/SXSOcQq5HiiV3orevHUFn+pmMB4cgbEkDYgnkUWb0WfeQ/wa2yFv6D5ICiCQOVpjA7vYDXrC7AGO8yjDHA==}
+    engines: {node: ^18.0.0 || >=20.0.0}
+    peerDependencies:
+      vite: ^5.0.0 || ^6.0.0
+      vue: ^3.2.25
 
   '@vitest/expect@2.1.9':
     resolution: {integrity: sha512-UJCIkTBenHeKT1TTlKMJWy1laZewsRIzYighyYiJKZreqtdxSos/S1t+ktRMQWu2CKqaarrkeszJx1cgC5tGZw==}
@@ -2514,6 +2553,11 @@ snapshots:
       csstype: 3.2.3
 
   '@types/trusted-types@2.0.7': {}
+
+  '@vitejs/plugin-vue@5.2.4(vite@5.4.21(@types/node@22.20.1))(vue@3.5.41(typescript@5.9.3))':
+    dependencies:
+      vite: 5.4.21(@types/node@22.20.1)
+      vue: 3.5.41(typescript@5.9.3)
 
   '@vitest/expect@2.1.9':
     dependencies:

@@ -13,7 +13,7 @@ export function People({ users }) {
 
 That is a complete usage. Columns come from the data, types from the values, and sorting, searching and pagination work. Everything else in these docs is for the cases where the default is not what you want.
 
-<!-- TODO: screenshot -->
+![A Trapezium table: pinned invoice column, currency, status chips, tags, dates and pagination](docs/images/table-dark.png)
 
 ## Why another one
 
@@ -95,12 +95,26 @@ Building an agent or working with one? [`llms.txt`](llms.txt) is the whole API i
 
 Every example in [`examples/`](examples) runs against the local packages.
 
-| | |
-|---|---|
-| [`playground`](examples/playground) | Every feature on one page. `npm run build` then open `dist/index.html` |
-| [`next-server`](examples/next-server) | Next.js App Router, sorting and paging in the database, state in the URL |
-| [`plain-html`](examples/plain-html) | One file, one script tag, no build step |
+| | | |
+|---|---|---|
+| [`playground`](examples/playground) | React | Every feature on one page. `pnpm build`, then open `dist/index.html` |
+| [`next-server`](examples/next-server) | Next.js | Sorting, filtering and paging in the database, all of it in the URL. `pnpm dev` |
+| [`vue-app`](examples/vue-app) | Vue 3 | Including a cell that renders a real Vue component. `pnpm dev` |
+| [`svelte-app`](examples/svelte-app) | Svelte 5 | Runes, `bind:tableState`, and the action. `pnpm dev` |
+| [`plain-html`](examples/plain-html) | None | One file, one script tag, no build step |
 
 ## Licence
 
 MIT.
+
+## Working on it
+
+```sh
+pnpm install
+pnpm build       # every package
+pnpm test        # 176 tests: core, React, Vue, Svelte, vanilla
+pnpm typecheck
+pnpm check       # typecheck and test together
+```
+
+The core is framework-agnostic and has no dependencies; each adapter binds it to a rendering layer and renders **the same DOM with the same class names**, so the stylesheet ships once and a fix lands everywhere. If you change markup in one adapter, change it in the others.

@@ -9,10 +9,24 @@
     "directory": "packages/vanilla"
   },
   "homepage": "https://github.com/Gregaly/trapezium#readme",
-  "keywords": ["table", "data-table", "datagrid", "vanilla", "javascript", "web"],
+  "keywords": [
+    "table",
+    "data-table",
+    "datagrid",
+    "vanilla",
+    "javascript",
+    "web"
+  ],
   "type": "module",
-  "sideEffects": ["*.css"],
-  "files": ["dist", "styles.css", "themes"],
+  "sideEffects": [
+    "*.css"
+  ],
+  "files": [
+    "dist",
+    "styles.css",
+    "themes",
+    "README.md"
+  ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -34,5 +48,7 @@
   "dependencies": {
     "@trapezium/core": "workspace:*"
   },
-  "publishConfig": { "access": "public" }
+  "publishConfig": {
+    "access": "public"
+  }
 }

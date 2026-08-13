@@ -119,3 +119,49 @@ function MyGrid({ data }) {
   // …your own markup
 }
 ```
+
+## In Vue and Svelte
+
+The model is the same; only what a renderer returns differs.
+
+**Vue** — return a VNode and it is mounted as a real component, with props, events and your app's context:
+
+```ts
+import { h } from "vue"
+
+{ key: "actions", header: "", render: ({ row }) => h(RowMenu, { id: row.id, onOpen: open }) }
+```
+
+A string or a DOM node works too.
+
+**Svelte** — return a DOM node or a string. To render a component, mount it yourself:
+
+```ts
+import { mount } from "svelte"
+
+{
+  key: "actions",
+  header: "",
+  render: ({ row }) => {
+    const host = document.createElement("span")
+    mount(RowMenu, { target: host, props: { id: row.id } })
+    return host
+  },
+}
+```
+
+**Vanilla** — a DOM node or a string:
+
+```js
+{
+  key: "actions",
+  header: "",
+  render: ({ row }) => {
+    const button = document.createElement("button")
+    button.className = "tpz-btn"
+    button.textContent = "Open"
+    button.addEventListener("click", () => open(row.id))
+    return button
+  },
+}
+```

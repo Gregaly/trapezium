@@ -23,7 +23,8 @@
   "files": [
     "dist",
     "styles.css",
-    "themes"
+    "themes",
+    "README.md"
   ],
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

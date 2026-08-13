@@ -25,7 +25,8 @@
   "files": [
     "dist",
     "styles.css",
-    "themes"
+    "themes",
+    "README.md"
   ],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
