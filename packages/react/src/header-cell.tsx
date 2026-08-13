@@ -402,7 +402,7 @@ function Action({
   }
 
   return (
-    <a href={href} role="menuitem" data-menu-item="" className="tpz-menu-item">
+    <a href={href} data-menu-item="" className="tpz-menu-item">
       {icon}
       {children}
     </a>

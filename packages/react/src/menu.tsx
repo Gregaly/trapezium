@@ -13,7 +13,7 @@ import { cx } from "./classes.js"
 import { useTableContext } from "./context.js"
 
 /**
- * A dropdown menu.
+ * A dropdown panel.
  *
  * Written rather than pulled from a component library on purpose: a table
  * library that depends on Radix forces that dependency, and its version, on
@@ -21,6 +21,12 @@ import { useTableContext } from "./context.js"
  * the part that actually matters: it opens on click, closes on escape, on an
  * outside pointer press and on selection, moves focus with the arrow keys,
  * returns focus to the trigger, and describes itself to a screen reader.
+ *
+ * Deliberately `role="group"` and plain buttons rather than `role="menu"` and
+ * `menuitem`. An ARIA menu may only contain menu items, and a column's panel
+ * holds a filter form as well as actions — claiming the role would be a lie
+ * that screen readers act on. Buttons in a labelled group announce correctly
+ * and carry no such contract.
  *
  * Two details worth keeping:
  *
@@ -46,6 +52,7 @@ export function Menu({
   children: (close: () => void) => ReactNode
   align?: MenuAlign
   /** Names the menu for a screen reader. */
+  /** Names the panel for a screen reader. */
   label?: string
   className?: string
   width?: number | string
@@ -146,7 +153,7 @@ export function Menu({
     ref: (node: HTMLElement | null) => {
       triggerRef.current = node
     },
-    "aria-haspopup": "menu",
+    "aria-haspopup": true,
     "aria-expanded": open,
     "aria-controls": open ? id : undefined,
     onClick: (event) => {
@@ -186,7 +193,7 @@ export function Menu({
             <div
               id={id}
               ref={menuRef}
-              role="menu"
+              role="group"
               aria-label={label}
               tabIndex={-1}
               className={cx("tpz-menu", className)}
@@ -204,7 +211,7 @@ export function Menu({
 
 export type TriggerProps = {
   ref: (node: HTMLElement | null) => void
-  "aria-haspopup": "menu"
+  "aria-haspopup": boolean
   "aria-expanded": boolean
   "aria-controls": string | undefined
   onClick: (event: React.MouseEvent) => void
@@ -227,7 +234,6 @@ export function MenuItem({
   return (
     <button
       type="button"
-      role="menuitem"
       data-menu-item=""
       disabled={disabled}
       className={cx("tpz-menu-item", className)}

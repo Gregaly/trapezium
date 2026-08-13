@@ -149,7 +149,7 @@ describe("the header menu", () => {
     // there and the menu renders as unstyled text over the table.
     expect(portal?.classList.contains("tpz")).toBe(true)
     expect(portal?.getAttribute("data-theme")).toBe("dark")
-    expect(portal?.querySelector('[role="menu"]')).toBeTruthy()
+    expect(portal?.querySelector('[role="group"]')).toBeTruthy()
   })
 
   it("offers the values present as a set filter, and applies one", () => {

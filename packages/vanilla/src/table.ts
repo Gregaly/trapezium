@@ -187,7 +187,7 @@ export function createTable<TRow extends AnyRow>(
     }
 
     if (settings.columnControl !== false) {
-      const button = el("button", { type: "button", class: "tpz-btn", "aria-haspopup": "menu" }, [
+      const button = el("button", { type: "button", class: "tpz-btn", "aria-haspopup": "true" }, [
         icon("columns"),
         "Columns",
       ])
@@ -201,7 +201,7 @@ export function createTable<TRow extends AnyRow>(
         type: "button",
         class: "tpz-btn tpz-btn-icon",
         "aria-label": "Export",
-        "aria-haspopup": "menu",
+        "aria-haspopup": "true",
       })
       const glyph = icon("download")
       if (glyph) button.append(glyph)
@@ -529,7 +529,7 @@ export function createTable<TRow extends AnyRow>(
         {
           type: "button",
           class: "tpz-th-menu",
-          "aria-haspopup": "menu",
+          "aria-haspopup": "true",
           "aria-label": `${column.header} column options`,
         },
         [icon("chevronDown", 12, "tpz-th-chevron")],

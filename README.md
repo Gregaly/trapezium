@@ -113,7 +113,7 @@ MIT.
 ```sh
 pnpm install
 pnpm build       # every package
-pnpm test        # 176 tests: core, React, Vue, Svelte, vanilla
+pnpm test        # core, React, Vue, Svelte and vanilla, including an axe pass
 pnpm typecheck
 pnpm check       # typecheck and test together
 ```

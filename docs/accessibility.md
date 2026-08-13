@@ -8,11 +8,13 @@ Accessibility is not a feature here; a feature that is not accessible does not s
 
 **Sorting is announced.** Every header carries `aria-sort` — `ascending`, `descending` or `none` — so a screen reader says how the table is ordered, and says it changed.
 
-**Everything is reachable by keyboard.** Headers sort with Enter or Space. Column menus open with Enter or Down, move with the arrow keys, Home and End, close with Escape, and return focus to the control that opened them. Column resizing is on a real button that responds to the left and right arrows, and to Shift for larger steps.
+**Everything is reachable by keyboard.** Headers sort with Enter or Space. Column panels open with Enter or Down, move with the arrow keys, Home and End, close with Escape, and return focus to the control that opened them. Column resizing is on a real button that responds to the left and right arrows, and to Shift for larger steps.
 
 **Icon-only controls have names.** Sort direction, resize handles, pagination arrows, remove-filter buttons, the export menu — all labelled.
 
 **Selection is labelled per row**, and the header checkbox says whether it will select or clear.
+
+**Panels are groups, not ARIA menus.** A column's panel holds a filter form as well as actions, and an ARIA menu may only contain menu items — so it is a labelled group of buttons, which announces correctly and makes no promise the content cannot keep.
 
 **Live regions where they matter.** The row count and the pagination position are announced when they change, so a filter that removes rows is not silent.
 
@@ -48,4 +50,6 @@ Accessibility is not a feature here; a feature that is not accessible does not s
 
 ## Testing it
 
-The suite runs an automated pass and explicit keyboard paths on every release. If you find something that reads badly in a real screen reader, that is a bug worth reporting — automated checks catch a fraction of what matters.
+Every release runs an automated `axe-core` pass over the table with everything switched on, over the empty, loading and error states, and over an open column panel — plus explicit keyboard-path tests for sorting, opening a panel, moving through it, escaping out of it and getting focus back. Contrast is checked against the built stylesheet rather than in the test environment, which has no layout to measure.
+
+Automated checks catch a fraction of what matters. If something reads badly in a real screen reader, that is a bug worth reporting.

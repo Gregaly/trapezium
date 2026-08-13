@@ -1,7 +1,10 @@
 import { el } from "./dom.js"
 
 /**
- * A dropdown, in about eighty lines.
+ * A dropdown panel, in about eighty lines.
+ *
+ * `role="group"` rather than `role="menu"`: an ARIA menu may only contain menu
+ * items, and a column's panel holds a filter form as well as actions.
  *
  * Appended to the document body, because a popover inside the table's scroll
  * container is clipped by it — and wrapped in an element carrying the table's
@@ -42,7 +45,7 @@ export function openMenuAt(
 ): () => void {
   closeMenu()
 
-  const menu = el("div", { class: "tpz-menu", role: "menu", "aria-label": options.label, tabindex: "-1" })
+  const menu = el("div", { class: "tpz-menu", role: "group", "aria-label": options.label, tabindex: "-1" })
   const wrapper = el("div", { class: "tpz tpz-portal", "data-theme": options.theme }, [menu])
   if (options.width) menu.style.width = `${String(options.width)}px`
 
@@ -133,7 +136,7 @@ export function menuItem(
 ): HTMLElement {
   const item = el(
     "button",
-    { type: "button", class: "tpz-menu-item", role: "menuitem", "data-menu-item": true, disabled: options.disabled },
+    { type: "button", class: "tpz-menu-item", "data-menu-item": true, disabled: options.disabled },
     [options.icon, label],
   )
   item.addEventListener("click", onSelect)
