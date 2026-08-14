@@ -10,6 +10,7 @@ import type {
   PaginationOptions,
   PartialTableState,
   ResolvedColumn,
+  ServerSource,
   TableState,
   TypeDef,
 } from "@trapezium/core"
@@ -161,8 +162,22 @@ export type TableProps<TRow extends AnyRow = AnyRow> = {
   /**
    * The rows have already been filtered, sorted and paginated by a server.
    * Supply `total` so the pagination knows how many there are.
+   *
+   * Pass an object instead of `true` to say where the answers the table cannot
+   * work out for itself come from — the values behind a set filter, and the
+   * rows behind an export:
+   *
+   * ```tsx
+   * server={{
+   *   distinct: (column) => api.invoices.distinct(column),
+   *   all: (state) => api.invoices.all(state),
+   * }}
+   * ```
+   *
+   * Given once, every set-filter column and the export use it, so there is
+   * nothing to configure per column and nothing to forget.
    */
-  server?: boolean
+  server?: boolean | ServerSource<TRow>
   /** Total matching rows. Required in server mode for numbered pagination. */
   total?: number
 

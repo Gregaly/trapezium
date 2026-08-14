@@ -34,6 +34,7 @@ export type {
   ResolvedColumn,
   SelectOption,
   SelectionOptions,
+  ServerSource,
   Sort,
   SortDirection,
   TableRows,
@@ -173,4 +174,5 @@ export {
   textEquals,
   textIncludes,
   textStartsWith,
+  toSelectOptions,
 } from "./util.js"

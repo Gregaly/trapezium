@@ -7,8 +7,10 @@ import {
   setSelected,
   toCsv,
   toDelimitedText,
+  toSelectOptions,
   toggleSelection,
   type AnyRow,
+  type SelectOption,
   type TableState,
 } from "@trapezium/core"
 
@@ -65,7 +67,8 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   } = props
 
   const table = useTable(props)
-  const { rows, matchedRows, rowIds, columns, hiddenColumns, state, update, types, format, pagination, total } = table
+  const { rows, matchedRows, rowIds, columns, hiddenColumns, state, update, types, format, pagination, total, serverSource } =
+    table
 
   const classes = useMemo(() => createClasses(classNames, unstyled), [classNames, unstyled])
 
@@ -106,6 +109,34 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
       formatWithType(types.get(column.type), value, { ...format, ...column.formatOptions }),
     [types, format],
   )
+
+  /*
+    A set-filter column with nothing of its own asks the server, if the table
+    was told how to ask. Bound per column and remembered by identity, so the
+    panel fetches once and reopening it is free.
+  */
+  const distinctFor = useMemo(() => {
+    const source = serverSource?.distinct
+    if (!source) return undefined
+
+    const bound = new Map<string, () => Promise<SelectOption[]>>()
+    return (key: string) => {
+      let provider = bound.get(key)
+      if (!provider) {
+        provider = async () => {
+          const values = await source(key, latestState.current)
+          return toSelectOptions(values)
+        }
+        bound.set(key, provider)
+      }
+      return provider
+    }
+  }, [serverSource])
+
+  // Read when a provider actually runs, so a fetch reflects the filters in
+  // force at that moment rather than the ones in force when it was bound.
+  const latestState = useRef(state)
+  latestState.current = state
   const columnCount = columns.length + (selection ? 1 : 0)
 
   /*
@@ -213,7 +244,13 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   const exportRows = exportOptions?.scope === "page" ? rows : matchedRows
 
   // Only worth saying when the caller has given it no way to do better.
-  if (exportOptions && props.server && !exportOptions.fetchRows && !exportOptions.onExport) {
+  if (
+    exportOptions &&
+    props.server &&
+    !exportOptions.fetchRows &&
+    !exportOptions.onExport &&
+    !serverSource?.all
+  ) {
     warnAboutServerExport()
   }
 
@@ -223,9 +260,8 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
           void (async () => {
             // The caller's rows if they have them — a server-side table's real
             // answer — and otherwise the ones on hand.
-            const rows = exportOptions.fetchRows
-              ? await exportOptions.fetchRows(state)
-              : exportRows
+            const fetchRows = exportOptions.fetchRows ?? serverSource?.all
+            const rows = fetchRows ? await fetchRows(state) : exportRows
 
             if (exportOptions.onExport) {
               exportOptions.onExport(state, rows)
@@ -334,6 +370,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
                     theme={theme}
                     onDragStateChange={setDraggingColumn}
                     formatValue={formatValue(column)}
+                    fetchOptions={column.filterOptions ? undefined : distinctFor?.(column.key)}
                     style={{ width: column.width, minWidth: column.minWidth, maxWidth: column.maxWidth }}
                   />
                 ))}
@@ -503,8 +540,9 @@ function warnAboutServerExport(): void {
   warnedAboutExport = true
   console.warn(
     "[trapezium] Exporting in server mode can only include the rows the table has, which is one " +
-      "page. Pass export={{ fetchRows: (state) => … }} and the table will write the file from " +
-      "whatever you fetch. See https://github.com/Gregaly/trapezium/blob/main/docs/server-data.md#exporting",
+      "page. Say where the rest come from — server={{ all: (state) => … }} — and the table will " +
+      "write the file from whatever you fetch. See " +
+      "https://github.com/Gregaly/trapezium/blob/main/docs/server-data.md#exporting",
   )
 }
 

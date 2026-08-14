@@ -4,6 +4,7 @@ import {
   distinctValues,
   isListOperator,
   needsValue,
+  toSelectOptions,
   type AnyRow,
   type ColumnFilter,
   type FilterOperator,
@@ -30,6 +31,7 @@ export function FilterControl<TRow extends AnyRow>({
   filter,
   rows,
   label,
+  fetchOptions,
   onApply,
   onClear,
 }: {
@@ -46,11 +48,23 @@ export function FilterControl<TRow extends AnyRow>({
    * thing that knows the difference.
    */
   label: (value: unknown) => string
+  /** Asks the server what values this column has, when the table knows how. */
+  fetchOptions?: FilterOptionsProvider
   onApply: (filter: ColumnFilter) => void
   onClear: () => void
 }) {
   if (column.filterKind === "set") {
-    return <SetFilter column={column} filter={filter} rows={rows} label={label} onApply={onApply} onClear={onClear} />
+    return (
+      <SetFilter
+        column={column}
+        filter={filter}
+        rows={rows}
+        label={label}
+        fetchOptions={fetchOptions}
+        onApply={onApply}
+        onClear={onClear}
+      />
+    )
   }
   if (column.filterKind === "boolean") {
     return <BooleanFilter filter={filter} column={column} onApply={onApply} onClear={onClear} />
@@ -165,6 +179,7 @@ function SetFilter<TRow extends AnyRow>({
   filter,
   rows,
   label,
+  fetchOptions,
   onApply,
   onClear,
 }: {
@@ -172,11 +187,14 @@ function SetFilter<TRow extends AnyRow>({
   filter: ColumnFilter | undefined
   rows: readonly TRow[]
   label: (value: unknown) => string
+  fetchOptions?: FilterOptionsProvider
   onApply: (filter: ColumnFilter) => void
   onClear: () => void
 }) {
   const [query, setQuery] = useState("")
-  const fetched = useFetchedOptions(column.filterOptions)
+  // The column's own list first; failing that, whatever the table was told to
+  // ask the server.
+  const fetched = useFetchedOptions(column.filterOptions ?? fetchOptions)
 
   const choices = useMemo(() => {
     /*
@@ -361,8 +379,9 @@ function useFetchedOptions(source: TableColumn["filterOptions"]): {
 
     Promise.resolve(provider())
       .then((options) => {
-        remembered.set(provider, options)
-        if (live) setState({ options, loading: false, error: false })
+        const choices = toSelectOptions(options)
+        remembered.set(provider, choices)
+        if (live) setState({ options: choices, loading: false, error: false })
       })
       .catch(() => {
         // Left unremembered, so opening the panel again tries once more.

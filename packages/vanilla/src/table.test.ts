@@ -743,3 +743,104 @@ describe("server-side data, made whole", () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe("telling the table once where the answers come from", () => {
+  const STATUSES = ["draft", "sent", "paid", "overdue"]
+
+  const onePage = [
+    { id: "1", reference: "INV-001", status: "draft" },
+    { id: "2", reference: "INV-002", status: "sent" },
+  ]
+
+  const everything = Array.from({ length: 480 }, (_, index) => ({
+    id: String(index),
+    reference: `INV-${String(index).padStart(3, "0")}`,
+    status: STATUSES[index % 4]!,
+  }))
+
+  const openStatusFilter = () => {
+    host.querySelectorAll<HTMLButtonElement>(".tpz-th-menu")[1]!.click()
+    return document.querySelector<HTMLElement>(".tpz-portal")!
+  }
+
+  const choices = (panel: HTMLElement) =>
+    [...panel.querySelectorAll(".tpz-filter-option-label")].map((node) => node.textContent)
+
+  /** One object, and every set-filter column and the export use it. */
+  const source = () => ({
+    distinct: vi.fn((columnKey: string) =>
+      Promise.resolve([...new Set(everything.map((row) => row[columnKey as "status"]))]),
+    ),
+    all: vi.fn(() => Promise.resolve(everything)),
+  })
+
+  it("fetches a set filter's values without the column being told to", async () => {
+    const server = source()
+
+    createTable(host, {
+      data: onePage,
+      columns: ["reference", { key: "status", filter: "set" }],
+      server,
+      total: 480,
+      pagination: { pageSize: 2 },
+    })
+
+    const panel = openStatusFilter()
+    expect(server.distinct).toHaveBeenCalledWith("status", expect.objectContaining({ page: 1 }))
+
+    await vi.waitFor(() => expect(choices(panel)).toEqual(STATUSES))
+
+    // Remembered per column, so reopening it asks nobody anything.
+    document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+    expect(choices(openStatusFilter())).toHaveLength(4)
+    expect(server.distinct).toHaveBeenCalledTimes(1)
+  })
+
+  it("still lets a column overrule it", () => {
+    const server = source()
+
+    createTable(host, {
+      data: onePage,
+      columns: ["reference", { key: "status", filter: { kind: "set", options: ["only", "these"] } }],
+      server,
+      total: 480,
+      pagination: { pageSize: 2 },
+    })
+
+    expect(choices(openStatusFilter())).toEqual(["only", "these"])
+    expect(server.distinct).not.toHaveBeenCalled()
+  })
+
+  it("exports everything without the export being told to", async () => {
+    let downloaded: string | undefined
+    vi.stubGlobal("Blob", class {
+      constructor(parts: string[]) {
+        downloaded = parts.join("")
+      }
+    })
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:test", revokeObjectURL: () => {} })
+
+    const server = source()
+
+    createTable(host, {
+      data: onePage,
+      columns: ["reference", "status"],
+      server,
+      total: 480,
+      pagination: { pageSize: 2 },
+      export: true,
+    })
+
+    host.querySelector<HTMLButtonElement>('[aria-label="Export"]')!.click()
+    const item = [...document.querySelectorAll<HTMLElement>(".tpz-portal [data-menu-item]")].find((node) =>
+      node.textContent?.includes("Download"),
+    )!
+    item.click()
+
+    await vi.waitFor(() => expect(downloaded).toBeDefined())
+    expect((downloaded ?? "").replace(/\r?\n$/, "").split("\r\n")).toHaveLength(481)
+    expect(server.all).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 2 }))
+
+    vi.unstubAllGlobals()
+  })
+})

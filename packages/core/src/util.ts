@@ -2,6 +2,8 @@
  * Small shared helpers. No dependencies, no DOM, no surprises.
  */
 
+import type { SelectOption } from "./types.js"
+
 /**
  * Whether a value counts as absent.
  *
@@ -154,6 +156,27 @@ function fold(value: string): string {
 }
 
 /** Clamps a number into a range. */
+/**
+ * Loose choices, made uniform.
+ *
+ * Everywhere a list of choices is accepted — a column's set filter, a server's
+ * distinct values — a plain string is allowed to stand for `{ value }`, because
+ * most of the time the value is the label and writing it twice is noise.
+ */
+export function toSelectOptions(values: readonly (SelectOption | string | null | undefined)[]): SelectOption[] {
+  const options: SelectOption[] = []
+
+  for (const value of values) {
+    // A column with gaps in it answers "what values do you have?" with a null
+    // somewhere in the list. It is not a choice, and it must not be one that
+    // renders as a blank row or throws on the way there.
+    if (value === null || value === undefined || value === "") continue
+    options.push(typeof value === "string" ? { value } : value)
+  }
+
+  return options
+}
+
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }

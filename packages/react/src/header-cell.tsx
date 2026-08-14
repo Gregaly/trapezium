@@ -12,6 +12,7 @@ import {
   removeFilter,
   type AnyRow,
   type ColumnFilter,
+  type SelectOption,
   type TableState,
 } from "@trapezium/core"
 
@@ -46,6 +47,7 @@ export function HeaderCell<TRow extends AnyRow>({
   theme,
   onDragStateChange,
   formatValue,
+  fetchOptions,
 }: {
   column: TableColumn<TRow>
   state: TableState
@@ -71,6 +73,8 @@ export function HeaderCell<TRow extends AnyRow>({
   onDragStateChange?: (dragging: boolean) => void
   /** How a stored value reads on screen, for the set filter's choices. */
   formatValue: (value: unknown) => string
+  /** Asks the server what values this column has, when the table knows how. */
+  fetchOptions?: () => Promise<SelectOption[]>
 }) {
   const [dropEdge, setDropEdge] = useState<"before" | "after" | undefined>()
   const [dragging, setDragging] = useState(false)
@@ -323,6 +327,7 @@ export function HeaderCell<TRow extends AnyRow>({
                       filter={filter}
                       rows={rows}
                       label={formatValue}
+                      fetchOptions={fetchOptions}
                       onApply={(next: ColumnFilter) => {
                         apply((current) => setFilterState(current, next))
                         if (column.filterKind !== "set") close()

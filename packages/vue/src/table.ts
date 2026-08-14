@@ -52,7 +52,13 @@ export const Table = defineComponent({
 
     state: { type: Object as PropType<PartialTableState>, default: undefined },
 
-    server: { type: Boolean, default: false },
+    /**
+     * The rows have already been filtered, sorted and paginated by a server.
+     *
+     * Pass an object instead of `true` to say where the values behind a set
+     * filter and the rows behind an export come from — `{ distinct, all }`.
+     */
+    server: { type: [Boolean, Object] as PropType<TableOptions["server"]>, default: false },
     total: { type: Number, default: undefined },
     loading: { type: Boolean, default: false },
     error: { type: String, default: undefined },

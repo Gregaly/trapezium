@@ -33,6 +33,7 @@ import {
   toggleSort,
   OPERATOR_LABELS,
   clearFilters,
+  toSelectOptions,
   type AnyRow,
   type CellContext,
   type ColumnDef,
@@ -45,6 +46,7 @@ import {
   type PartialTableState,
   type ResolvedColumn,
   type SelectOption,
+  type ServerSource,
   type TableState,
   type TypeDef,
 } from "@trapezium/core"
@@ -77,7 +79,15 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
   state?: PartialTableState
   onStateChange?: (state: TableState) => void
 
-  server?: boolean
+  /**
+   * The rows have already been filtered, sorted and paginated by a server.
+   *
+   * Pass an object instead of `true` to say where the answers the table cannot
+   * work out for itself come from — the values behind a set filter, and the
+   * rows behind an export. Given once, every set-filter column and the export
+   * use it.
+   */
+  server?: boolean | ServerSource<TRow>
   total?: number
   loading?: boolean
   error?: string
@@ -248,7 +258,9 @@ export function createTable<TRow extends AnyRow>(
               void (async () => {
                 // The caller's rows if they have them — a server-side table's
                 // real answer — and otherwise the ones on hand.
-                const exported = config.fetchRows ? await config.fetchRows(state) : onHand
+                const fetchRows = config.fetchRows ?? source()?.all
+                if (!fetchRows && settings.server && !config.onExport) warnAboutServerExport()
+                const exported = fetchRows ? await fetchRows(state) : onHand
 
                 if (config.onExport) {
                   config.onExport(state, exported)
@@ -302,6 +314,11 @@ export function createTable<TRow extends AnyRow>(
 
   /* ── Model ─────────────────────────────────────────────────────────────── */
 
+  /** Where server-side answers come from, if the caller said. */
+  function source(): ServerSource<TRow> | undefined {
+    return typeof settings.server === "object" ? settings.server : undefined
+  }
+
   function registry() {
     return settings.types ? createTypeRegistry(settings.types) : defaultTypeRegistry
   }
@@ -327,7 +344,8 @@ export function createTable<TRow extends AnyRow>(
       state: pagination ? state : { ...state, pageSize: 0 },
       types: registry(),
       format: formatting(),
-      server: settings.server,
+      server: Boolean(settings.server),
+      serverDistinct: Boolean(source()?.distinct),
       total: settings.total,
       accumulate: pagination?.mode === "infinite" || pagination?.mode === "loadMore",
     })
@@ -671,6 +689,24 @@ export function createTable<TRow extends AnyRow>(
     })
   }
 
+  const distinctProviders = new Map<string, () => Promise<SelectOption[]>>()
+
+  function distinctProvider(key: string): (() => Promise<SelectOption[]>) | undefined {
+    const ask = source()?.distinct
+    if (!ask) return undefined
+
+    let provider = distinctProviders.get(key)
+    if (!provider) {
+      provider = async () => {
+        // Read when it runs, so a fetch reflects the filters in force at that
+        // moment rather than the ones in force when it was bound.
+        return toSelectOptions(await ask(key, state))
+      }
+      distinctProviders.set(key, provider)
+    }
+    return provider
+  }
+
   function resizeHandle(cell: HTMLElement, key: string): HTMLElement {
     const handle = el("button", { type: "button", class: "tpz-resizer", "aria-label": `Resize column` })
 
@@ -806,11 +842,18 @@ export function createTable<TRow extends AnyRow>(
       const asChoices = (options: readonly SelectOption[]) =>
         options.map((option) => ({ value: option.value, label: option.label ?? option.value }))
 
-      const given = Array.isArray(column.filterOptions)
-        ? column.filterOptions
-        : column.filterOptions === undefined
+      /*
+        A set-filter column with nothing of its own asks the server, if the
+        table was told how to ask. Bound per column and remembered by identity,
+        so the panel fetches once and reopening it is free.
+      */
+      const asking = column.filterOptions ?? distinctProvider(column.key)
+
+      const given = Array.isArray(asking)
+        ? asking
+        : asking === undefined
           ? column.formatOptions?.options
-          : rememberedOptions.get(column.filterOptions)
+          : rememberedOptions.get(asking)
 
       let choices = given?.length ? asChoices(given) : fromData()
 
@@ -818,14 +861,15 @@ export function createTable<TRow extends AnyRow>(
         A column whose choices are fetched: asked for once, remembered against
         the function itself, so opening the panel again is free.
       */
-      if (typeof column.filterOptions === "function" && !rememberedOptions.has(column.filterOptions)) {
-        const provider = column.filterOptions
+      if (typeof asking === "function" && !rememberedOptions.has(asking)) {
+        const provider = asking
         choices = []
 
         void Promise.resolve(provider())
           .then((options) => {
-            rememberedOptions.set(provider, options)
-            choices = asChoices(options)
+            const fetched = toSelectOptions(options)
+            rememberedOptions.set(provider, fetched)
+            choices = asChoices(fetched)
             note.textContent = ""
             draw(searchBox?.value ?? "")
           })
@@ -869,12 +913,8 @@ export function createTable<TRow extends AnyRow>(
         const nodes: Node[] = []
 
         if (visible.length === 0) {
-          nodes.push(
-            el("p", {
-              class: "tpz-menu-label",
-              text: pendingOptions(column) ? "Loading values…" : "No values",
-            }),
-          )
+          const pending = typeof asking === "function" && !rememberedOptions.has(asking)
+          nodes.push(el("p", { class: "tpz-menu-label", text: pending ? "Loading values…" : "No values" }))
         }
 
         for (const choice of visible) {
@@ -905,7 +945,7 @@ export function createTable<TRow extends AnyRow>(
 
       // The same threshold as the other adapters: a panel's worth fits without
       // one, and anything more wants a way to be narrowed.
-      if (choices.length > 8 || typeof column.filterOptions === "function") {
+      if (choices.length > 8 || typeof asking === "function") {
         searchBox = el("input", {
           class: "tpz-input",
           type: "search",
@@ -1402,10 +1442,6 @@ function badge(value: string, options: Array<{ value: string; label?: string; co
  */
 const rememberedOptions = new WeakMap<object, SelectOption[]>()
 
-function pendingOptions<TRow extends AnyRow>(column: ResolvedColumn<TRow, Node | string>): boolean {
-  return typeof column.filterOptions === "function" && !rememberedOptions.has(column.filterOptions)
-}
-
 /**
  * How many set-filter choices are drawn at once.
  *
@@ -1416,6 +1452,25 @@ function pendingOptions<TRow extends AnyRow>(column: ResolvedColumn<TRow, Node |
 const RENDER_LIMIT = 200
 
 /** Which page numbers to show: first, last, the current one and its neighbours. */
+/*
+  In server mode the table holds one page, so an export can only contain that
+  page. The rest are the caller's rows to fetch, and this says where.
+*/
+let warnedAboutExport = false
+
+function warnAboutServerExport(): void {
+  if (warnedAboutExport) return
+  if (typeof process !== "undefined" && process.env["NODE_ENV"] === "production") return
+
+  warnedAboutExport = true
+  console.warn(
+    "[trapezium] Exporting in server mode can only include the rows the table has, which is one " +
+      "page. Say where the rest come from — server: { all: (state) => … } — and the table will " +
+      "write the file from whatever you fetch. See " +
+      "https://github.com/Gregaly/trapezium/blob/main/docs/server-data.md#exporting",
+  )
+}
+
 export function pageWindow(page: number, pageCount: number, siblings: number): Array<number | "gap"> {
   const width = siblings * 2 + 5
   const range = (from: number, to: number) =>

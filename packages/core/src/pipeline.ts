@@ -38,6 +38,11 @@ export type PipelineOptions<TRow, TNode = unknown> = {
   total?: number
   /** True in the append pagination modes, where every loaded page stays on screen. */
   accumulate?: boolean
+  /**
+   * The table was told where a set filter's values come from — `server.distinct`
+   * — so a column without a list of its own is not a mistake.
+   */
+  serverDistinct?: boolean
 }
 
 /**
@@ -55,7 +60,7 @@ export function getRows<TRow extends AnyRow, TNode = unknown>(
   if (server) {
     const total = options.total ?? rows.length
     if (options.accumulate) warnIfNotAccumulating(rows.length, state)
-    warnAboutSetFilters(columns)
+    if (!options.serverDistinct) warnAboutSetFilters(columns)
     return {
       rows: [...rows],
       matched: [...rows],
@@ -136,8 +141,9 @@ function warnAboutSetFilters<TRow, TNode>(columns: readonly ResolvedColumn<TRow,
     warnedColumns.add(column.key)
     console.warn(
       `[trapezium] The set filter on "${column.key}" is offering only the values on the page it can ` +
-        "see, because in server mode that is all the table has. Give it the full list — " +
-        `filter: { kind: "set", options } — or the values on later pages will be unfindable. ` +
+        "see, because in server mode that is all the table has. Say where the values come from — " +
+        "server={{ distinct }} for every column at once, or filter: { kind: \"set\", options } for " +
+        "this one — or the values on later pages will be unfindable. " +
         "See https://github.com/Gregaly/trapezium/blob/main/docs/filtering.md#set-filters-with-server-side-data",
     )
   }

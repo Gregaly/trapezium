@@ -234,3 +234,117 @@ describe("an export that cannot see past its page", () => {
     expect(downloaded).toBeUndefined()
   })
 })
+
+describe("telling the table once where the answers come from", () => {
+  let downloaded: string | undefined
+
+  beforeEach(() => {
+    downloaded = undefined
+    vi.stubGlobal("Blob", class {
+      constructor(parts: string[]) {
+        downloaded = parts.join("")
+      }
+    })
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:test", revokeObjectURL: () => {} })
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  const everything = Array.from({ length: 480 }, (_, index) => ({
+    id: String(index),
+    reference: `INV-${String(index).padStart(3, "0")}`,
+    status: STATUSES[index % 4]!.value,
+    owner: index % 2 === 0 ? "Ada" : "Wren",
+  }))
+
+  /** One object, and every set-filter column and the export use it. */
+  const source = () => ({
+    distinct: vi.fn((columnKey: string) =>
+      // The trailing null is a column with gaps in it, which is what a real
+      // "select distinct" returns and what the table must not choke on.
+      Promise.resolve([
+        ...new Set(everything.map((row) => row[columnKey as "status" | "owner"])),
+        null,
+      ]),
+    ),
+    all: vi.fn(() => Promise.resolve(everything)),
+  })
+
+  it("fetches a set filter's values without the column being told to", async () => {
+    const user = userEvent.setup()
+    const server = source()
+
+    /*
+      A column key no other test uses, because the warning below is only ever
+      said once per column for the life of the module — assert it against a key
+      that has already warned and the assertion proves nothing.
+    */
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const { container } = setup({
+      server,
+      data: [{ id: "1", reference: "INV-001", owner: "Ada" }],
+      columns: [{ key: "reference" }, { key: "owner", filter: "set" }],
+    })
+
+    await user.click(within(container).getByRole("button", { name: /Owner column options/i }))
+    const panel = screen.getByRole("group", { name: /Owner column/i })
+
+    await vi.waitFor(() => expect(choices(panel)).toEqual(["Ada", "Wren"]))
+    expect(server.distinct).toHaveBeenCalledWith("owner", expect.objectContaining({ page: 1 }))
+
+    // Nothing to warn about: the table knows how to ask.
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it("asks once per column, however often the panel is opened", async () => {
+    const user = userEvent.setup()
+    const server = source()
+
+    const { container } = setup({ server })
+    let panel = await openStatusFilter(user, container)
+    await vi.waitFor(() => expect(choices(panel)).toHaveLength(4))
+
+    await user.keyboard("{Escape}")
+    panel = await openStatusFilter(user, container)
+
+    expect(server.distinct).toHaveBeenCalledTimes(1)
+    expect(choices(panel)).toHaveLength(4)
+  })
+
+  it("exports everything without the export being told to", async () => {
+    const user = userEvent.setup()
+    const server = source()
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+
+    const { container } = setup({ server, export: true })
+
+    await user.click(within(container).getByRole("button", { name: "Export" }))
+    await user.click(
+      within(screen.getByRole("group", { name: "Export" })).getByRole("button", { name: /Download CSV/i }),
+    )
+
+    await vi.waitFor(() => expect(downloaded).toBeDefined())
+    expect((downloaded ?? "").replace(/\r?\n$/, "").split("\r\n")).toHaveLength(481)
+    expect(server.all).toHaveBeenCalledWith(expect.objectContaining({ pageSize: 2 }))
+
+    expect(warn).not.toHaveBeenCalled()
+    warn.mockRestore()
+  })
+
+  it("still lets a column overrule it", async () => {
+    const user = userEvent.setup()
+    const server = source()
+
+    const { container } = setup({
+      server,
+      columns: [{ key: "reference" }, { key: "status", filter: { kind: "set", options: STATUSES } }],
+    })
+
+    const panel = await openStatusFilter(user, container)
+
+    expect(choices(panel)).toEqual(["Draft", "Sent", "Paid", "Overdue"])
+    expect(server.distinct).not.toHaveBeenCalled()
+  })
+})

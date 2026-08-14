@@ -8,6 +8,7 @@ import { BUILT_IN_TYPES, createTypeRegistry, defaultTypeRegistry } from "./regis
 import { createState } from "./state.js"
 import { stateFromUrl, stateToQueryString } from "./url.js"
 import { toCsv } from "./csv.js"
+import { toSelectOptions } from "./util.js"
 import type { AnyRow, TableState } from "./types.js"
 
 /**
@@ -419,5 +420,23 @@ describe("state that round-trips through a URL", () => {
   it("survives an emoji", () => {
     const state = createState({ search: "🎉", filters: [{ key: "n", operator: "eq", value: "🎉" }] })
     expect(stateFromUrl(stateToQueryString(state)).search).toBe("🎉")
+  })
+})
+
+describe("choices that arrive in a bad state", () => {
+  it("drops the gaps a real query returns rather than rendering them", () => {
+    expect(toSelectOptions(["draft", null, "", undefined, { value: "sent", label: "Sent" }])).toEqual([
+      { value: "draft" },
+      { value: "sent", label: "Sent" },
+    ])
+  })
+
+  it("leaves a list that is already choices exactly as it is", () => {
+    const given = [{ value: "a", label: "A", colour: "#fff" }]
+    expect(toSelectOptions(given)).toEqual(given)
+  })
+
+  it("has nothing to say about an empty list", () => {
+    expect(toSelectOptions([])).toEqual([])
   })
 })

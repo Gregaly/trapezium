@@ -86,7 +86,9 @@ export type FilterKind = "text" | "set" | "range" | "date" | "boolean" | "none"
  * every column's domain being fetched up front. Returning a promise is the
  * normal case.
  */
-export type FilterOptionsProvider = () => SelectOption[] | Promise<SelectOption[]>
+export type FilterOptionsProvider = () =>
+  | readonly (SelectOption | string)[]
+  | Promise<readonly (SelectOption | string)[]>
 
 /**
  * How a column is filtered.
@@ -107,8 +109,11 @@ export type FilterOption =
        * A list, or a function that fetches one. Without either, they are
        * derived from the data — which is everything in client mode and one
        * page in server mode.
+       *
+       * Plain strings are accepted wherever a choice is, for the common case
+       * where the value is also the label.
        */
-      options?: SelectOption[] | FilterOptionsProvider
+      options?: readonly (SelectOption | string)[] | FilterOptionsProvider
       /** Starting operator when the user opens an empty filter. */
       defaultOperator?: FilterOperator
     }
@@ -372,6 +377,42 @@ export type TableRows<TRow = AnyRow> = {
   pageCount: number
   /** True when filters or search removed rows that otherwise exist. */
   filtered: boolean
+}
+
+/**
+ * Where a server-side table gets the answers it cannot work out for itself.
+ *
+ * With the data on a server the table holds one page, so two things it does
+ * well in the browser become impossible alone: a set filter cannot know what
+ * values a column has, and an export cannot include rows it has never seen.
+ *
+ * Both need one thing — a way to ask. Given here once, every set-filter column
+ * and the export use it without being configured individually, so there is
+ * nothing to forget on the twelfth column.
+ *
+ * The library still fetches nothing itself: these are your functions, hitting
+ * your endpoint, with your authentication. It only knows when to call them.
+ */
+export type ServerSource<TRow = AnyRow> = {
+  /**
+   * The values a column can hold, for its set filter.
+   *
+   * Called with the column's key the first time somebody opens that column's
+   * panel, and remembered afterwards. Return labelled choices, or plain
+   * strings if the value is the label.
+   */
+  distinct?: (
+    columnKey: string,
+    state: TableState,
+  ) => readonly (SelectOption | string)[] | Promise<readonly (SelectOption | string)[]>
+
+  /**
+   * Every row matching the current filters and search, for an export.
+   *
+   * The same query that fetches a page, with the paging left off. The table
+   * writes the file from what comes back.
+   */
+  all?: (state: TableState) => readonly TRow[] | Promise<readonly TRow[]>
 }
 
 /** How a row is identified across sorting, filtering and paging. */

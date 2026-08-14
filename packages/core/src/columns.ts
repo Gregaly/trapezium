@@ -23,7 +23,7 @@ import type {
   SelectOption,
   TableState,
 } from "./types.js"
-import { getPath, humanise } from "./util.js"
+import { getPath, humanise, toSelectOptions } from "./util.js"
 
 /** How many rows are sampled when a column's type has to be inferred. */
 const SAMPLE_SIZE = 50
@@ -192,7 +192,7 @@ function resolveFilter(
   return {
     kind: option.kind ?? type.filter ?? "text",
     operators: option.operators ?? operators,
-    options: option.options,
+    options: typeof option.options === "function" ? option.options : option.options && toSelectOptions(option.options),
   }
 }
 

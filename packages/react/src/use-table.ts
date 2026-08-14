@@ -123,7 +123,8 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
         state: pagination ? state : { ...state, pageSize: 0 },
         types,
         format,
-        server,
+        server: Boolean(server),
+        serverDistinct: typeof server === "object" && Boolean(server.distinct),
         total,
         accumulate,
       }),
@@ -164,7 +165,9 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
     format,
     pagination,
     selection,
-    server,
+    server: Boolean(server),
+    /** Where the answers a server-side table cannot work out come from. */
+    serverSource: typeof server === "object" ? server : undefined,
   }
 }
 
