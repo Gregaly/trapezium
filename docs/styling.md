@@ -119,3 +119,17 @@ The puff of smoke on removal is `.tpz-poof`, and it does not render at all under
 ## Motion and print
 
 Transitions respect `prefers-reduced-motion`. Printing drops the toolbar, the pagination and the selection column, unfreezes the header and lets cells wrap, so a printed table is the data rather than a screenshot of an interface.
+
+## Which browsers
+
+Chrome 123+, Edge 123+, Safari 17.5+, Firefox 120+ get everything, because that
+is where `light-dark()` landed.
+
+Older browsers still get a correctly themed table: the palette is repeated in an
+`@supports not (color: light-dark(…))` block, so a browser that cannot resolve
+the function reads a plain light or dark list instead of dropping the colours
+altogether. What they lose is the OS following a theme change without a reload.
+
+Below Safari 16 and Chrome 105 the card layout stops adapting — container
+queries are what drive it — and the table falls back to scrolling sideways,
+which is the same thing `responsive="scroll"` does deliberately.

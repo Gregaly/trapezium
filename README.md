@@ -105,6 +105,13 @@ Every example in [`examples/`](examples) runs against the local packages.
 | [`svelte-app`](examples/svelte-app) | Svelte 5 | Runes, `bind:tableState`, and the action. `pnpm dev` |
 | [`plain-html`](examples/plain-html) | None | One file, one script tag, no build step. `pnpm dev` |
 
+## Browsers
+
+Chrome, Edge, Safari and Firefox, current and one back — everything from Chrome
+123, Safari 17.5 and Firefox 120. Older browsers get a themed, working table
+without the OS-driven theme switching. See
+[styling](docs/styling.md#which-browsers).
+
 ## Licence
 
 MIT.

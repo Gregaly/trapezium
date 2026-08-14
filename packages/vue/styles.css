@@ -118,6 +118,78 @@
   color-scheme: dark;
 }
 
+/*
+  Older browsers, and only older browsers.
+
+  `light-dark()` is what keeps one list of colours instead of two that drift,
+  but it arrived in 2024 — and a browser that does not understand it drops every
+  declaration above, leaving a table with no colours at all rather than the
+  wrong ones. This says the same palette the long way round for those, and is
+  invisible to everything else: a browser that supports the function never
+  reads it.
+*/
+@supports not (color: light-dark(#000, #fff)) {
+  .tpz {
+    --tpz-bg: #f2eee6;
+    --tpz-fg: #221e1a;
+    --tpz-surface: #fbf8f2;
+    --tpz-surface-fg: #221e1a;
+    --tpz-muted: #e9e3d8;
+    --tpz-muted-fg: #6b6157;
+    --tpz-accent: #e8e0d2;
+    --tpz-accent-fg: #221e1a;
+    --tpz-primary: #6a2e46;
+    --tpz-primary-fg: #fdf8f5;
+    --tpz-border: #e0d8c8;
+    --tpz-input: #e0d8c8;
+    --tpz-ring: #6a2e46;
+    --tpz-success: #3f6b4a;
+    --tpz-warning: #9a6b1f;
+    --tpz-danger: #97362b;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    .tpz:not([data-theme="light"]) {
+      --tpz-bg: #0a0a0a;
+      --tpz-fg: #ededed;
+      --tpz-surface: #141414;
+      --tpz-surface-fg: #ededed;
+      --tpz-muted: #1f1f1f;
+      --tpz-muted-fg: #a1a1a1;
+      --tpz-accent: #262626;
+      --tpz-accent-fg: #ededed;
+      --tpz-primary: #d98fae;
+      --tpz-primary-fg: #2a1119;
+      --tpz-border: rgb(255 255 255 / 10%);
+      --tpz-input: rgb(255 255 255 / 15%);
+      --tpz-ring: #d98fae;
+      --tpz-success: #82b491;
+      --tpz-warning: #d9a95c;
+      --tpz-danger: #e0857a;
+    }
+  }
+
+  .tpz[data-theme="dark"],
+  :where(.dark, [data-theme="dark"], [data-mode="dark"]) .tpz:not([data-theme="light"]) {
+    --tpz-bg: #0a0a0a;
+    --tpz-fg: #ededed;
+    --tpz-surface: #141414;
+    --tpz-surface-fg: #ededed;
+    --tpz-muted: #1f1f1f;
+    --tpz-muted-fg: #a1a1a1;
+    --tpz-accent: #262626;
+    --tpz-accent-fg: #ededed;
+    --tpz-primary: #d98fae;
+    --tpz-primary-fg: #2a1119;
+    --tpz-border: rgb(255 255 255 / 10%);
+    --tpz-input: rgb(255 255 255 / 15%);
+    --tpz-ring: #d98fae;
+    --tpz-success: #82b491;
+    --tpz-warning: #d9a95c;
+    --tpz-danger: #e0857a;
+  }
+}
+
 /* ── Density ───────────────────────────────────────────────────────────── */
 
 .tpz[data-density="compact"] {
