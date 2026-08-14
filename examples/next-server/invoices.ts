@@ -67,6 +67,28 @@ const INVOICES: Invoice[] = (() => {
   })
 })()
 
+/** The columns a query may name. Anything else is not a column, whoever asked. */
+export const INVOICE_COLUMNS: string[] = [
+  "reference", "customer", "email", "amount", "status", "issued_at", "due_date", "paid",
+]
+
+/**
+ * Every value a column has, across the whole table.
+ *
+ * A set filter needs this, and only the database knows it — one page of rows
+ * can only ever offer the values that page happened to contain.
+ */
+export async function distinctInvoiceValues(columnKey: string): Promise<string[]> {
+  await new Promise((resolve) => setTimeout(resolve, 120))
+
+  const values = new Set<string>()
+  for (const invoice of INVOICES) {
+    const value = invoice[columnKey as keyof Invoice]
+    if (value !== null && value !== undefined && value !== "") values.add(String(value))
+  }
+  return [...values].sort()
+}
+
 /**
  * One page of rows for the state the user asked for.
  *

@@ -132,6 +132,62 @@
       // a number a spreadsheet can add up rather than text it cannot.
       check("formatted as a spreadsheet wants it", lines[1] === "INV-0003,overdue,5", lines[1])
 
+      document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+
+      /*
+        The same table again, told once where the answers come from instead of
+        per column. Nothing else changes: no options on the status column, no
+        fetchRows on the export.
+      */
+      table.destroy()
+      downloaded = undefined
+      distinctCalls = 0
+      state = { ...state, page: 1, filters: [] }
+
+      const renderAutomatic = async () => {
+        const { rows, total } = await query(state)
+        if (table) table.destroy()
+        table = createTable(host, {
+          data: rows,
+          total,
+          server: {
+            distinct: async (columnKey) => {
+              distinctCalls += 1
+              await wait(10)
+              return [...new Set(everything.map((row) => row[columnKey]))]
+            },
+            all: async (current) => (await query({ ...current, page: 1, pageSize: 1e9 })).rows,
+          },
+          state,
+          columns: ["reference", { key: "status", filter: "set" }, { key: "amount", type: "currency", formatOptions: { currencyInMinorUnits: true } }],
+          getRowId: (row) => row.id,
+          pagination: { mode: "pages", pageSize: 25 },
+          export: true,
+          onStateChange: (next) => { state = next; void renderAutomatic() },
+        })
+      }
+
+      await renderAutomatic()
+
+      host.querySelectorAll(".tpz-th-menu")[1].click()
+      panel = document.querySelector(".tpz-portal")
+      await wait(60)
+      check("one declaration fills the set filter", labels().join() === "draft,sent,paid,overdue", labels().join(", "))
+
+      const paid = [...panel.querySelectorAll(".tpz-filter-option")].find((entry) => entry.textContent.trim() === "paid")
+      paid.querySelector("input").click()
+      await wait(80)
+      check("and it still fetches the matching rows", host.querySelector(".tpz-count").textContent.includes("1,200"), host.querySelector(".tpz-count").textContent.trim())
+
+      document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+      host.querySelector('[aria-label="Export"]').click()
+      ;[...document.querySelectorAll(".tpz-portal [data-menu-item]")].find((n) => n.textContent.includes("Download")).click()
+      await wait(80)
+
+      const automaticLines = (downloaded ?? "").replace(/\r?\n$/, "").split("\r\n")
+      check("one declaration exports every matching row", automaticLines.length - 1 === 1200, `${automaticLines.length - 1} rows for 1,200 matches`)
+      check("asked the server once per column", distinctCalls === 1, `${distinctCalls} fetches`)
+
       window.Blob = RealBlob
       document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
 

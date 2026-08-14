@@ -5,6 +5,7 @@ import { useTransition } from "react"
 import Link from "next/link"
 import { Table, applyStateToUrl, type Column, type TableState } from "@trapezium/react"
 
+import { allMatching, distinctValues } from "../actions"
 import { STATUS_OPTIONS, type Invoice } from "../invoices"
 
 /**
@@ -75,9 +76,8 @@ export function InvoiceTable({
     {
       key: "status",
       type: "badge",
-      // The choices come from the server, not from the page of rows on screen:
-      // a set filter built from one page would only ever offer what that page
-      // happened to contain.
+      // This column's choices are known up front, so it says so rather than
+      // asking the server. Every other set filter uses `server.distinct`.
       formatOptions: { options: STATUS_OPTIONS },
       filter: { kind: "set", options: STATUS_OPTIONS },
     },
@@ -137,7 +137,13 @@ export function InvoiceTable({
       <Table
         data={rows}
         total={total}
-        server
+        /*
+          Said once, and every set-filter column and the export use it: the
+          values behind a filter and the rows behind an export both come from
+          the server, because one page of rows cannot know either. These are
+          Next server actions, so the query never leaves the server.
+        */
+        server={{ distinct: distinctValues, all: allMatching }}
         loading={pending}
         state={state}
         onStateChange={(next) => go(href(next))}
