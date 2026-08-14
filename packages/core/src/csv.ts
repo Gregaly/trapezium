@@ -140,9 +140,15 @@ export function downloadText(text: string, filename: string, mimeType = "text/cs
   document.body.append(link)
   link.click()
   link.remove()
-  // Revoking immediately cancels the download in some browsers; a tick is
-  // enough for the navigation to have started.
-  setTimeout(() => URL.revokeObjectURL(url), 0)
+  /*
+    Revoking immediately cancels the download in some browsers; a tick is
+    enough for the navigation to have started. Held onto now rather than looked
+    up then, because by the time the tick comes the environment may have moved
+    on — a test that restored its globals, an embedder that swapped `URL` — and
+    releasing a blob is best-effort cleanup that must never throw.
+  */
+  const revoke = URL.revokeObjectURL
+  if (typeof revoke === "function") setTimeout(() => revoke.call(URL, url), 0)
   return true
 }
 
