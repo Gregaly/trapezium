@@ -84,3 +84,27 @@ describe("the action", () => {
     expect(node.querySelector(".tpz")).toBeNull()
   })
 })
+
+describe("server-side data", () => {
+  it("passes a server source through to the table", async () => {
+    const distinct = vi.fn(() => Promise.resolve(["pro", "free", "enterprise"]))
+
+    const node = mount({
+      data: [people[0]!],
+      total: 480,
+      server: { distinct },
+      columns: ["name", { key: "plan", filter: "set" }],
+      pagination: { pageSize: 1 },
+    })
+
+    // The page holds one row and one plan; the filter must offer all three.
+    node.querySelectorAll<HTMLButtonElement>(".tpz-th-menu")[1]!.click()
+    const panel = document.querySelector<HTMLElement>(".tpz-portal")!
+    expect(distinct).toHaveBeenCalledWith("plan", expect.objectContaining({ page: 1 }))
+
+    await vi.waitFor(() => {
+      const labels = [...panel.querySelectorAll(".tpz-filter-option-label")].map((node) => node.textContent)
+      expect(labels).toEqual(["pro", "free", "enterprise"])
+    })
+  })
+})
