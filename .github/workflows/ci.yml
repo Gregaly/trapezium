@@ -28,3 +28,13 @@ jobs:
       - run: pnpm typecheck
 
       - run: pnpm test
+
+      # The packages are only as good as they are once packed: an exports map
+      # that resolves in the repo and not on npm is the classic way to ship a
+      # broken release.
+      - run: pnpm check:packaging
+
+      # An example that no longer builds is a broken release, not a broken
+      # example — they are the only proof the published entry points work in a
+      # real app.
+      - run: pnpm build:examples

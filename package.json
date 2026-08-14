@@ -12,13 +12,21 @@
     "check": "pnpm typecheck && pnpm test",
     "bench": "node bench/pipeline.mjs",
     "bench:browser": "node examples/plain-html/serve.mjs # then open /bench/browser/index.html",
-    "bench:prepare": "esbuild packages/core/src/testing/dataset.ts --format=esm --target=es2022 --outfile=bench/dataset.mjs && node scripts/bench-dataset.mjs"
+    "bench:prepare": "esbuild packages/core/src/testing/dataset.ts --format=esm --target=es2022 --outfile=bench/dataset.mjs && node scripts/bench-dataset.mjs",
+    "changeset": "changeset",
+    "version-packages": "changeset version",
+    "release": "pnpm build && pnpm typecheck && pnpm test && pnpm -r --filter \"./packages/*\" publish --access public",
+    "check:packaging": "pnpm -r --filter \"./packages/*\" exec publint",
+    "build:examples": "pnpm -r --filter \"./examples/*\" build"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "^0.18.5",
+    "@changesets/cli": "^3.0.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.4",
     "@types/node": "^22.10.2",
     "axe-core": "^4.13.0",
     "fast-check": "^4.9.0",
+    "publint": "^0.3.23",
     "svelte": "^5.56.8",
     "tsup": "^8.5.0",
     "typescript": "^5.7.2",
