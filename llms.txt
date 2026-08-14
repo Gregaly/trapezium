@@ -102,6 +102,24 @@ Saved views are JSON.stringify(state).
 
 In server mode nothing is filtered, sorted or paged by the table; `total` drives pagination.
 
+Two things the table cannot work out from one page — the values behind a set filter and the rows
+behind an export — are declared once by passing an object instead of `true`:
+
+    <Table
+      data={page}
+      total={total}
+      server={{
+        distinct: (columnKey, state) => api.rows.distinct(columnKey),  // string[] or SelectOption[]
+        all: (state) => api.rows.all(state),                           // every matching row
+      }}
+      export
+      onStateChange={(state) => refetch(state)}
+    />
+
+`distinct` is called once per column, the first time its filter panel is opened, and remembered.
+`all` is called when the user exports. A column's own `filter: { kind: "set", options }` overrules
+`distinct`, and `export: { fetchRows }` overrules `all`. Both members are optional.
+
 ## Server rendering
 
 Renders completely on a server with the correct rows in the markup, no effects and no layout shift.

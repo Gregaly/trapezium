@@ -43,6 +43,9 @@ The biggest difference: TanStack's state is several objects, Trapezium's is one.
 | `rowSelection: "multiple"` | `selection` |
 | `getRowId` | `getRowId` |
 | `onGridReady` / the grid API | state and `onStateChange` |
+| `serverSideDatasource` / `IServerSideDatasource` | `server={{ distinct, all }}` and `onStateChange` |
+| `setFilterParams.values` (a callback) | `server.distinct`, or `filter: { kind: "set", options }` |
+| `exportDataAsCsv` | `export`, and `server.all` when the rows are on a server |
 | `pagination: true` | `pagination` |
 | `domLayout`, `rowHeight` | `density`, `maxHeight` |
 | Enterprise: pivoting, grouping, aggregation | not offered, on purpose |
