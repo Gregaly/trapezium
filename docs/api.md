@@ -15,7 +15,7 @@ import { Table } from "@trapezium/react"
 | `data` | `readonly TRow[]` | required | The rows. In server mode, the current page. |
 | `columns` | `(ColumnDef \| string)[]` | inferred | Definitions or bare keys. |
 | `getRowId` | `(row, index) => string` | `row.id ?? row.uuid ?? index` | Row identity. |
-| `server` | `boolean` | `false` | The rows are already filtered, sorted and paged. |
+| `server` | `boolean \| ServerSource<TRow>` | `false` | The rows are already filtered, sorted and paged. An object says where the answers the table cannot work out for itself come from — `{ distinct, all }`. |
 | `total` | `number` | `data.length` | Total matching rows, for server mode. |
 | `loading` | `boolean` | `false` | Shows skeletons, or dims existing rows. |
 | `error` | `ReactNode` | — | Shows the error state instead of rows. |
@@ -120,6 +120,21 @@ Passed to `format`, `render` and `exportValue`.
 { value, row, rowIndex, rowId, column, text, format }
 ```
 
+## `ServerSource`
+
+Passed as `server` instead of `true`, when the rows come from a server. Both members are optional; each removes one development warning.
+
+```ts
+{
+  /** Values for a set filter. Called per column, on first open, and remembered. */
+  distinct?: (columnKey: string, state: TableState) =>
+    readonly (SelectOption | string)[] | Promise<readonly (SelectOption | string)[]>
+
+  /** Every row matching the current filters and search, for an export. */
+  all?: (state: TableState) => readonly TRow[] | Promise<readonly TRow[]>
+}
+```
+
 ## `TableState`
 
 ```ts
@@ -212,4 +227,4 @@ A CSV is read by a spreadsheet, not by a person looking at a page, so money and 
 
 ### Utilities
 
-`isEmpty` · `humanise` · `getPath` · `compareUnknown` · `textIncludes` · `textEquals` · `textStartsWith` · `textEndsWith` · `clamp` · `shallowEqual`
+`isEmpty` · `humanise` · `getPath` · `compareUnknown` · `textIncludes` · `textEquals` · `textStartsWith` · `textEndsWith` · `clamp` · `shallowEqual` · `toSelectOptions` — turns a loose list of choices, where a plain string stands for `{ value }`, into `SelectOption[]`.

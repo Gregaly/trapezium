@@ -52,7 +52,15 @@ Ticking several values produces an `in` filter. Ticking one produces `eq`. A `ta
 
 This is the one case where the choices really are incomplete, and it is worth understanding: in [server mode](server-data.md) the table holds one page, so a set filter built from the data can only offer what that page contained. Trapezium says so in the console rather than letting you find out from a user.
 
-Give it the whole list, which your server knows and the table does not:
+The short answer is to tell the table once where the values come from, and every set-filter column uses it:
+
+```tsx
+<Table server={{ distinct: (column) => api.invoices.distinct(column) }} … />
+```
+
+It is called with a column's key the first time somebody opens that column's panel, and remembered afterwards. Return labelled choices, or plain strings where the value is the label.
+
+Per column, when the list is already to hand:
 
 ```tsx
 {
@@ -69,7 +77,7 @@ Or hand it a function, when you would rather not query for every column's values
 { key: "owner", filter: { kind: "set", options: () => api.invoices.distinct("owner") } }
 ```
 
-It is called the first time that column's panel is opened, shows "Loading values…" while it works, and is remembered afterwards.
+It is called the first time that column's panel is opened, shows "Loading values…" while it works, and is remembered afterwards. A column's own list wins over `server={{ distinct }}`, so the two mix.
 
 For a column whose values are open-ended — a customer name, a reference — a set filter is the wrong control server-side however you supply it. Use `filter: "text"` and let the database do the matching.
 

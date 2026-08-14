@@ -31,6 +31,36 @@ const { data, isLoading } = useQuery({
 />
 ```
 
+## Saying once where the answers come from
+
+Two things a server-side table cannot work out for itself: the values behind a set filter, and the rows behind an export. It holds one page, and one page does not know what is on the other nineteen.
+
+Tell it once, on the table, and every set-filter column and the export use it:
+
+```tsx
+<Table
+  data={page.rows}
+  total={page.total}
+  server={{
+    distinct: (column) => api.invoices.distinct(column),  // may return a promise
+    all: (state) => api.invoices.all(state),
+  }}
+  state={state}
+  onStateChange={setState}
+  export
+  columns={columns}
+/>
+```
+
+That is the whole of it. Set filters now offer every value in the table rather than the ones on this page, exports contain every matching row rather than the twenty-five on screen, and there is nothing to configure per column and nothing to forget when a column is added later.
+
+- **`distinct(column, state)`** is called with a column's key the first time somebody opens that column's filter panel — never up front, and never for a column nobody filters. Return `["draft", "sent"]` or `[{ value: "draft", label: "Draft" }]`; a plain string means the value is the label. The answer is remembered per column, so reopening the panel asks nobody anything.
+- **`all(state)`** is called when somebody exports. `state` is exactly what they are looking at, so it is the same query that fetches a page with the paging left off. The table writes the file.
+
+Either may be left out. `server={{ distinct }}` fixes the filters and leaves the export warning in place; `server={{ all }}` does the reverse; `server` on its own is the plain flag it always was.
+
+A column can still overrule it — `filter: { kind: "set", options: [...] }` on a column whose values you already have skips the fetch for that column, and `export={{ fetchRows }}` takes the export. The sections below cover doing it that way, one column at a time, when the table-wide version does not fit.
+
 ## Translating state into a query
 
 The state you receive is plain data, so turning it into SQL is a function you write once:
@@ -79,7 +109,7 @@ function toCondition(filter) {
 
 A set filter derives its choices from the rows it can see, and in server mode that is one page — so without help it offers whatever happened to be on screen, and a value on a later page cannot be chosen at all. Trapezium warns about this in development rather than letting it reach a user.
 
-Two ways to fix it, and both make the filter as complete as it is in the browser.
+The table-wide `server={{ distinct }}` above fixes every column at once and is what most tables want. Per column, when the list is already to hand or one column needs its own query:
 
 **Give it the list**, when you already have it:
 
@@ -99,7 +129,9 @@ Two ways to fix it, and both make the filter as complete as it is in the browser
 }
 ```
 
-It is called the first time somebody opens that column's panel, shows "Loading values…" while it works, and is remembered afterwards — so opening the panel again asks nobody anything. Change the function and it fetches afresh.
+It is called the first time somebody opens that column's panel, shows "Loading values…" while it works, and is remembered afterwards — so opening the panel again asks nobody anything. Change the function and it fetches afresh. Either form may return plain strings where the value is also the label.
+
+A column's own `options` win over `server={{ distinct }}`, so the two mix freely: the table-wide fetch handles the columns you never thought about, and a column with a known list says so.
 
 Once the choices are there, everything else already works: ticking one writes a normal filter into the state, `onStateChange` fires, your query runs, and rows that were never on screen come back.
 
@@ -141,7 +173,7 @@ Nothing is kept in the browser, a shared link reproduces exactly what the sender
 
 An export contains **every row matching the current filters and search**, in the current sort order, with the columns as arranged — not the page on screen. In client mode the table has all of that and writes the file itself.
 
-In server mode it does not: it holds one page, and exporting it would hand somebody twenty-five of four hundred rows without saying so. Trapezium warns in development, and gives you the half of the job only you can do:
+In server mode it does not: it holds one page, and exporting it would hand somebody twenty-five of four hundred rows without saying so. Trapezium warns in development until you supply the half of the job only you can do — `server={{ all }}` above, or per table:
 
 ```tsx
 <Table
