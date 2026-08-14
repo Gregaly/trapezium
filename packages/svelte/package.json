@@ -24,6 +24,7 @@
     "dist",
     "styles.css",
     "themes",
+    "LICENSE",
     "README.md"
   ],
   "module": "./dist/index.js",
@@ -62,5 +63,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }

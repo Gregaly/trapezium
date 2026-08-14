@@ -26,6 +26,7 @@
     "dist",
     "styles.css",
     "themes",
+    "LICENSE",
     "README.md"
   ],
   "main": "./dist/index.cjs",
@@ -33,18 +34,28 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.cjs"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    },
+    "./testing": {
+      "import": {
+        "types": "./dist/testing/index.d.ts",
+        "default": "./dist/testing/index.js"
+      },
+      "require": {
+        "types": "./dist/testing/index.d.cts",
+        "default": "./dist/testing/index.cjs"
+      }
     },
     "./styles.css": "./styles.css",
     "./themes/shadcn.css": "./themes/shadcn.css",
-    "./package.json": "./package.json",
-    "./testing": {
-      "types": "./dist/testing/index.d.ts",
-      "import": "./dist/testing/index.js",
-      "require": "./dist/testing/index.cjs"
-    }
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "tsup",
@@ -53,5 +64,8 @@
   },
   "publishConfig": {
     "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
   }
 }
