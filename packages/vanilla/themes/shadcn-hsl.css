@@ -1,0 +1,53 @@
+/*
+  shadcn/ui bridge, for the HSL-channel convention.
+
+  Tailwind 3 era shadcn stores its tokens as bare channels —
+  `--background: 210 20% 98%` — and wraps them at the point of use, as
+  `hsl(var(--background))`. Referencing one directly gives a table three numbers
+  where a colour should be, and every colour silently falls back.
+
+      import "@trapezium/react/styles.css"
+      import "@trapezium/core/themes/shadcn-hsl.css"
+
+  Use `themes/shadcn.css` instead when the tokens are already whole colours,
+  which is what newer shadcn and Tailwind 4 generate. If you are not sure, look
+  at your `globals.css`: channels mean this file, `oklch(…)` or `hsl(…)` means
+  the other one.
+*/
+
+.tpz {
+  --tpz-bg: hsl(var(--background));
+  --tpz-fg: hsl(var(--foreground));
+
+  --tpz-surface: hsl(var(--card));
+  --tpz-surface-fg: hsl(var(--card-foreground));
+
+  --tpz-muted: hsl(var(--muted));
+  --tpz-muted-fg: hsl(var(--muted-foreground));
+
+  --tpz-accent: hsl(var(--accent));
+  --tpz-accent-fg: hsl(var(--accent-foreground));
+
+  --tpz-primary: hsl(var(--primary));
+  --tpz-primary-fg: hsl(var(--primary-foreground));
+
+  --tpz-border: hsl(var(--border));
+  --tpz-input: hsl(var(--input));
+  --tpz-ring: hsl(var(--ring));
+
+  --tpz-danger: hsl(var(--destructive));
+
+  /*
+    shadcn ships no success or warning token, so these stay as Trapezium's own
+    unless the application defines them. Referencing a variable that does not
+    exist would resolve to nothing and paint the check mark invisible.
+  */
+  --tpz-success: hsl(var(--success, 137 26% 33%));
+  --tpz-warning: hsl(var(--warning, 38 66% 36%));
+
+  --tpz-radius: var(--radius, 0.625rem);
+
+  /* Inherit the app's typefaces rather than the system stack. */
+  --tpz-font-sans: var(--font-sans, ui-rounded, system-ui, sans-serif);
+  --tpz-font-mono: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, monospace);
+}

@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs"
+
 import { describe, expect, it } from "vitest"
 
 import { moveColumn, pruneState, reorderColumn, reorderColumnTo, resolveColumns } from "./columns.js"
@@ -184,5 +186,33 @@ describe("reorderColumnTo", () => {
     expect(reorderColumnTo(keys, "a", "a", "after")).toEqual(keys)
     expect(reorderColumnTo(keys, "a", "z", "after")).toEqual(keys)
     expect(reorderColumnTo(keys, "z", "a", "after")).toEqual(keys)
+  })
+})
+
+describe("the design-system bridges", () => {
+  const read = (name: string) =>
+    readFileSync(new URL(`../themes/${name}`, import.meta.url), "utf8")
+
+  const mappings = (css: string) =>
+    new Map(
+      [...css.matchAll(/(--tpz-[\w-]+):\s*([^;]+);/g)].map(([, token, value]) => [token, value.trim()]),
+    )
+
+  /*
+    Two bridges, because shadcn has had two conventions: whole colours, and bare
+    HSL channels that the application wraps at the point of use. Mapping a
+    channel triplet straight through gives a table three numbers where a colour
+    should be, and every colour silently disappears — so they must stay in step
+    with each other, token for token.
+  */
+  it("map exactly the same tokens", () => {
+    expect([...mappings(read("shadcn-hsl.css")).keys()]).toEqual([...mappings(read("shadcn.css")).keys()])
+  })
+
+  it("wrap every colour in hsl(), and nothing that is not a colour", () => {
+    for (const [token, value] of mappings(read("shadcn-hsl.css"))) {
+      const isColour = !/^--tpz-(radius|font-)/.test(token)
+      expect({ token, wrapped: value.startsWith("hsl(") }).toEqual({ token, wrapped: isColour })
+    }
   })
 })

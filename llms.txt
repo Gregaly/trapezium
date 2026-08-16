@@ -135,7 +135,10 @@ CSS custom properties on `.tpz` (--tpz-surface, --tpz-muted, --tpz-border, --tpz
 classNames={{ root, frame, toolbar, search, scroll, table, thead, tbody, headerRow, headerCell, row,
 cell, selectCell, pagination, empty, loading, footer }} adds classes; `unstyled` drops the defaults.
 responsive="cards" stacks rows below 40rem of container width, in pure CSS.
-Bridge to shadcn/ui: import "@trapezium/react/themes/shadcn.css".
+Bridge to shadcn/ui: import "@trapezium/react/themes/shadcn.css" when the app's tokens are whole
+colours (oklch(...), hsl(...)), or "@trapezium/react/themes/shadcn-hsl.css" when they are bare HSL
+channels like `--background: 210 20% 98%`, which is the Tailwind 3 convention. Picking the wrong one
+leaves every colour unset.
 
 ## Headless
 

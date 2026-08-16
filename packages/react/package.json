@@ -44,6 +44,7 @@
     },
     "./styles.css": "./styles.css",
     "./themes/shadcn.css": "./themes/shadcn.css",
+    "./themes/shadcn-hsl.css": "./themes/shadcn-hsl.css",
     "./package.json": "./package.json"
   },
   "scripts": {

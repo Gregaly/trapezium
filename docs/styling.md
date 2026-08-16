@@ -41,7 +41,16 @@ import "@trapezium/react/styles.css"
 import "@trapezium/react/themes/shadcn.css"   // for shadcn/ui apps
 ```
 
-That file is twenty lines of `--tpz-surface: var(--card)`. Copy it and point at your own variables for any other system.
+**shadcn apps come in two flavours, and picking the wrong one loses every colour.** Open your `globals.css` and look at a token:
+
+| What `--background` holds | Import |
+|---|---|
+| `oklch(0.98 0 0)` or `hsl(210 20% 98%)` — a whole colour | `themes/shadcn.css` |
+| `210 20% 98%` — bare channels, wrapped as `hsl(var(--background))` where they are used | `themes/shadcn-hsl.css` |
+
+The channel form is what Tailwind 3 era shadcn generates and it is still the common one. Handing those three numbers to a colour property is not an error CSS reports — the declaration is simply dropped and the table falls back, so it is worth checking rather than guessing.
+
+Either file is twenty lines of `--tpz-surface: var(--card)`. Copy one and point it at your own variables for any other system.
 
 ## 3. Take over with your own classes
 
