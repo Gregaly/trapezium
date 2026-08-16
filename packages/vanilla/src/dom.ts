@@ -16,6 +16,11 @@ type Attributes = Record<string, string | number | boolean | null | undefined>
  * `class` and `text` are handled specially because they are what almost every
  * call needs; anything else is set as an attribute, and `false`, `null` and
  * `undefined` mean "leave it off" rather than "set it to the string false".
+ *
+ * There is deliberately no way to pass markup. Everything a table renders comes
+ * from somebody's database, and a helper that writes `innerHTML` is how a name
+ * field ends up executing a script. Values become text; a caller who wants
+ * richer output supplies a node from their own renderer.
  */
 export function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -28,7 +33,6 @@ export function el<K extends keyof HTMLElementTagNameMap>(
     if (value === null || value === undefined || value === false) continue
     if (name === "class") node.className = String(value)
     else if (name === "text") node.textContent = String(value)
-    else if (name === "html") node.innerHTML = String(value)
     else node.setAttribute(name, value === true ? "" : String(value))
   }
 
