@@ -27,6 +27,7 @@
     "styles.css",
     "themes",
     "LICENSE",
+    "llms.txt",
     "README.md"
   ],
   "main": "./dist/index.cjs",
@@ -59,7 +60,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ../../scripts/copy-llms.mjs core",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

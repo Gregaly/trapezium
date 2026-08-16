@@ -18,6 +18,9 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# copied into every package at build time, from llms.txt at the root
+packages/*/llms.txt
+
 local-packs/
 test-results/
 playwright-report/

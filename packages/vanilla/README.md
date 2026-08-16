@@ -28,4 +28,6 @@ Columns, types, formatting, sorting, search and pagination are all inferred from
 
 The instance is yours: `setData`, `setOptions`, `getState`, `setState`, `getRows`, `getSelection`, `refresh`, `destroy`.
 
+**Working with a coding agent?** The whole API is one file inside this package: `node_modules/@trapezium/vanilla/llms.txt`.
+
 Full documentation: [github.com/Gregaly/trapezium](https://github.com/Gregaly/trapezium#readme) · MIT

@@ -40,4 +40,6 @@ render: ({ row }) => {
 
 Svelte 5, SvelteKit, Vite, Astro.
 
+**Working with a coding agent?** The whole API is one file inside this package: `node_modules/@trapezium/svelte/llms.txt`.
+
 Full documentation: [github.com/Gregaly/trapezium](https://github.com/Gregaly/trapezium#readme) · MIT

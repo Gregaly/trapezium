@@ -27,4 +27,6 @@ Events: `@update:state`, `@selection-change`, `@row-click`.
 
 Vue 3.4+, Nuxt 3, Vite, Astro.
 
+**Working with a coding agent?** The whole API is one file inside this package: `node_modules/@trapezium/vue/llms.txt`.
+
 Full documentation: [github.com/Gregaly/trapezium](https://github.com/Gregaly/trapezium#readme) · MIT

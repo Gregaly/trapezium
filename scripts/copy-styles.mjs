@@ -19,3 +19,8 @@ const to = resolve(root, "packages", target)
 await mkdir(resolve(to, "themes"), { recursive: true })
 await cp(resolve(from, "styles.css"), resolve(to, "styles.css"))
 await cp(resolve(from, "themes"), resolve(to, "themes"), { recursive: true })
+
+// The whole API in one file, shipped inside the package: an agent working in a
+// project that depends on this can read node_modules/@trapezium/<name>/llms.txt
+// and get everything, rather than guessing from the type signatures.
+await cp(resolve(root, "llms.txt"), resolve(to, "llms.txt"))

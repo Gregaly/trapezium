@@ -28,4 +28,6 @@ import "@trapezium/core/styles.css"
 import "@trapezium/core/themes/shadcn.css"   // optional bridge
 ```
 
+**Working with a coding agent?** The whole API is one file inside this package: `node_modules/@trapezium/core/llms.txt`.
+
 Full documentation: [github.com/Gregaly/trapezium](https://github.com/Gregaly/trapezium#readme) · MIT

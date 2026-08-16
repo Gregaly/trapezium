@@ -42,4 +42,6 @@ React 18 and 19. Next.js App Router and Pages Router, Remix, React Router, Vite,
 />
 ```
 
+**Working with a coding agent?** The whole API is one file inside this package: `node_modules/@trapezium/react/llms.txt`.
+
 Full documentation: [github.com/Gregaly/trapezium](https://github.com/Gregaly/trapezium#readme) · MIT

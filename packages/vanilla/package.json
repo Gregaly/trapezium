@@ -26,6 +26,7 @@
     "styles.css",
     "themes",
     "LICENSE",
+    "llms.txt",
     "README.md"
   ],
   "main": "./dist/index.cjs",

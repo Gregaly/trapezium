@@ -38,6 +38,28 @@ the data. Add configuration only to override a default.
       ]}
     />
 
+## Table props
+
+data · columns · getRowId(row, index) · state · defaultState · onStateChange(state) · server ·
+total · loading · error · search · filters · sortable · resizable · reorderable · columnMenu ·
+columnControl · pagination · selection · onSelectionChange(ids, rows) · export · density ·
+densityControl · responsive("scroll"|"cards") · stickyHeader · maxHeight · types · format ·
+rowHref(row) · onRowClick(row, event) · rowClassName(row, index) · emptyState · emptyMessage ·
+toolbar · appendRow · footer · buildHref(state) · linkComponent · className · classNames ·
+unstyled · theme("light"|"dark") · id · aria-label · caption
+
+Booleans default to sensible: filters, sortable, resizable, reorderable, columnMenu, columnControl
+and stickyHeader are on; search, selection, export, densityControl are off until asked for.
+
+## Export
+
+export={{ filename, scope: "matching" | "page", clipboard, fetchRows(state), onExport(state, rows) }}
+
+Default scope is "matching": every row the filters and search leave, in the current sort order and
+column arrangement, not the page on screen. Numbers, dates and currency are written as values a
+spreadsheet can add up rather than as the formatted text. A selection, if any, wins for the
+clipboard copy.
+
 ## Column definition
 
 key (required, supports dotted paths and synthetic ids) · header · type · accessor(row) ·
@@ -150,6 +172,22 @@ allColumns, state, update, patch, types, format, pagination, selection, server }
 
 Grouping, aggregation, pivoting, tree data, formulas, Excel export. Inline editing and expandable
 rows are planned but not in v1.
+
+## Migrating from AG Grid
+
+columnDefs→columns · field→key · headerName→header · valueGetter→key with a dotted path, or
+accessor(row) · valueFormatter→format(ctx) · cellRenderer→render(ctx) · cellClass→className ·
+pinned:"left"→pin:"start" · filter:"agSetColumnFilter"→filter:"set" ·
+filter:"agNumberColumnFilter"→filter:"range" · filter:"agDateColumnFilter"→filter:"date" ·
+rowSelection:"multiple"→selection · quickFilterText→search prop or state.search ·
+getRowStyle/getRowClass→rowClassName(row, index) · onRowClicked→onRowClick (clicks on links,
+buttons and inputs inside a row are already ignored) · rowHeight→density · domLayout→maxHeight ·
+serverSideDatasource→server={{ distinct, all }} with onStateChange · exportDataAsCsv→export ·
+ModuleRegistry.registerModules→nothing.
+
+A per-column `comparator` usually wants to be a custom type instead: defineType once and every
+column of that type sorts, filters, formats and exports consistently. There is no grid API object
+and no ref to call methods on — everything is state, and `onStateChange` reports it.
 
 ## Docs
 

@@ -25,6 +25,7 @@
     "styles.css",
     "themes",
     "LICENSE",
+    "llms.txt",
     "README.md"
   ],
   "module": "./dist/index.js",
