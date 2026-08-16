@@ -192,3 +192,93 @@ describe("server-side data", () => {
     })
   })
 })
+
+describe("props that change after the first render", () => {
+  /** Every prop below is one a real app toggles while the table is on screen. */
+  it("follows columns, pagination, search, selection and density", async () => {
+    const columns = ref<(string | { key: string; header?: string })[]>(["name", "plan"])
+    const pageSize = ref(1)
+    const selection = ref<"multiple" | false>(false)
+    const density = ref<"normal" | "compact">("normal")
+
+    const host = mount(
+      defineComponent(() => () =>
+        h(Table, {
+          data: people,
+          columns: columns.value,
+          pagination: { pageSize: pageSize.value },
+          selection: selection.value,
+          density: density.value,
+          search: true,
+        }),
+      ),
+    )
+    await nextTick()
+
+    expect(rows(host)).toHaveLength(1)
+
+    pageSize.value = 10
+    await nextTick()
+    expect(rows(host)).toHaveLength(2)
+
+    columns.value = [{ key: "name", header: "Who" }]
+    await nextTick()
+    expect([...host.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim())).toEqual(["Who"])
+
+    selection.value = "multiple"
+    await nextTick()
+    expect(host.querySelectorAll("tbody .tpz-select-cell input")).toHaveLength(2)
+
+    density.value = "compact"
+    await nextTick()
+    expect(host.querySelector(".tpz")?.getAttribute("data-density")).toBe("compact")
+  })
+
+  it("searches, and keeps the query when the data underneath changes", async () => {
+    const data = ref<Person[]>(people)
+    const host = mount(
+      defineComponent(() => () => h(Table, { data: data.value, columns: ["name"], search: { debounce: 0 } })),
+    )
+    await nextTick()
+
+    const box = host.querySelector<HTMLInputElement>("input[type='search']")!
+    box.value = "ada"
+    box.dispatchEvent(new Event("input", { bubbles: true }))
+    await vi.waitFor(() => expect(rows(host)).toHaveLength(1))
+
+    data.value = [...people, { id: "3", name: "Adam", plan: "pro" }]
+    await nextTick()
+
+    // Still filtered, and the new row is judged by the same query.
+    expect(rows(host).map((row) => row[0])).toEqual(["Ada", "Adam"])
+  })
+
+  it("takes a state prop as the source of truth", async () => {
+    const state = ref<{ sort: { key: string; direction: "asc" | "desc" }[] }>({
+      sort: [{ key: "name", direction: "desc" }],
+    })
+    const host = mount(
+      defineComponent(() => () => h(Table, { data: people, columns: ["name"], state: state.value })),
+    )
+    await nextTick()
+    expect(rows(host).map((row) => row[0])).toEqual(["Tom", "Ada"])
+
+    state.value = { sort: [{ key: "name", direction: "asc" }] }
+    await nextTick()
+    expect(rows(host).map((row) => row[0])).toEqual(["Ada", "Tom"])
+  })
+})
+
+describe("the row-height switch", () => {
+  it("appears when asked and changes the rows", async () => {
+    const host = mount(defineComponent(() => () => h(Table, { data: people, densityControl: true })))
+    await nextTick()
+
+    host.querySelector<HTMLButtonElement>('[aria-label="Row height"]')!.click()
+    const items = [...document.querySelectorAll<HTMLElement>(".tpz-portal [data-menu-item]")]
+    expect(items.map((item) => item.textContent?.trim())).toEqual(["Compact", "Normal", "Relaxed"])
+
+    items[2]!.click()
+    expect(host.querySelector(".tpz")?.getAttribute("data-density")).toBe("relaxed")
+  })
+})

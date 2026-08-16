@@ -23,6 +23,7 @@ import {
   setPage,
   setPageSize,
   setPin,
+  setDensity,
   setSearch,
   setSelected,
   setWidth,
@@ -124,6 +125,8 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
   types?: Record<string, TypeDef>
   format?: Partial<FormatContext>
   density?: Density
+  /** Offer the row-height switch in the toolbar. Defaults to false. */
+  densityControl?: boolean
   responsive?: "scroll" | "cards"
   stickyHeader?: boolean
   maxHeight?: number | string
@@ -229,6 +232,42 @@ export function createTable<TRow extends AnyRow>(
         "Columns",
       ])
       button.addEventListener("click", () => openColumnMenu(button))
+      toolbarEnd.append(button)
+    }
+
+    if (settings.densityControl) {
+      const button = el("button", {
+        type: "button",
+        class: "tpz-btn tpz-btn-icon",
+        "aria-label": "Row height",
+        "aria-haspopup": "true",
+      })
+      const glyph = icon("longText")
+      if (glyph) button.append(glyph)
+
+      button.addEventListener("click", () => {
+        const choices: Array<[Density, string]> = [
+          ["compact", "Compact"],
+          ["normal", "Normal"],
+          ["relaxed", "Relaxed"],
+        ]
+
+        openMenuAt({ anchor: button, align: "end", label: "Row height", theme: settings.theme }, (close) =>
+          choices.map(([value, label]) =>
+            menuItem(
+              label,
+              () => {
+                close()
+                update(setDensity(state, value))
+              },
+              // A tick beside the current one, and a gap where the tick would
+              // be beside the others, so the labels stay in one column.
+              { icon: (settings.density ?? state.density) === value ? icon("check") : undefined },
+            ),
+          ),
+        )
+      })
+
       toolbarEnd.append(button)
     }
 
@@ -379,7 +418,7 @@ export function createTable<TRow extends AnyRow>(
     const selectionMode = settings.selection === true ? "multiple" : settings.selection || undefined
     const columnCount = columns.length + (selectionMode ? 1 : 0)
 
-    root.dataset["density"] = state.density
+    root.dataset["density"] = settings.density ?? state.density
     root.dataset["responsive"] = settings.responsive ?? "scroll"
     if (settings.theme) root.dataset["theme"] = settings.theme
     if (settings.stickyHeader !== false) root.dataset["stickyHeader"] = "true"
@@ -1297,7 +1336,24 @@ export function createTable<TRow extends AnyRow>(
       render()
     },
     setOptions(next) {
+      const previous = settings
       settings = { ...settings, ...next }
+
+      /*
+        Two settings also live in the state, which is the table's to change once
+        it is running — so they are followed only when the caller changes them,
+        rather than being reapplied on every call and undoing what the user
+        just did with the page-size picker.
+      */
+      if (next.state && next.state !== previous.state) state = { ...state, ...next.state }
+
+      const pageSize = paginationOf(settings)?.pageSize
+      if (pageSize !== undefined && pageSize !== paginationOf(previous)?.pageSize) {
+        // Back to the first page: page four of a twenty-five-row list is not
+        // page four of a hundred-row one.
+        state = { ...state, pageSize, page: 1 }
+      }
+
       buildToolbar()
       render()
     },

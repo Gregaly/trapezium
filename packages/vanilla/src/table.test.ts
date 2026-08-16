@@ -844,3 +844,54 @@ describe("telling the table once where the answers come from", () => {
     vi.unstubAllGlobals()
   })
 })
+
+describe("row height", () => {
+  it("takes the density it is given, and follows a change to it", () => {
+    const table = createTable(host, { data: people, density: "compact" })
+    expect(host.querySelector(".tpz")?.getAttribute("data-density")).toBe("compact")
+
+    table.setOptions({ density: "relaxed" })
+    expect(host.querySelector(".tpz")?.getAttribute("data-density")).toBe("relaxed")
+  })
+
+  it("offers the switch when asked, and changes the rows with it", () => {
+    createTable(host, { data: people, densityControl: true })
+
+    host.querySelector<HTMLButtonElement>('[aria-label="Row height"]')!.click()
+    const items = [...document.querySelectorAll<HTMLElement>(".tpz-portal [data-menu-item]")]
+    expect(items.map((item) => item.textContent?.trim())).toEqual(["Compact", "Normal", "Relaxed"])
+
+    items[0]!.click()
+    expect(host.querySelector(".tpz")?.getAttribute("data-density")).toBe("compact")
+  })
+
+  it("has no switch unless one was asked for", () => {
+    createTable(host, { data: people })
+    expect(host.querySelector('[aria-label="Row height"]')).toBeNull()
+  })
+})
+
+describe("options that change while the table is running", () => {
+  it("follows a new page size, and starts again from the first page", () => {
+    const many = Array.from({ length: 30 }, (_, index) => ({ id: String(index), name: `P${String(index)}` }))
+    const table = createTable(host, { data: many, columns: ["name"], pagination: { pageSize: 5 } })
+
+    host.querySelector<HTMLButtonElement>('[aria-label="Next page"]')!.click()
+    expect(cells()[0]?.[0]).toBe("P5")
+
+    table.setOptions({ pagination: { pageSize: 10 } })
+    expect(host.querySelectorAll("tbody tr")).toHaveLength(10)
+    expect(cells()[0]?.[0]).toBe("P0")
+  })
+
+  it("follows a new state, and leaves the rest of the arrangement alone", () => {
+    const table = createTable(host, { data: people, columns: ["name", "plan"] })
+
+    table.setOptions({ state: { sort: [{ key: "name", direction: "desc" }] } })
+    expect(cells().map((row) => row[0])).toEqual(["Zoe", "Tom", "Ada"])
+
+    // Something else changing must not undo it.
+    table.setOptions({ search: true })
+    expect(cells().map((row) => row[0])).toEqual(["Zoe", "Tom", "Ada"])
+  })
+})

@@ -108,3 +108,39 @@ describe("server-side data", () => {
     })
   })
 })
+
+describe("options that change while the table is running", () => {
+  it("follows page size, density and state", () => {
+    const many = Array.from({ length: 30 }, (_, index) => ({
+      id: String(index),
+      name: `P${String(index)}`,
+      plan: "pro",
+    }))
+
+    const node = mount({ data: many, columns: ["name"], pagination: { pageSize: 5 } })
+    expect(node.querySelectorAll("tbody tr")).toHaveLength(5)
+
+    action?.update({ data: many, columns: ["name"], pagination: { pageSize: 10 } })
+    expect(node.querySelectorAll("tbody tr")).toHaveLength(10)
+
+    action?.update({ data: many, columns: ["name"], pagination: { pageSize: 10 }, density: "compact" })
+    expect(node.querySelector(".tpz")?.getAttribute("data-density")).toBe("compact")
+
+    action?.update({
+      data: many,
+      columns: ["name"],
+      pagination: { pageSize: 10 },
+      state: { sort: [{ key: "name", direction: "desc" }] },
+    })
+    // Natural order, so P29 sorts above P9 rather than below it.
+    expect(rows()[0]?.[0]).toBe("P29")
+  })
+
+  it("offers the row-height switch when asked", () => {
+    const node = mount({ data: people, densityControl: true })
+
+    node.querySelector<HTMLButtonElement>('[aria-label="Row height"]')!.click()
+    const items = [...document.querySelectorAll<HTMLElement>(".tpz-portal [data-menu-item]")]
+    expect(items.map((item) => item.textContent?.trim())).toEqual(["Compact", "Normal", "Relaxed"])
+  })
+})

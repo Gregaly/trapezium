@@ -64,6 +64,19 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
   )
 
   /*
+    A page size given as a prop is configuration, so a change to it is the
+    caller changing their mind and the table follows — but only on a change,
+    or every render would undo the user's own choice from the page-size picker.
+    Adjusting state during render is React's own answer to this: the render is
+    discarded and redone before anything is painted, so nobody sees the old size.
+  */
+  const seededPageSize = useRef(pagination?.pageSize)
+  if (pagination && pagination.pageSize !== seededPageSize.current) {
+    seededPageSize.current = pagination.pageSize
+    setInternal((current) => ({ ...current, pageSize: pagination.pageSize, page: 1 }))
+  }
+
+  /*
     The latest state, readable synchronously from an event handler. Two
     controls changed in the same tick — a filter applied while a debounce was
     pending — would otherwise each build their next state from the render's

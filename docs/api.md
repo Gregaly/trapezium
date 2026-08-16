@@ -53,7 +53,7 @@ import { Table } from "@trapezium/react"
 | Prop | Type | Default | |
 |---|---|---|---|
 | `density` | `"compact" \| "normal" \| "relaxed"` | `"normal"` | |
-| `densityControl` | `boolean` | `false` | Offer it in the toolbar. |
+| `densityControl` | `boolean` | `false` | Offer the row-height switch in the toolbar. |
 | `responsive` | `"scroll" \| "cards"` | `"scroll"` | |
 | `stickyHeader` | `boolean` | `true` | |
 | `maxHeight` | `number \| string` | — | Caps the scroll area. |
