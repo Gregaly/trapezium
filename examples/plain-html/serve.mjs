@@ -26,7 +26,19 @@ const TYPES = {
 
 createServer(async (request, response) => {
   const path = normalize(decodeURIComponent((request.url ?? "/").split("?")[0] ?? "/"))
-  const file = join(root, path === "/" ? "examples/plain-html/index.html" : path)
+
+  /*
+    The root redirects rather than serving the page in place. Serving it at "/"
+    is one line shorter and quietly wrong: the page's own `fetch("people.json")`
+    would then resolve against the root and 404, which looks like a broken
+    library rather than a broken server.
+  */
+  if (path === "/") {
+    response.writeHead(302, { location: "/examples/plain-html/" }).end()
+    return
+  }
+
+  const file = join(root, path.endsWith("/") ? `${path}index.html` : path)
 
   // `normalize` has already collapsed `..`, so anything still outside the
   // repository is someone trying it on.
