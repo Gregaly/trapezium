@@ -121,9 +121,14 @@ MIT.
 ```sh
 pnpm install
 pnpm build       # every package
-pnpm test        # core, React, Vue, Svelte and vanilla, including an axe pass
+pnpm test        # core, React, Vue, Svelte and vanilla
+pnpm test:e2e    # the examples, driven in Chromium, Firefox and WebKit
 pnpm typecheck
-pnpm check       # typecheck and test together
+pnpm check       # all three
 ```
+
+The end-to-end tests start the examples themselves and cover what only a real
+browser can show: layout, scrolling, dragging, an axe pass per adapter, and
+screenshots at three widths in both themes. See [`e2e`](e2e).
 
 The core is framework-agnostic and has no dependencies; each adapter binds it to a rendering layer and renders **the same DOM with the same class names**, so the stylesheet ships once and a fix lands everywhere. If you change markup in one adapter, change it in the others.
