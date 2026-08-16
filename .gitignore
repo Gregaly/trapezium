@@ -18,6 +18,7 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+local-packs/
 test-results/
 playwright-report/
 blob-report/
