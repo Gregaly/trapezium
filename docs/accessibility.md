@@ -50,6 +50,10 @@ Accessibility is not a feature here; a feature that is not accessible does not s
 
 ## Testing it
 
-Every release runs an automated `axe-core` pass over the table with everything switched on, over the empty, loading and error states, and over an open column panel — plus explicit keyboard-path tests for sorting, opening a panel, moving through it, escaping out of it and getting focus back. Contrast is checked against the built stylesheet rather than in the test environment, which has no layout to measure.
+Every release runs an automated `axe-core` pass over the table with everything switched on, over the empty, loading and error states, and over an open column panel — plus explicit keyboard-path tests for sorting, opening a panel, moving through it, escaping out of it and getting focus back.
+
+That pass then runs again in a real browser, against every example — React, Vue, Svelte and plain JavaScript — with a column menu open as well as closed, in Chromium, Firefox and WebKit. It is the run that can see contrast, because it is the only one with a stylesheet that really loaded and a layout to measure.
+
+One caveat worth knowing rather than hiding: Safari does not move focus to buttons and links with Tab unless the reader has switched on **Full Keyboard Access** in macOS or iOS. That is Safari's setting rather than anything in the markup, and it applies to every site — but if your users are on Safari and rely on the keyboard, it is worth knowing that they may have to turn it on.
 
 Automated checks catch a fraction of what matters. If something reads badly in a real screen reader, that is a bug worth reporting.

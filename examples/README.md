@@ -32,10 +32,15 @@ Then pick one. Each runs on its own port, so several can be open at the same tim
 ## Testing the library itself
 
 ```sh
-pnpm test        # 185 tests: core, React, Vue, Svelte, vanilla, plus an axe pass
-pnpm test:watch
+pnpm test        # the unit suites: core, React, Vue, Svelte, vanilla
+pnpm test:e2e    # these examples, driven in Chromium, Firefox and WebKit
 pnpm typecheck
-pnpm check       # typecheck and test together
+pnpm check       # all three
 ```
+
+The end-to-end tests start every example themselves, so nothing needs to be
+running first. They are also the only tests that can see layout, scrolling,
+dragging and a real accessibility pass — if you change the markup or the
+stylesheet, they are the ones that will tell you.
 
 Each example is deliberately small and reads top to bottom. If something in the library is awkward to use, it should be visible here first.
