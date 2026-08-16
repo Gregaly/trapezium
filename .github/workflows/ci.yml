@@ -38,3 +38,32 @@ jobs:
       # example — they are the only proof the published entry points work in a
       # real app.
       - run: pnpm build:examples
+
+  browsers:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm build:examples
+
+      - run: pnpm exec playwright install --with-deps chromium firefox webkit
+
+      # The examples, driven as a user drives them, in all three engines.
+      # Screenshots are compared only where a baseline exists for the platform,
+      # so this does not fail on font rendering.
+      - run: pnpm test:e2e
+
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 7
