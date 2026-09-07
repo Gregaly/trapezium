@@ -103,7 +103,9 @@ Every example in [`examples/`](examples) runs against the local packages.
 | [`playground`](examples/playground) | React | Every feature on one page. `pnpm build`, then open `dist/index.html` |
 | [`next-server`](examples/next-server) | Next.js | Sorting, filtering and paging in the database, all of it in the URL. `pnpm dev` |
 | [`vue-app`](examples/vue-app) | Vue 3 | Including a cell that renders a real Vue component. `pnpm dev` |
+| [`nuxt-app`](examples/nuxt-app) | Nuxt 4 | Server-rendered, the view in the URL, every control a link. `pnpm dev` |
 | [`svelte-app`](examples/svelte-app) | Svelte 5 | Runes, `bind:tableState`, and the action. `pnpm dev` |
+| [`sveltekit-app`](examples/sveltekit-app) | SvelteKit 2 | Server-rendered, the view in the URL, every control a link. `pnpm dev` |
 | [`plain-html`](examples/plain-html) | None | One file, one script tag, no build step. `pnpm dev` |
 
 ## Browsers

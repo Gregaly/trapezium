@@ -139,6 +139,10 @@ const users = [/* … */]
 </script>
 ```
 
+### On a server
+
+Every adapter renders on the server with the right rows already in the markup — Next.js, Nuxt and SvelteKit each have an example in the repository. See [Server rendering and URL state](ssr.md).
+
 ### Anything else
 
 `@trapezium/core` is the whole engine with no renderer: the column model, the type registry, and pure functions for filtering, sorting, paginating and serialising state. See [the API reference](api.md#core).

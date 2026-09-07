@@ -12,6 +12,26 @@ Three details make that true, and they are worth knowing if you extend the libra
 
 In the Next.js App Router the table is a client component (it has to be — it has state), which still renders on the server. Nothing special is required.
 
+### Vue, Svelte and plain JavaScript
+
+The same is true in Nuxt and SvelteKit, and for the same reason: the table is in the server's HTML with the right rows in it, and the live table takes over on mount. Those three adapters share one DOM renderer, and on a server that renderer runs against a small in-memory document and writes the result out as HTML. It is the same code that builds the live table, so the server's markup and the browser's are the same bytes — a test in the repository compares them — and swapping one for the other moves nothing.
+
+Two things a server cannot do, and how they are handled:
+
+- **A cell renderer that builds a DOM node** — or returns a Vue component — is written as the cell's text on the server. The component mounts a moment later with the live table.
+- **The slots** (`toolbar`, `appendRow`, `footer`, `emptyState`) are written when they are strings and arrive with the live table when they are nodes. Vue's template slots arrive with the live table.
+
+Plain JavaScript gets the same thing as a function: `renderToString(options)` returns the HTML, and `createTable` on an element that already holds it replaces it in place.
+
+```js
+// On the server
+import { renderToString, stateFromUrl } from "@trapezium/vanilla"
+const html = renderToString({ data: rows, columns, state: stateFromUrl(url.search) })
+
+// In the browser, on the element that holds it
+createTable("#people", { data: rows, columns, state: stateFromUrl(location.search) })
+```
+
 ## Putting the state in the URL
 
 This is what makes a view shareable, the back button work, and a server-rendered table correct on its first paint.
@@ -81,6 +101,17 @@ Selection and column widths are left out by default — a selection means nothin
 stateToQueryString(state, { include: ["sort", "filters", "search", "page"] })
 ```
 
+### A table with its own defaults
+
+Only what differs from the defaults is written, and the library's default page size is twenty-five. A table showing fifteen rows a page has fifteen as its resting state, so tell the codec — in both directions, with the same object:
+
+```tsx
+const URL_OPTIONS = { defaults: { pageSize: 15 } }
+
+stateFromUrl(searchParams, URL_OPTIONS)      // no size in the URL means 15
+stateToQueryString(state, URL_OPTIONS)       // a size of 15 writes nothing
+```
+
 ## A table with no JavaScript
 
 Give the table `buildHref` and every control renders as a link instead of a button. Sorting, filtering, paging and hiding columns then work by navigation — on a server-rendered page, with the client bundle never loaded.
@@ -98,6 +129,57 @@ Give the table `buildHref` and every control renders as a link instead of a butt
 ```
 
 The menus still need JavaScript to open, so this is progressive enhancement rather than a no-JS-only mode: the header sorts, the pagination pages, and everything else improves once the bundle arrives.
+
+`buildHref` is the same option in every adapter. `linkComponent` is React's alone: it exists so `next/link` can wrap the anchors. SvelteKit intercepts plain anchors itself; in Nuxt, catch clicks on the table's links and hand them to the router, as the example does.
+
+### Nuxt
+
+```vue
+<script setup lang="ts">
+import { TrapeziumTable, applyStateToUrl, pickUrlState, stateFromUrl } from "@trapezium/vue"
+
+const route = useRoute()
+const router = useRouter()
+const state = computed(() => stateFromUrl(route.query))
+const href = (next) => applyStateToUrl("/invoices", next)
+</script>
+
+<template>
+  <TrapeziumTable
+    :data="invoices"
+    :state="pickUrlState(state)"
+    :build-href="href"
+    @update:state="(next) => router.push(href(next))"
+  />
+</template>
+```
+
+### SvelteKit
+
+```ts
+// +page.ts
+import { stateFromUrl } from "@trapezium/svelte"
+export const load = ({ url }) => ({ state: stateFromUrl(url.searchParams) })
+```
+
+```svelte
+<!-- +page.svelte -->
+<script lang="ts">
+  import { goto } from "$app/navigation"
+  import { Table, applyStateToUrl, pickUrlState } from "@trapezium/svelte"
+  let { data } = $props()
+  const href = (next) => applyStateToUrl("/invoices", next)
+</script>
+
+<Table
+  data={invoices}
+  state={pickUrlState(data.state)}
+  buildHref={href}
+  onStateChange={(next) => goto(href(next))}
+/>
+```
+
+Both examples are in the repository, under `examples/nuxt-app` and `examples/sveltekit-app`, and both are driven by the browser tests with JavaScript switched off.
 
 ## Saved views
 
