@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises"
 
-import type { Locator, Page } from "@playwright/test"
+import { expect, type Locator, type Page } from "@playwright/test"
 
 /**
  * A table, as a test talks to it.
@@ -55,11 +55,20 @@ export class Table {
     return this.root.locator("thead th").filter({ hasText: name }).first()
   }
 
-  /** Opens a column's menu and returns the panel, which is portalled to the body. */
+  /**
+   * Opens a column's menu and returns the panel, which is portalled to the body.
+   *
+   * Retried, because on a server-rendered page the button is on screen before
+   * the script that makes it work has arrived, and a click before then does
+   * nothing.
+   */
   async openMenu(column: string): Promise<Locator> {
-    await this.root.getByRole("button", { name: new RegExp(`${column} column options`, "i") }).click()
+    const trigger = this.root.getByRole("button", { name: new RegExp(`${column} column options`, "i") })
     const panel = this.page.locator(".tpz-portal").last()
-    await panel.waitFor()
+    await expect(async () => {
+      await trigger.click()
+      await expect(panel).toBeVisible({ timeout: 1_000 })
+    }).toPass({ timeout: 30_000 })
     return panel
   }
 
