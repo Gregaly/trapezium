@@ -63,7 +63,7 @@ import {
 } from "@trapezium/core"
 
 import { currentDocument, el, fill, fragment, icon, text } from "./dom.js"
-import { closeMenu, menuItem, menuLabel, menuSeparator, openMenuAt } from "./menu.js"
+import { closeMenu, menuItem, menuLabel, menuLink, menuSeparator, openMenuAt } from "./menu.js"
 
 /**
  * The table, in plain DOM.
@@ -170,6 +170,19 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
   appendRow?: Node | string
   /** Content below the table, inside the frame. */
   footer?: Node | string
+
+  /**
+   * Renders every control that changes the view as a link to this URL instead
+   * of a button.
+   *
+   * With it, a server-rendered table sorts, pages and hides columns with no
+   * client JavaScript at all — the server re-renders from the query string.
+   * Pair it with `renderToString` on the server and `stateFromUrl` for the
+   * state. The menus still need JavaScript to open, so this is progressive
+   * enhancement: the header sorts and the pagination pages before the script
+   * arrives, and everything else improves once it has.
+   */
+  buildHref?: (state: TableState) => string
 
   /** Added to the root element. */
   className?: string
@@ -1071,11 +1084,26 @@ export function createTable<TRow extends AnyRow>(
     // and "Move right" in the column panel, so the icon announces nothing.
     inner.append(el("span", { class: "tpz-th-icon", "aria-hidden": "true" }, [icon(column.icon)]))
 
-    const label = el(sortable ? "button" : "span", { class: "tpz-th-button", type: sortable ? "button" : undefined }, [
+    const labelChildren = [
       el("span", { class: "tpz-th-label", text: column.header }),
       sort ? icon(sort.direction === "asc" ? "sortAscending" : "sortDescending", 12, "tpz-th-marker") : null,
-    ])
-    if (sortable) label.addEventListener("click", () => update(toggleSort(state, column.key)))
+    ]
+
+    // The class goes on the anchor itself rather than on a span inside it, or
+    // the browser's own link styling underlines every column header.
+    const label =
+      sortable && settings.buildHref
+        ? el(
+            "a",
+            {
+              href: settings.buildHref(toggleSort(state, column.key)),
+              class: "tpz-th-button",
+              "aria-label": `Sort by ${column.header}`,
+            },
+            labelChildren,
+          )
+        : el(sortable ? "button" : "span", { class: "tpz-th-button", type: sortable ? "button" : undefined }, labelChildren)
+    if (sortable && !settings.buildHref) label.addEventListener("click", () => update(toggleSort(state, column.key)))
     inner.append(label)
 
     if (settings.columnMenu !== false) {
@@ -1232,22 +1260,23 @@ export function createTable<TRow extends AnyRow>(
     openMenuAt({ anchor, label: `${column.header} column`, theme: settings.theme }, (close) => {
       const items: Array<Node | null> = []
 
+      /**
+       * An action that changes the view: a link when the table has URLs, a
+       * button otherwise — the same choice the React adapter makes.
+       */
+      const action = (label: string, next: TableState, glyph: Node | null) =>
+        settings.buildHref
+          ? menuLink(label, settings.buildHref(next), { icon: glyph })
+          : menuItem(label, () => {
+              update(next)
+              close()
+            }, { icon: glyph })
+
       if (settings.sortable !== false && column.sortable) {
         items.push(
-          menuItem("Sort ascending", () => {
-            update({ ...state, sort: [{ key: column.key, direction: "asc" }], page: 1 })
-            close()
-          }, { icon: icon("sortAscending") }),
-          menuItem("Sort descending", () => {
-            update({ ...state, sort: [{ key: column.key, direction: "desc" }], page: 1 })
-            close()
-          }, { icon: icon("sortDescending") }),
-          sort
-            ? menuItem("Clear sort", () => {
-                update({ ...state, sort: [] })
-                close()
-              }, { icon: icon("close") })
-            : null,
+          action("Sort ascending", { ...state, sort: [{ key: column.key, direction: "asc" }], page: 1 }, icon("sortAscending")),
+          action("Sort descending", { ...state, sort: [{ key: column.key, direction: "desc" }], page: 1 }, icon("sortDescending")),
+          sort ? action("Clear sort", { ...state, sort: [] }, icon("close")) : null,
           menuSeparator(),
         )
       }
@@ -1284,10 +1313,7 @@ export function createTable<TRow extends AnyRow>(
           },
           { icon: icon("pin") },
         ),
-        menuItem("Hide column", () => {
-          update(hideColumn(state, column.key))
-          close()
-        }, { icon: icon("eyeOff") }),
+        action("Hide column", hideColumn(state, column.key), icon("eyeOff")),
       )
 
       return items
@@ -1704,6 +1730,17 @@ export function createTable<TRow extends AnyRow>(
     const nav = el("nav", { class: "tpz-pages", "aria-label": "Pagination" })
 
     const pageButton = (page: number, label: string, content: Node | string, disabled = false, isCurrent = false) => {
+      // A real link when the table has URLs, so paging works before any script
+      // arrives and middle-click opens a page in a new tab.
+      if (settings.buildHref && !disabled) {
+        return el("a", {
+          href: settings.buildHref(setPage(state, page)),
+          class: "tpz-btn tpz-page",
+          "aria-label": label,
+          "aria-current": isCurrent ? "page" : undefined,
+        }, [content])
+      }
+
       const button = el("button", {
         type: "button",
         class: "tpz-btn tpz-page",
