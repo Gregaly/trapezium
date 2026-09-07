@@ -9,7 +9,7 @@
  * once through jsdom — and comparing the strings.
  */
 import { columns as fullColumns, customTypes, makeRows, type Row } from "@trapezium/core/testing"
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 
 import { renderToString } from "./render-to-string.js"
 import { createTable, type TableOptions, type VanillaColumn } from "./table.js"
@@ -130,15 +130,87 @@ describe("renderToString", () => {
 })
 
 describe("createTable over server markup", () => {
-  it("replaces the markup in place rather than adding a second table", () => {
+  /** A page as the browser has it before the script: the server's markup, live in a document. */
+  function serverPage(options: TableOptions<Row>): HTMLElement {
     const host = document.createElement("div")
-    host.innerHTML = renderToString(base)
+    host.innerHTML = renderToString(options)
     document.body.append(host)
+    return host
+  }
 
+  it("replaces the markup in place rather than adding a second table", () => {
+    const host = serverPage(base)
     const table = createTable(host, base)
 
     expect(host.querySelectorAll(".tpz")).toHaveLength(1)
     expect(host.firstElementChild).toBe(table.element)
     table.destroy()
+  })
+
+  describe("what was done before the script arrived", () => {
+    it("keeps a box that was ticked, and clears one that was unticked", () => {
+      // Every row selectable here; the first rows of the sample data are inactive.
+      const preselected: TableOptions<Row> = { ...base, selection: true, state: { selection: [rows[0]!.id] } }
+      const host = serverPage(preselected)
+      const boxes = host.querySelectorAll<HTMLInputElement>('tbody [data-key="__select"] input')
+      expect(boxes[0]!.checked).toBe(true)
+      boxes[0]!.click()
+      boxes[2]!.click()
+
+      const onSelectionChange = vi.fn()
+      const table = createTable(host, { ...preselected, onSelectionChange })
+
+      expect(table.getSelection()).toEqual([rows[2]!.id])
+      expect(onSelectionChange).toHaveBeenCalledWith([rows[2]!.id], [rows[2]])
+      expect(host.querySelectorAll<HTMLInputElement>('tbody [data-key="__select"] input')[2]!.checked).toBe(true)
+    })
+
+    it("ignores a tick on a row that cannot be selected", () => {
+      const host = serverPage(base)
+      const locked = [...host.querySelectorAll<HTMLInputElement>('tbody [data-key="__select"] input')].findIndex(
+        (box) => box.disabled,
+      )
+      expect(locked).toBeGreaterThanOrEqual(0)
+      // A disabled box cannot be clicked, but its property can still be set.
+      host.querySelectorAll<HTMLInputElement>('tbody [data-key="__select"] input')[locked]!.checked = true
+
+      const table = createTable(host, base)
+      expect(table.getSelection()).toEqual([])
+    })
+
+    it("selects the page when the header box was ticked", () => {
+      const host = serverPage(base)
+      host.querySelector<HTMLInputElement>('thead [data-key="__select"] input')!.click()
+
+      const table = createTable(host, base)
+      expect(table.getSelection().length).toBe(rows.slice(0, 10).filter((row) => row.active !== false).length)
+    })
+
+    it("keeps the search that was typed, applies it, and puts the caret back", () => {
+      const host = serverPage(base)
+      const box = host.querySelector<HTMLInputElement>('input[type="search"]')!
+      box.focus()
+      box.value = "zo"
+
+      const onStateChange = vi.fn()
+      const table = createTable(host, { ...base, onStateChange })
+
+      expect(table.getState().search).toBe("zo")
+      expect(onStateChange).toHaveBeenCalledWith(expect.objectContaining({ search: "zo", page: 1 }))
+      const live = host.querySelector<HTMLInputElement>('input[type="search"]')!
+      expect(live.value).toBe("zo")
+      expect(document.activeElement).toBe(live)
+      expect(live.selectionStart).toBe(2)
+    })
+
+    it("does nothing when nothing was touched", () => {
+      const host = serverPage(base)
+      const onStateChange = vi.fn()
+      const onSelectionChange = vi.fn()
+      createTable(host, { ...base, onStateChange, onSelectionChange })
+
+      expect(onStateChange).not.toHaveBeenCalled()
+      expect(onSelectionChange).not.toHaveBeenCalled()
+    })
   })
 })

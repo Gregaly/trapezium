@@ -226,6 +226,17 @@ export function createTable<TRow extends AnyRow>(
   let lastSelection = state.selection.join(",")
 
   /*
+    What the person did to the server markup before this script arrived.
+
+    A checkbox is a checkbox with or without JavaScript: tick one on the
+    server-rendered table and it shows ticked. Type into the search box and the
+    text is there. Throwing that away when the live table takes over would be
+    the one visible seam in server rendering, so it is read off the old markup
+    first and folded into the state the live table starts from.
+  */
+  const adopted = readInteractions(host)
+
+  /*
     What the body is currently showing.
 
     Kept so that a render which only adds rows to the end can add them, rather
@@ -525,7 +536,12 @@ export function createTable<TRow extends AnyRow>(
   function update(next: TableState) {
     state = next
     render()
-    settings.onStateChange?.(next)
+    notify()
+  }
+
+  /** Tells the caller about the state, and about the selection if it moved. */
+  function notify() {
+    settings.onStateChange?.(state)
 
     const key = state.selection.join(",")
     if (key !== lastSelection) {
@@ -537,6 +553,38 @@ export function createTable<TRow extends AnyRow>(
         state.selection.map((id) => byId.get(id)).filter((row): row is TRow => row !== undefined),
       )
     }
+  }
+
+  /** Folds what was done to the server markup into the starting state. */
+  function adoptInteractions(): boolean {
+    if (!adopted) return false
+    const before = state
+
+    // The boxes were in the server's row order, so they are matched against
+    // the rows as the server had them — before any search typed since applies.
+    const { rows } = current()
+    const ids = rows.map((row, index) => resolveRowId(row, index, settings.getRowId))
+    const selection = selectionOf()
+
+    if (selection) {
+      if (adopted.header !== undefined && selection.mode === "multiple") {
+        state = setSelected(state, selectableIds(rows, ids, selection.isSelectable), adopted.header)
+      }
+      for (const { index, checked } of adopted.toggled) {
+        const id = ids[index]
+        if (id === undefined) continue
+        if (selection.isSelectable && !selection.isSelectable(rows[index]!, index)) continue
+        if (selection.mode === "single") {
+          state = { ...state, selection: checked ? [id] : state.selection.filter((entry) => entry !== id) }
+        } else {
+          state = setSelected(state, [id], checked)
+        }
+      }
+    }
+
+    if (adopted.search !== undefined && settings.search) state = setSearch(state, adopted.search)
+
+    return state !== before
   }
 
   // Shift-click selects a range, which is the one selection gesture people
@@ -1815,8 +1863,17 @@ export function createTable<TRow extends AnyRow>(
 
   /* ── Instance ──────────────────────────────────────────────────────────── */
 
+  const changed = adoptInteractions()
   buildToolbar()
   render()
+
+  if (adopted?.searchFocused && searchInput) {
+    // Back where the person was typing, caret and all.
+    searchInput.focus()
+    const end = searchInput.value.length
+    searchInput.setSelectionRange(end, end)
+  }
+  if (changed) notify()
 
   return {
     element: root,
@@ -1876,6 +1933,40 @@ export function createTable<TRow extends AnyRow>(
 }
 
 /* ── Helpers shared with the other adapters' behaviour ───────────────────── */
+
+/** What a person did to server-rendered markup before the script arrived. */
+type Interactions = {
+  /** The search text, when it is not what the server wrote. */
+  search: string | undefined
+  searchFocused: boolean
+  /** Row checkboxes whose state is not what the server wrote, by row position. */
+  toggled: Array<{ index: number; checked: boolean }>
+  /** The header checkbox, when it was toggled. */
+  header: boolean | undefined
+}
+
+/**
+ * Reads the interactions off whatever the host holds.
+ *
+ * A control's default — the attribute the server wrote — against its current
+ * state is exactly the record of what was done to it. The selection cells are
+ * found by their key rather than a class, which `unstyled` may have removed.
+ */
+function readInteractions(host: HTMLElement): Interactions | undefined {
+  const previous = host.firstElementChild
+  if (!previous) return undefined
+
+  const search = previous.querySelector<HTMLInputElement>('input[type="search"]')
+  const boxes = [...previous.querySelectorAll<HTMLInputElement>('tbody [data-key="__select"] input')]
+  const header = previous.querySelector<HTMLInputElement>('thead [data-key="__select"] input')
+
+  return {
+    search: search && search.value !== search.defaultValue ? search.value : undefined,
+    searchFocused: search !== null && search === currentDocument().activeElement,
+    toggled: boxes.flatMap((box, index) => (box.checked !== box.defaultChecked ? [{ index, checked: box.checked }] : [])),
+    header: header && header.checked !== header.defaultChecked ? header.checked : undefined,
+  }
+}
 
 /**
  * Options that a row's markup never depends on, so changing one of them does
