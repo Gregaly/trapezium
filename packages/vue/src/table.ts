@@ -64,7 +64,10 @@ export const Table = defineComponent({
     columns: { type: Array as PropType<readonly (VueColumn | string)[]>, default: undefined },
     getRowId: { type: Function as PropType<(row: AnyRow, index: number) => string>, default: undefined },
 
+    /** Controlled state. Use `v-model:state`, or `:state` with `@update:state`. */
     state: { type: Object as PropType<PartialTableState>, default: undefined },
+    /** Starting state for a table that manages its own — a saved view, a URL. Read once. */
+    defaultState: { type: Object as PropType<PartialTableState>, default: undefined },
 
     /**
      * The rows have already been filtered, sorted and paginated by a server.
@@ -134,6 +137,11 @@ export const Table = defineComponent({
     "update:state": (state: TableState) => true,
     selectionChange: (ids: string[], rows: AnyRow[]) => true,
     rowClick: (row: AnyRow, event: MouseEvent) => true,
+    /**
+     * A plain click on one of the table's links, with the URL it points at.
+     * Listening prevents the browser's navigation; hand the URL to the router.
+     */
+    navigate: (href: string, event: MouseEvent) => true,
   },
 
   setup(props, { emit, slots }) {
@@ -148,6 +156,7 @@ export const Table = defineComponent({
     */
     const instance = getCurrentInstance()
     const listensForRowClick = () => Boolean(instance?.vnode.props?.["onRowClick"])
+    const listensForNavigate = () => Boolean(instance?.vnode.props?.["onNavigate"])
 
     /*
       Containers holding a mounted VNode. Vue will not unmount them on its own —
@@ -236,6 +245,7 @@ export const Table = defineComponent({
       columns: adaptedColumns.value as TableOptions["columns"],
       getRowId: props.getRowId,
       state: props.state,
+      defaultState: props.defaultState,
       server: props.server,
       total: props.total,
       loading: props.loading,
@@ -275,6 +285,7 @@ export const Table = defineComponent({
       onStateChange: (state) => emit("update:state", state),
       onSelectionChange: (ids, rows) => emit("selectionChange", ids, rows),
       onRowClick: listensForRowClick() ? (row, event) => emit("rowClick", row, event) : undefined,
+      onNavigate: listensForNavigate() ? (href, event) => emit("navigate", href, event) : undefined,
     })
 
     /*

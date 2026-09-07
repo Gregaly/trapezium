@@ -452,6 +452,45 @@ describe("slots", () => {
   })
 })
 
+describe("state props", () => {
+  it("starts from defaultState", async () => {
+    const host = mount(
+      defineComponent(() => () =>
+        h(Table, { data: people, columns: ["name"], defaultState: { sort: [{ key: "name", direction: "desc" }] } }),
+      ),
+    )
+    await nextTick()
+    expect(rows(host).map((row) => row[0])).toEqual(["Tom", "Ada"])
+  })
+
+  it("emits navigate for a plain click on one of its links, and only when listened to", async () => {
+    const onNavigate = vi.fn()
+    const href = (state: { sort: Array<{ key: string; direction: string }> }) =>
+      `/people?sort=${state.sort.map((sort) => `${sort.key}:${sort.direction}`).join(",")}`
+
+    const host = mount(
+      defineComponent(() => () => h(Table, { data: people, columns: ["name"], buildHref: href, onNavigate })),
+    )
+    await nextTick()
+
+    const link = host.querySelector<HTMLAnchorElement>("thead a.tpz-th-button")!
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true })
+    link.dispatchEvent(click)
+    expect(onNavigate).toHaveBeenCalledWith("/people?sort=name:asc", click)
+    expect(click.defaultPrevented).toBe(true)
+
+    unmount?.()
+    unmount = undefined
+
+    // Nobody listening: the browser follows the link.
+    const quiet = mount(defineComponent(() => () => h(Table, { data: people, columns: ["name"], buildHref: href })))
+    await nextTick()
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true })
+    quiet.querySelector<HTMLAnchorElement>("thead a.tpz-th-button")!.dispatchEvent(plain)
+    expect(plain.defaultPrevented).toBe(false)
+  })
+})
+
 describe("presentation props", () => {
   it("passes the class overrides and the caption through", async () => {
     const host = mount(
