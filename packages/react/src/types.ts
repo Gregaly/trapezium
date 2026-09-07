@@ -10,6 +10,7 @@ import type {
   PaginationOptions,
   PartialTableState,
   ResolvedColumn,
+  RowHeight,
   SelectionOptions,
   ServerSource,
   TableSlots,
@@ -197,6 +198,18 @@ export type TableProps<TRow extends AnyRow = AnyRow> = {
   stickyHeader?: boolean
   /** Caps the scroll area, which is what makes a sticky header do anything. */
   maxHeight?: number | string
+
+  /**
+   * How tall a row is: `"fixed"` (the default), `"auto"`, or a number of
+   * pixels.
+   *
+   * Both `"auto"` and a number let every cell wrap — including whatever a cell
+   * renderer returns, because the browser is what measures it. They differ in
+   * where the height comes from: `"auto"` follows the content, a number gives
+   * every row that height and ends what will not fit in an ellipsis. Opt a column out with `wrap: false`, or cap one at
+   * three lines with `wrap: 3`.
+   */
+  rowHeight?: RowHeight
 
   /** Custom types, merged over the built-ins. */
   types?: Record<string, TypeDef>

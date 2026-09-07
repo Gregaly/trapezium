@@ -150,6 +150,9 @@ export function InvoiceTable({
       <Table
         data={rows}
         total={total}
+        // Rendered on the server, height and all: the mode is decided from this
+        // prop alone, so the markup arrives finished.
+        rowHeight="auto"
         /*
           Said once, and every set-filter column and the export use it: the
           values behind a filter and the rows behind an export both come from

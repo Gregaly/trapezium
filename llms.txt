@@ -43,13 +43,30 @@ the data. Add configuration only to override a default.
 data · columns · getRowId(row, index) · state · defaultState · onStateChange(state) · server ·
 total · loading · error · search · filters · sortable · resizable · reorderable · columnMenu ·
 columnControl · pagination · selection · onSelectionChange(ids, rows) · export · density ·
-densityControl · responsive("scroll"|"cards") · stickyHeader · maxHeight · types · format ·
+densityControl · responsive("scroll"|"cards") · stickyHeader · maxHeight ·
+rowHeight("fixed"|"auto"|number) · types · format ·
 rowHref(row) · onRowClick(row, event) · rowClassName(row, index) · emptyState · emptyMessage ·
 toolbar · appendRow · footer · buildHref(state) · linkComponent · className · classNames ·
 unstyled · theme("light"|"dark") · id · aria-label · caption
 
 Booleans default to sensible: filters, sortable, resizable, reorderable, columnMenu, columnControl
 and stickyHeader are on; search, selection, export, densityControl are off until asked for.
+
+rowHeight: "fixed" (default) is one line a cell with an ellipsis. "auto" and a number both let every
+cell wrap, whatever a cell renderer put there — it is CSS only, because the table is a real <table>
+in normal flow, so there is no measuring pass, no ResizeObserver and no layout shift on the server.
+They differ only in where the height comes from: "auto" grows each row to its tallest cell with
+--tpz-row-height as the floor, a number gives them all that height and ends what will not fit in an
+ellipsis, on however many lines the height allows (the count is worked out in CSS, nothing is
+measured). Only "fixed" truncates to one line. Wrapped rows align to the top; fixed and exact rows
+stay centred. The header has its own --tpz-header-height and does not follow rowHeight; density
+moves both. Per column: wrap:false keeps one line whichever wrapping mode is on, wrap:true wraps,
+wrap:3 wraps and stops after three lines.
+
+Append pagination ("loadMore", "infinite") keeps every page loaded so far on screen and renders only
+the rows it just added: the rows already there are not rebuilt, their cell renderers are not re-run,
+and the scroll position is not disturbed. That is what makes rowHeight:"auto" affordable on a long
+infinite list.
 
 ## Export
 
@@ -65,7 +82,7 @@ clipboard copy.
 key (required, supports dotted paths and synthetic ids) · header · type · accessor(row) ·
 format(ctx)=>string · formatOptions · render(ctx)=>node · renderHeader(ctx)=>node · sortable ·
 compare(a,b) · searchable · filter · align · width · minWidth · maxWidth · pin("start"|"end") ·
-hidden · resizable · reorderable · wrap · mono · icon · exportable · exportValue(ctx) · className ·
+hidden · resizable · reorderable · wrap(boolean|number) · mono · icon · exportable · exportValue(ctx) · className ·
 headerClassName · meta
 
 `format` replaces the cell text and keeps sorting/filtering on the raw value.
@@ -167,7 +184,7 @@ table works with no client JavaScript.
 ## Styling
 
 CSS custom properties on `.tpz` (--tpz-surface, --tpz-muted, --tpz-border, --tpz-primary,
---tpz-row-height, --tpz-font-mono, …). Dark mode follows the page's color-scheme, or `.dark` /
+--tpz-row-height, --tpz-header-height, --tpz-font-mono, …). Dark mode follows the page's color-scheme, or `.dark` /
 [data-theme="dark"] on an ancestor, or theme="dark" on the table.
 classNames={{ root, frame, toolbar, search, scroll, table, thead, tbody, headerRow, headerCell, row,
 cell, selectCell, pagination, empty, footer }} adds classes; `unstyled` drops the defaults. Same in
@@ -197,7 +214,9 @@ pinned:"left"→pin:"start" · filter:"agSetColumnFilter"→filter:"set" ·
 filter:"agNumberColumnFilter"→filter:"range" · filter:"agDateColumnFilter"→filter:"date" ·
 rowSelection:"multiple"→selection · quickFilterText→search prop or state.search ·
 getRowStyle/getRowClass→rowClassName(row, index) · onRowClicked→onRowClick (clicks on links,
-buttons and inputs inside a row are already ignored) · rowHeight→density · domLayout→maxHeight ·
+buttons and inputs inside a row are already ignored) · rowHeight→rowHeight · getRowHeight→
+rowHeight:"auto" (the browser measures it; there is nothing to answer) · autoHeight→wrap:true ·
+wrapText→wrap · domLayout→maxHeight ·
 serverSideDatasource→server={{ distinct, all }} with onStateChange · exportDataAsCsv→export ·
 ModuleRegistry.registerModules→nothing.
 

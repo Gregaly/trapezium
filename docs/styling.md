@@ -24,7 +24,7 @@ Every value is a CSS custom property on `.tpz`. Set them anywhere that wins the 
 
 **Colour** — `--tpz-bg` `--tpz-fg` `--tpz-surface` `--tpz-surface-fg` `--tpz-muted` `--tpz-muted-fg` `--tpz-accent` `--tpz-accent-fg` `--tpz-primary` `--tpz-primary-fg` `--tpz-border` `--tpz-input` `--tpz-ring` `--tpz-success` `--tpz-warning` `--tpz-danger`
 
-**Shape** — `--tpz-radius` `--tpz-radius-sm` `--tpz-radius-md` `--tpz-row-height` `--tpz-cell-padding-x` `--tpz-col-min-width` `--tpz-col-max-width` `--tpz-lead-min-width` `--tpz-lead-max-width` `--tpz-select-width`
+**Shape** — `--tpz-radius` `--tpz-radius-sm` `--tpz-radius-md` `--tpz-row-height` `--tpz-header-height` `--tpz-cell-padding-x` `--tpz-cell-padding-y` `--tpz-col-min-width` `--tpz-col-max-width` `--tpz-lead-min-width` `--tpz-lead-max-width` `--tpz-select-width`
 
 **Type** — `--tpz-font-sans` `--tpz-font-mono` `--tpz-text-header` `--tpz-text-cell` `--tpz-text-cell-leading` `--tpz-text-ui`
 
@@ -97,6 +97,111 @@ Force it per table:
 ```tsx
 <Table data={rows} density="compact" />       // 1.75rem rows
 <Table data={rows} densityControl />          // let the user choose
+```
+
+## Row height
+
+Rows are one line tall and truncate with an ellipsis, which is what makes a
+table of values scannable. When the content is not values — prose, a stack of
+tags, an avatar and two lines of detail from a cell renderer — let the rows size
+themselves:
+
+```tsx
+<Table data={rows} rowHeight="auto" />        // as tall as the tallest cell
+<Table data={rows} rowHeight={64} />          // all rows 64px, text wrapping into it
+<Table data={rows} />                         // "fixed": one line, ellipsis
+```
+
+Under `"auto"` the row grows to fit its tallest cell — **including whatever a
+cell renderer returned**, because the thing measuring it is the browser. There
+is no measuring pass, no `ResizeObserver`, no second layout, and nothing to get
+wrong on the server: the table is a real `<table>` in normal flow, so a row is
+already as tall as its content. This is the part every virtualised grid has to
+reinvent, badly, because absolutely-positioned rows have to be rendered,
+measured and then placed.
+
+`--tpz-row-height` becomes the *minimum* rather than the height, so density goes
+on meaning what it meant and a row of short values keeps the rhythm.
+
+Per column:
+
+```tsx
+columns={[
+  { key: "reference", wrap: false },   // stays on one line while the rest wrap
+  { key: "notes" },                    // wraps, because the table says so
+  { key: "summary", wrap: 3 },         // wraps, then stops after three lines
+]}
+```
+
+`wrap` works without `rowHeight="auto"` too — one prose column in an otherwise
+fixed table is the common case, and it is what `wrap: true` has always meant.
+
+A number wraps in exactly the same way as `"auto"` — the only difference is
+where the height comes from. `"auto"` lets each row follow its own content; a
+number gives them all the same height. Asking for 72px rows and being handed one
+truncated line adrift in the middle of them is nobody's idea of the setting, so
+`fixed` is the only mode that truncates.
+
+A number is a ceiling as well as a floor: every row is that height, and text
+that will not fit ends in an ellipsis on the last line the row had room for —
+the same finish a single line gets under `fixed`, just on however many lines
+there are. A row height you cannot shrink would not be a row height, so cells in
+this mode carry an element that bounds them; `height` alone cannot, because on a
+table cell it is only ever a minimum.
+
+The number of lines is worked out in CSS from the height you asked for, so
+nothing is measured and the server and the first paint agree. To fix a column at
+a particular number of lines regardless of the row, say so:
+
+```tsx
+<Table
+  data={rows}
+  rowHeight={72}
+  columns={[{ key: "summary", wrap: 3 }]}   // three lines, then an ellipsis
+/>
+```
+
+The line count leans on `round()`, `atan2()` and the `lh` unit, which every
+current engine has: Chrome 125, Firefox 120 and Safari 16.4 or later. An older
+browser still gets rows of the right height with the overflow clipped; it only
+loses the ellipsis on the last line.
+
+Wrapped rows hang from the top, so the first line of every column lines up with
+the first line of the others. `fixed` and exact rows stay vertically centred,
+the way every other row in the library is.
+
+`rowHeight` is about rows: the header keeps its own height and does not follow
+it, or a table of 64px rows would carry a 64px header. Density moves both, which
+is the point of density. To size the header on its own, set its token:
+
+```css
+.tpz { --tpz-header-height: 44px; }
+```
+
+### With append pagination
+
+`loadMore` and `infinite` render only the rows they just added, so a long list of
+rows of differing heights stays cheap — the rows already on screen keep their
+elements and their place, and the scroll position is not disturbed. That is what
+makes auto height usable on an infinite list at all.
+
+The rows already on screen are recognised by identity, so append what you
+fetched to the array you have rather than mapping a fresh copy of everything —
+a row that is a new object is a row that has changed, and it is rebuilt.
+Toggling `loading` around the fetch is fine, in every adapter.
+
+One thing to know, because it is the one way the rows above can still move: a
+column with no `width` is sized from its content, so if the first page is not
+representative of the rest, the arrival of a much wider page can re-lay-out the
+columns. Nothing is rebuilt, but text in a narrowed column may re-wrap and change
+height. It settles after that and stays settled.
+
+Give the columns that hold prose an explicit width and the question never arises
+— worth doing in [server mode](server-data.md) especially, where the first page
+really is all the table has seen:
+
+```tsx
+{ key: "summary", width: 420 }
 ```
 
 ## Sticky header and height

@@ -56,6 +56,8 @@ Nothing exotic — mostly not doing avoidable work:
 - **Nothing that does not depend on the row is computed per row.** Filter contexts, type lookups and the folded search query are all prepared once.
 - **Accent folding takes a fast path for text that has no accents**, which is nearly all of it — and for ASCII, folding *is* lower-casing, so the cheap answer is the same answer.
 - **Filters short-circuit.** "Match all" stops at the first refusal, "match any" at the first acceptance.
+- **An appended page costs the size of the page, not the size of the list.** `loadMore` and `infinite` keep every page loaded so far on screen, so by the tenth page the table holds ten pages of rows. Reaching the sentinel renders the new rows and leaves every row already on screen alone — the DOM elements are not rebuilt, the cell renderers are not re-run, the header is not replaced, and the scroll position is not disturbed. Rows are recognised by identity, so this holds as long as the rows already shown are the same objects. This is what makes [`rowHeight="auto"`](styling.md#row-height) usable with an infinite list: rows of differing heights are the case a virtualised grid has to render, measure and place one at a time.
+- **Selecting a row changes that row.** Not the table around it: the attribute and the checkbox are updated in place, so a click in a list of five thousand rows costs one row's work.
 
 ## Bundle size
 

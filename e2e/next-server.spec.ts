@@ -127,6 +127,44 @@ test.describe("with JavaScript", () => {
     expect(lines.slice(1).every((line) => line.includes("Wren Ashby"))).toBe(true)
   })
 
+  /*
+    The claim the row-height work rests on, checked against a real server
+    rather than a simulated one: a row sizes itself with no measuring pass, so
+    the finished markup can be produced by a machine with no layout at all.
+
+    This reads the HTML off the wire, before any JavaScript has run.
+  */
+  test("sizes its rows in the server's own markup, with nothing left to correct", async ({ request, page }) => {
+    const html = await (await request.get("/")).text()
+
+    // The mode is in the document itself, not applied by an effect after paint.
+    expect(html).toContain('data-row-height="auto"')
+    expect(html).toContain("<table")
+
+    // And the browser agrees with it once the page is live.
+    await page.goto("/")
+    const table = page.locator(".tpz").first()
+    await expect(table.locator("tbody tr").first()).toBeVisible()
+    expect(await table.getAttribute("data-row-height")).toBe("auto")
+
+    /*
+      And the mode is really in force, not merely named. This example's columns
+      all hold short values, so nothing here has to wrap — what it proves is
+      that a table which arrived from a server is in the wrapping mode and free
+      to grow, which is the part a server cannot work out by measuring.
+    */
+    const cell = await table
+      .locator("tbody td")
+      .first()
+      .evaluate((node) => {
+        const style = getComputedStyle(node)
+        return { whiteSpace: style.whiteSpace, verticalAlign: style.verticalAlign }
+      })
+
+    expect(cell.whiteSpace).toBe("normal")
+    expect(cell.verticalAlign).toBe("top")
+  })
+
   test("keeps the header visible while the body scrolls", async ({ page }) => {
     await page.goto("/")
     const table = new Table(page)

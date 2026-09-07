@@ -53,6 +53,7 @@ import {
   type PartialTableState,
   type ResolvedColumn,
   type ResolvedSelection,
+  type RowHeight,
   type SelectOption,
   type SelectionInput,
   type ServerSource,
@@ -146,6 +147,13 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
   responsive?: "scroll" | "cards"
   stickyHeader?: boolean
   maxHeight?: number | string
+  /**
+   * How tall a row is: `"fixed"` (the default), `"auto"`, or a number of
+   * pixels. `"auto"` and a number both let cells wrap; `"auto"` grows the row
+   * to fit its tallest cell, a number gives them all that height and ends what
+   * will not fit in an ellipsis.
+   */
+  rowHeight?: RowHeight
   theme?: "light" | "dark"
 
   rowHref?: (row: TRow) => string
@@ -203,6 +211,42 @@ export function createTable<TRow extends AnyRow>(
   let settings = options
   let state: TableState = { ...DEFAULT_STATE, ...paginationOf(options)?.stateDefaults, ...options.state }
   let lastSelection = state.selection.join(",")
+
+  /*
+    What the body is currently showing.
+
+    Kept so that a render which only adds rows to the end can add them, rather
+    than building the table again from nothing.
+
+    That is the shape of every append-paginated table: an infinite list holds
+    every page loaded so far, so reaching the sentinel on page ten meant
+    rebuilding two hundred and fifty rows to show twenty-five new ones — every
+    cell formatted again, every element allocated again, every open menu and
+    every focused control thrown away, and a scroll position that lands
+    wherever the browser puts it. The new rows are the only new work there is.
+
+    `renderedRows` holds the row objects rather than their ids, because a
+    caller who replaced a row's contents but kept its id has changed what the
+    cells should say. Identity is the signal, which is the same contract every
+    memoising renderer works by.
+  */
+  let renderedRows: readonly TRow[] = []
+  let renderedIds: string[] = []
+  /** Of those, the ones that may be selected — what the header checkbox and a shift-range act on. */
+  let renderedSelectable: readonly string[] = []
+  /**
+   * The `<tr>` for each of those, in order.
+   *
+   * Held rather than read back off the body, because the body is not only
+   * rows: an error renders a row of its own above them, and counting children
+   * would then be off by one for every row beneath it.
+   */
+  let renderedNodes: HTMLElement[] = []
+  let renderedSelection = new Set<string>()
+  let renderedShape = ""
+  /** Bumped by `setOptions`, so a change to columns, types or renderers rebuilds. */
+  let generation = 0
+  let selectAllBox: HTMLInputElement | undefined
 
   const root = el("div", { class: "tpz" })
   const frame = el("div", { class: "tpz-frame" })
@@ -517,6 +561,21 @@ export function createTable<TRow extends AnyRow>(
     } else {
       root.style.removeProperty("--tpz-max-height")
     }
+
+    /*
+      Both modes wrap; a number additionally pins the height and clips, so it
+      is a mode of its own rather than only a different value for the token.
+    */
+    if (settings.rowHeight === "auto") root.dataset["rowHeight"] = "auto"
+    else if (typeof settings.rowHeight === "number") root.dataset["rowHeight"] = "exact"
+    else delete root.dataset["rowHeight"]
+
+    if (typeof settings.rowHeight === "number") {
+      root.style.setProperty("--tpz-row-height", `${String(settings.rowHeight)}px`)
+    } else {
+      root.style.removeProperty("--tpz-row-height")
+    }
+
     if (settings.ariaLabel) table.setAttribute("aria-label", settings.ariaLabel)
     else table.removeAttribute("aria-label")
 
@@ -541,9 +600,56 @@ export function createTable<TRow extends AnyRow>(
 
     renderChips(columns)
 
+    const shape = shapeOf(columns, selection)
+    const build: RowBuild = { columns, types, format, cls, selection, pinEdges: pinEdgesOf(columns) }
+
+    /*
+      The cheap path.
+
+      Nothing about the arrangement changed and the rows on screen are still
+      the first however-many of the rows to show, so the difference between
+      the two renders is entirely at the end of the list. Build that, and
+      leave the rest of the DOM alone — which also leaves alone the header's
+      focus, the browser's scroll anchoring, and any text the user had
+      selected.
+    */
+    if (shape === renderedShape && renderedRows.length > 0 && extendsRendered(rows)) {
+      if (rows.length > renderedRows.length) {
+        const offsets = measurePinOffsets()
+        const fragment = document.createDocumentFragment()
+        const added: HTMLElement[] = []
+
+        for (let index = renderedRows.length; index < rows.length; index += 1) {
+          const tr = buildRow(rows[index]!, rowIds[index]!, index, build)
+          added.push(tr)
+          fragment.append(tr)
+        }
+
+        // Positioned before they are in the document, so a frozen column does
+        // not spend a frame in the wrong place.
+        applyPinOffsets(fragment, offsets)
+
+        // After the last data row rather than at the end of the body: a
+        // caller's appended row sits below the data and must stay there.
+        const last = renderedNodes[renderedNodes.length - 1]
+        if (last) last.after(fragment)
+        else body.append(fragment)
+
+        renderedNodes.push(...added)
+        renderedRows = rows
+        renderedIds = rowIds
+        renderedSelectable = selectable
+      }
+
+      syncSelection()
+      renderPagination(pagination, total, pageCount, rows.length)
+      void hidden
+      return
+    }
+
     /* Header */
     const headerRow = el("tr", { class: cls("headerRow") })
-    if (selectionMode) headerRow.append(selectionHeader(selectable, selectionMode))
+    if (selectionMode) headerRow.append(selectionHeader(selectionMode))
     for (const column of columns) headerRow.append(headerCell(column, columns, cls))
     fill(head, [headerRow])
 
@@ -594,76 +700,8 @@ export function createTable<TRow extends AnyRow>(
       )
     }
 
-    rows.forEach((row, index) => {
-      const id = rowIds[index] ?? resolveRowId(row, index, settings.getRowId)
-      const selected = state.selection.includes(id)
-      const tr = el("tr", {
-        class: cls("row", settings.rowClassName?.(row, index)),
-        "data-selected": selected ? "true" : undefined,
-        "data-clickable": settings.onRowClick ? "true" : undefined,
-      })
-
-      if (settings.onRowClick) {
-        tr.addEventListener("click", (event) => settings.onRowClick?.(row, event))
-      }
-
-      if (selectionMode) {
-        const box = el("input", {
-          type: selectionMode === "single" ? "radio" : "checkbox",
-          class: "tpz-checkbox",
-          "aria-label": `Select row ${String(index + 1)}`,
-        }) as HTMLInputElement
-        box.checked = selected
-        box.disabled = selection?.isSelectable ? !selection.isSelectable(row, index) : false
-
-        // The change event does not carry the modifier keys; the click before
-        // it does, so that is where shift is read.
-        let shift = false
-        box.addEventListener("click", (event) => {
-          event.stopPropagation()
-          shift = event.shiftKey
-        })
-        box.addEventListener("change", () => {
-          if (shift && lastToggled !== undefined && selectionMode !== "single") {
-            // Over the selectable rows only, so a disabled row between two
-            // chosen ones is stepped over rather than swept up.
-            update(selectRange(state, selectable, lastToggled, id, !state.selection.includes(id)))
-            return
-          }
-          lastToggled = id
-          update(toggleSelection(state, id, selectionMode === "single"))
-        })
-        tr.append(el("td", { class: cls("selectCell"), "data-pin": "start", "data-key": "__select" }, [box]))
-      }
-
-      columns.forEach((column, columnIndex) => {
-        const context = cellContext(row, id, index, column, types, format)
-        const content = renderCell(context, settings)
-        const cell = el("td", {
-          class: cls("cell", column.className),
-          "data-align": column.align,
-          "data-mono": column.mono ? undefined : "false",
-          "data-wrap": column.wrap ? "true" : undefined,
-          "data-pin": column.pin,
-          "data-pin-edge": isPinEdge(columns, column.key) ? column.pin : undefined,
-          "data-key": column.key,
-          "data-label": column.header,
-        })
-        if (column.width) cell.style.width = `${String(column.width)}px`
-
-        if (columnIndex === 0 && settings.rowHref) {
-          const link = el("a", { class: "tpz-link tpz-lead", href: settings.rowHref(row) })
-          link.append(typeof content === "string" ? document.createTextNode(content) : content)
-          cell.append(link)
-        } else {
-          cell.append(typeof content === "string" ? document.createTextNode(content) : content)
-        }
-
-        tr.append(cell)
-      })
-
-      rendered.push(tr)
-    })
+    const nodes = rows.map((row, index) => buildRow(row, rowIds[index]!, index, build))
+    rendered.push(...nodes)
 
     if (settings.appendRow) {
       rendered.push(
@@ -672,13 +710,240 @@ export function createTable<TRow extends AnyRow>(
     }
 
     fill(body, rendered)
+
+    renderedRows = rows
+    renderedIds = rowIds
+    renderedSelectable = selectable
+    renderedNodes = nodes
+    renderedSelection = new Set(state.selection)
+    renderedShape = shape
+    syncSelectAll()
+
     applyPinOffsets()
     renderPagination(pagination, total, pageCount, rows.length)
     void hidden
   }
 
+  /** Everything a row is built from that is not the row itself. */
+  type RowBuild = {
+    columns: ResolvedColumn<TRow, Node | string>[]
+    types: ReturnType<typeof createTypeRegistry>
+    format: FormatContext
+    cls: ReturnType<typeof classes>
+    selection: ResolvedSelection<TRow> | undefined
+    /** Keys of the last pinned column on each side, which carry the frozen edge. */
+    pinEdges: Set<string>
+  }
+
+  /** One row, built the same way whether the body is being filled or extended. */
+  function buildRow(row: TRow, id: string, index: number, build: RowBuild): HTMLElement {
+    const { columns, types, format, cls, selection, pinEdges } = build
+    const selectionMode = selection?.mode
+    const selected = state.selection.includes(id)
+    const tr = el("tr", {
+      class: cls("row", settings.rowClassName?.(row, index)),
+      "data-selected": selected ? "true" : undefined,
+      "data-clickable": settings.onRowClick ? "true" : undefined,
+    })
+
+    if (settings.onRowClick) {
+      tr.addEventListener("click", (event) => settings.onRowClick?.(row, event))
+    }
+
+    if (selectionMode) {
+      const box = el("input", {
+        type: selectionMode === "single" ? "radio" : "checkbox",
+        class: "tpz-checkbox",
+        "aria-label": `Select row ${String(index + 1)}`,
+      }) as HTMLInputElement
+      box.checked = selected
+      box.disabled = selection?.isSelectable ? !selection.isSelectable(row, index) : false
+
+      // The change event does not carry the modifier keys; the click before
+      // it does, so that is where shift is read.
+      let shift = false
+      box.addEventListener("click", (event) => {
+        event.stopPropagation()
+        shift = event.shiftKey
+      })
+      box.addEventListener("change", () => {
+        if (shift && lastToggled !== undefined && selectionMode !== "single") {
+          /*
+            Over the selectable rows on screen *now*, not the ones there when
+            this row was built. An appended page leaves the earlier rows and
+            their handlers in place, and a range has to be able to reach the
+            rows that arrived after them. Disabled rows in between are stepped
+            over rather than swept up.
+          */
+          update(selectRange(state, renderedSelectable, lastToggled, id, !state.selection.includes(id)))
+          return
+        }
+        lastToggled = id
+        update(toggleSelection(state, id, selectionMode === "single"))
+      })
+      tr.append(el("td", { class: cls("selectCell"), "data-pin": "start", "data-key": "__select" }, [box]))
+    }
+
+    columns.forEach((column, columnIndex) => {
+      const context = cellContext(row, id, index, column, types, format)
+      const content = renderCell(context, settings)
+      const cell = el("td", {
+        class: cls("cell", column.className),
+        "data-align": column.align,
+        "data-mono": column.mono ? undefined : "false",
+        "data-wrap": wrapAttribute(column.wrap),
+        "data-pin": column.pin,
+        "data-pin-edge": pinEdges.has(column.key) ? column.pin : undefined,
+        "data-key": column.key,
+        "data-label": column.header,
+      })
+      if (column.width) cell.style.width = `${String(column.width)}px`
+
+      const node = typeof content === "string" ? document.createTextNode(content) : content
+
+      /*
+        A table cell has to go on being a table cell, so anything that bounds
+        its content needs an element of its own inside it: `-webkit-box` for a
+        line clamp, and a plain block for an exact row height, whose cap
+        `height` alone cannot enforce.
+      */
+      let host: Node = cell
+      if (typeof column.wrap === "number") {
+        const clamp = el("span", { class: "tpz-clamp" })
+        clamp.style.setProperty("--tpz-cell-lines", String(column.wrap))
+        cell.append(clamp)
+        host = clamp
+      } else if (typeof settings.rowHeight === "number") {
+        const fit = el("span", { class: "tpz-fit" })
+        cell.append(fit)
+        host = fit
+      }
+
+      if (columnIndex === 0 && settings.rowHref) {
+        const link = el("a", { class: "tpz-link tpz-lead", href: settings.rowHref(row) })
+        link.append(node)
+        host.appendChild(link)
+      } else {
+        host.appendChild(node)
+      }
+
+      tr.append(cell)
+    })
+
+    return tr
+  }
+
+  /**
+   * True when the rows to show start with exactly the rows already on screen.
+   *
+   * By identity, not by id: a caller who swapped a row for a new object with
+   * the same id has changed what its cells say, and that is a rebuild.
+   */
+  function extendsRendered(rows: readonly TRow[]): boolean {
+    if (rows.length < renderedRows.length) return false
+    for (let index = 0; index < renderedRows.length; index += 1) {
+      if (renderedRows[index] !== rows[index]) return false
+    }
+    return true
+  }
+
+  /**
+   * Everything about a render other than which rows are in it.
+   *
+   * If this is unchanged, a row built now is identical to the one built last
+   * time, so rows that were already there do not need building again. It has
+   * to name everything `buildRow` and the header read — a missing field here
+   * is a cell that quietly stops updating, which is the worst kind of bug to
+   * find later, so it errs towards rebuilding.
+   */
+  function shapeOf(
+    columns: ResolvedColumn<TRow, Node | string>[],
+    selection: ResolvedSelection<TRow> | undefined,
+  ): string {
+    return JSON.stringify({
+      generation,
+      selectionMode: selection?.mode ?? null,
+      selectable: Boolean(selection?.isSelectable),
+      // Only the skeleton, which needs an empty body, depends on loading —
+      // and the cheap path never runs with an empty body.
+      error: settings.error ?? null,
+      classNames: settings.classNames ?? null,
+      unstyled: Boolean(settings.unstyled),
+      appendRow: Boolean(settings.appendRow),
+      href: Boolean(settings.rowHref),
+      click: Boolean(settings.onRowClick),
+      rowClass: Boolean(settings.rowClassName),
+      // `buildRow` puts a bounding element in every cell for an exact height.
+      fit: typeof settings.rowHeight === "number",
+      format: settings.format ?? null,
+      sort: state.sort,
+      filters: state.filters,
+      match: state.match,
+      search: state.search,
+      pageSize: state.pageSize,
+      columns: columns.map((column) => [
+        column.key,
+        column.header,
+        column.type,
+        column.align,
+        column.mono,
+        column.wrap ?? null,
+        column.pin ?? null,
+        column.width ?? null,
+        column.className ?? null,
+        column.sortable,
+      ]),
+    })
+  }
+
+  /**
+   * Brings the rows on screen into line with the selection, touching only the
+   * ones whose answer changed.
+   *
+   * Selecting a row in a list of five thousand is otherwise a full rebuild for
+   * the sake of one attribute and one checkbox.
+   */
+  function syncSelection() {
+    const selection = new Set(state.selection)
+    const changed = new Set<string>()
+
+    for (const id of selection) if (!renderedSelection.has(id)) changed.add(id)
+    for (const id of renderedSelection) if (!selection.has(id)) changed.add(id)
+
+    if (changed.size > 0) {
+      renderedIds.forEach((id, index) => {
+        if (!changed.has(id)) return
+
+        const tr = renderedNodes[index]
+        if (!tr) return
+
+        const selected = selection.has(id)
+        if (selected) tr.dataset["selected"] = "true"
+        else delete tr.dataset["selected"]
+
+        const box = tr.querySelector<HTMLInputElement>("input.tpz-checkbox")
+        if (box) box.checked = selected
+      })
+    }
+
+    renderedSelection = selection
+    syncSelectAll()
+  }
+
+  /** The header checkbox, after the rows or the selection beneath it moved. */
+  function syncSelectAll() {
+    if (!selectAllBox) return
+
+    const selectedHere = renderedSelectable.filter((id) => state.selection.includes(id)).length
+    const all = renderedSelectable.length > 0 && selectedHere === renderedSelectable.length
+
+    selectAllBox.checked = all
+    selectAllBox.indeterminate = selectedHere > 0 && !all
+    selectAllBox.setAttribute("aria-label", all ? "Clear selection" : "Select all rows on this page")
+  }
+
   /** Frozen columns need real pixel offsets, and only layout knows them. */
-  function applyPinOffsets() {
+  function measurePinOffsets(): Record<string, number> {
     const cells = [...head.querySelectorAll<HTMLElement>("[data-pin]")]
     const offsets: Record<string, number> = {}
 
@@ -694,21 +959,40 @@ export function createTable<TRow extends AnyRow>(
       end += cell.getBoundingClientRect().width
     }
 
+    return offsets
+  }
+
+  /**
+   * Writes those offsets onto the cells under `scope`.
+   *
+   * Taking a scope is what lets an appended page position its own frozen
+   * columns without walking every row already on screen — which, on the tenth
+   * page of an infinite list, is the difference between touching twenty-five
+   * rows and touching two hundred and fifty.
+   */
+  function applyPinOffsets(scope: ParentNode = root, offsets = measurePinOffsets()) {
     /*
       Matched by reading the attribute rather than by building a selector from
       it: a column key can contain a dot (`customer.name`), and `CSS.escape`
       is not available everywhere the core is — including some test
       environments.
     */
-    for (const cell of root.querySelectorAll<HTMLElement>("[data-pin][data-key]")) {
+    for (const cell of scope.querySelectorAll<HTMLElement>("[data-pin][data-key]")) {
       const offset = offsets[cell.dataset["key"] ?? ""]
       if (offset === undefined) continue
       cell.style[cell.dataset["pin"] === "end" ? "right" : "left"] = `${String(offset)}px`
     }
   }
 
-  /** The header cell above the checkboxes. `ids` are the rows that may be selected. */
-  function selectionHeader(ids: readonly string[], mode: "single" | "multiple"): HTMLElement {
+  /**
+   * The header cell above the checkboxes.
+   *
+   * It reads the selectable rows on screen when it is clicked rather than
+   * when it was built. The header outlives the body now — an appended page
+   * leaves it exactly where it was — so a handler that closed over the rows
+   * it was built with would go on selecting page one after page four arrived.
+   */
+  function selectionHeader(mode: "single" | "multiple"): HTMLElement {
     const cell = el("th", {
       scope: "col",
       class: "tpz-th tpz-select-cell",
@@ -716,21 +1000,22 @@ export function createTable<TRow extends AnyRow>(
       "data-key": "__select",
     })
 
-    if (mode === "multiple") {
+    selectAllBox = undefined
+    if (mode !== "multiple") return cell
+
+    const box = el("input", {
+      type: "checkbox",
+      class: "tpz-checkbox",
+    }) as HTMLInputElement
+
+    box.addEventListener("change", () => {
+      const ids = [...renderedSelectable]
       const selectedHere = ids.filter((id) => state.selection.includes(id)).length
-      const all = ids.length > 0 && selectedHere === ids.length
+      update(setSelected(state, ids, !(ids.length > 0 && selectedHere === ids.length)))
+    })
 
-      const box = el("input", {
-        type: "checkbox",
-        class: "tpz-checkbox",
-        "aria-label": all ? "Clear selection" : "Select all rows on this page",
-      }) as HTMLInputElement
-      box.checked = all
-      box.indeterminate = selectedHere > 0 && !all
-      box.addEventListener("change", () => update(setSelected(state, ids, !all)))
-      cell.append(box)
-    }
-
+    cell.append(box)
+    selectAllBox = box
     return cell
   }
 
@@ -1494,6 +1779,19 @@ export function createTable<TRow extends AnyRow>(
       settings = { ...settings, ...next }
 
       /*
+        Most of what can change here is not visible from the outside of a
+        resolved column — a custom type, a cell renderer, a class map — so a
+        changed option makes the next render rebuild rather than trying to work
+        out whether it needs to. The exceptions are the options that never reach
+        a row's markup. `loading` is the one that matters: flipping it while the
+        next page is fetched is how every server-side append works, and the Vue
+        and Svelte adapters route it through here, so treating it as a change
+        would throw away the rows on screen at exactly the moment the cheap path
+        exists for.
+      */
+      if (changedKeys(next, previous).some((key) => !PASSIVE_OPTIONS.has(key))) generation += 1
+
+      /*
         Two settings also live in the state, which is the table's to change once
         it is running — so they are followed only when the caller changes them,
         rather than being reapplied on every call and undoing what the user
@@ -1529,11 +1827,73 @@ export function createTable<TRow extends AnyRow>(
 
 /* ── Helpers shared with the other adapters' behaviour ───────────────────── */
 
+/**
+ * Options that a row's markup never depends on, so changing one of them does
+ * not force the rows already on screen to be rebuilt. Anything not listed here
+ * is assumed to matter, because a cell that quietly stops updating is the worse
+ * failure. `data` is decided by row identity, not by being passed again.
+ */
+const PASSIVE_OPTIONS: ReadonlySet<string> = new Set([
+  "data",
+  "loading",
+  "error",
+  "total",
+  "state",
+  "onStateChange",
+  "onSelectionChange",
+  "density",
+  "densityControl",
+  "columnControl",
+  "export",
+  "search",
+  "theme",
+  "responsive",
+  "stickyHeader",
+  "maxHeight",
+  "rowHeight",
+  "ariaLabel",
+  "caption",
+  "footer",
+  // Read from the settings when the click happens, not when the row was built,
+  // and whether there is one at all is part of the shape. The Vue adapter
+  // hands over a fresh function on every change, so identity means nothing here.
+  "onRowClick",
+])
+
+/** The keys whose value is not the one already held, compared by identity. */
+function changedKeys<T extends object>(next: Partial<T>, previous: T): string[] {
+  const keys: string[] = []
+  for (const key in next) {
+    if (next[key] !== previous[key]) keys.push(key)
+  }
+  return keys
+}
+
 /** The last pinned column on each side gets the shadow that marks the frozen edge. */
 function isPinEdge(columns: ReadonlyArray<{ key: string; pin?: "start" | "end" }>, key: string): boolean {
+  return pinEdgesOf(columns).has(key)
+}
+
+/** Keys of the last pinned column on each side, worked out once per render rather than per cell. */
+function pinEdgesOf(columns: ReadonlyArray<{ key: string; pin?: "start" | "end" }>): Set<string> {
   const starts = columns.filter((column) => column.pin === "start")
   const ends = columns.filter((column) => column.pin === "end")
-  return starts[starts.length - 1]?.key === key || ends[0]?.key === key
+  const edges = new Set<string>()
+  const first = starts[starts.length - 1]?.key
+  const last = ends[0]?.key
+  if (first) edges.add(first)
+  if (last) edges.add(last)
+  return edges
+}
+
+/**
+ * `true` and a line count both mean "wrap"; `false` means "stay on one line
+ * even though the table is set to wrap", which is a different thing from
+ * saying nothing at all.
+ */
+function wrapAttribute(wrap: boolean | number | undefined): "true" | "false" | undefined {
+  if (wrap === undefined) return undefined
+  return wrap === false ? "false" : "true"
 }
 
 function paginationOf<TRow extends AnyRow>(options: TableOptions<TRow>) {

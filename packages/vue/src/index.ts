@@ -48,6 +48,7 @@ export type {
   FormatContext,
   PaginationOptions,
   PartialTableState,
+  RowHeight,
   SelectOption,
   SelectionInput,
   SelectionOptions,

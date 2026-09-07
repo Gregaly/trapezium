@@ -136,7 +136,26 @@ describe("options that change while the table is running", () => {
     expect(rows()[0]?.[0]).toBe("P29")
   })
 
-  it("offers the row-height switch when asked", () => {
+  it("passes row height through, and follows it when it changes", () => {
+    /*
+      The Svelte component spreads its props into the DOM renderer, so the
+      feature costs it no code — which is exactly why this is checked: a prop
+      that is not on the vanilla options type would be dropped without a word.
+    */
+    const node = mount({ data: people, rowHeight: "auto" })
+    const root = node.querySelector<HTMLElement>(".tpz")!
+    expect(root.dataset["rowHeight"]).toBe("auto")
+
+    action!.update({ data: people, rowHeight: 56 })
+    expect(root.dataset["rowHeight"]).toBe("exact")
+    expect(root.style.getPropertyValue("--tpz-row-height")).toBe("56px")
+
+    action!.update({ data: people })
+    expect(root.dataset["rowHeight"]).toBeUndefined()
+    expect(root.style.getPropertyValue("--tpz-row-height")).toBe("")
+  })
+
+  it("offers the density switch when asked", () => {
     const node = mount({ data: people, densityControl: true })
 
     node.querySelector<HTMLButtonElement>('[aria-label="Row height"]')!.click()

@@ -112,7 +112,7 @@ Empty values always sort last, in both directions. A column of dates with a few 
 
 Widths are in pixels. Columns are content-sized when you do not set one, within the `--tpz-col-min-width` and `--tpz-col-max-width` tokens. A width a user drags is stored in state and wins over the definition; double-clicking the resize handle forgets it.
 
-`wrap` lets a cell take several lines instead of truncating — worth it for a notes column, ruinous for everything else.
+`wrap` lets a cell take several lines instead of truncating — worth it for a notes column, ruinous for everything else. A number caps it: `wrap: 3` wraps and then stops after three lines. To let *every* row size itself to its content, use [`rowHeight`](styling.md#row-height) on the table — `"auto"` or a number — and `wrap: false` on the columns that should stay on one line.
 
 ## Moving and removing columns
 

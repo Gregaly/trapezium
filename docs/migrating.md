@@ -47,7 +47,11 @@ The biggest difference: TanStack's state is several objects, Trapezium's is one.
 | `setFilterParams.values` (a callback) | `server.distinct`, or `filter: { kind: "set", options }` |
 | `exportDataAsCsv` | `export`, and `server.all` when the rows are on a server |
 | `pagination: true` | `pagination` |
-| `domLayout`, `rowHeight` | `density`, `maxHeight` |
+| `rowHeight` | `rowHeight` |
+| `getRowHeight` | `rowHeight="auto"` — the browser measures it, so there is nothing to answer |
+| `autoHeight: true` on a column | `wrap: true`, or `rowHeight="auto"` for the whole table |
+| `wrapText` | `wrap` |
+| `domLayout` | `density`, `maxHeight` |
 | Enterprise: pivoting, grouping, aggregation | not offered, on purpose |
 
 The API-object habit is the thing to unlearn: there is no imperative grid handle to grab. Everything is state, and you already know how to change state.

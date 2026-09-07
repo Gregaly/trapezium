@@ -5,6 +5,7 @@ import {
   createTypeRegistry,
   defaultTypeRegistry,
   getRows,
+  COLUMN_SAMPLE_SIZE,
   resolveColumns,
   resolveRowId,
   type FormatContext,
@@ -111,17 +112,52 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
     [formatOverrides],
   )
 
+  /*
+    Only the first `COLUMN_SAMPLE_SIZE` rows can decide an inferred type, so
+    once a table has that many, adding more cannot change a column. Holding the
+    sample still past that point is what stops an appended page from resolving
+    the columns again — see below for why that matters.
+  */
+  const sample = useRef<readonly TRow[]>([])
+  const nextSample = data.slice(0, COLUMN_SAMPLE_SIZE)
+  if (
+    nextSample.length !== sample.current.length ||
+    nextSample.some((row, index) => row !== sample.current[index])
+  ) {
+    sample.current = nextSample
+  }
+  const rowSample = sample.current
+
+  /*
+    Columns are resolved against the *arrangement* — order, hiding, pinning and
+    widths — and nothing else the state holds. The dependencies say so, rather
+    than naming the whole state object, because the page number lives in there
+    too: depending on all of it meant a new `columns` array every time a page
+    was appended, which handed every row on screen a changed prop and undid the
+    memo that makes appending cheap. If `resolveColumns` ever starts reading
+    more of the state than this, this list has to grow with it.
+  */
   const { visible, hidden, all } = useMemo(
     () =>
       resolveColumns<TRow, React.ReactNode>({
         columns: columnInput,
-        rows: data,
+        rows: rowSample,
         state,
         types,
         resizable: props.resizable,
         reorderable: props.reorderable,
       }),
-    [columnInput, data, state, types, props.resizable, props.reorderable],
+    [
+      columnInput,
+      rowSample,
+      state.order,
+      state.hidden,
+      state.pinned,
+      state.widths,
+      types,
+      props.resizable,
+      props.reorderable,
+    ],
   )
 
   // Append modes keep every page loaded so far on screen rather than replacing

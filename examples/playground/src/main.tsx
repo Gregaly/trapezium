@@ -1,6 +1,6 @@
 import { StrictMode, useState } from "react"
 import { createRoot } from "react-dom/client"
-import { Table, type Column, type Density, type PaginationOptions } from "@trapezium/react"
+import { Table, type Column, type Density, type PaginationOptions, type RowHeight } from "@trapezium/react"
 import "@trapezium/react/styles.css"
 
 import { Controls, Segmented, Switch } from "./controls.js"
@@ -32,6 +32,7 @@ function Playground() {
   const [density, setDensity] = useState<Density>("normal")
   const [cards, setCards] = useState(false)
   const [sticky, setSticky] = useState(true)
+  const [rowHeight, setRowHeight] = useState<RowHeight>("fixed")
 
   const columns: Column<Invoice>[] = [
     { key: "reference", header: "Invoice", pin: "start", type: "id" },
@@ -135,6 +136,17 @@ function Playground() {
               { value: "relaxed", label: "Relaxed" },
             ]}
           />
+          <Segmented
+            label="Row height"
+            value={String(rowHeight)}
+            onChange={(next) => setRowHeight(next === "fixed" || next === "auto" ? next : Number(next))}
+            options={[
+              { value: "fixed", label: "Fixed" },
+              { value: "auto", label: "Auto" },
+              { value: "28", label: "28px" },
+              { value: "64", label: "64px" },
+            ]}
+          />
           <Switch label="Set filters" checked={setFilters} onChange={setSetFilters} />
           <Switch label="Selection" checked={selection} onChange={setSelection} />
           <Switch label="Card layout" checked={cards} onChange={setCards} />
@@ -156,6 +168,7 @@ function Playground() {
           density={density}
           responsive={cards ? "cards" : "scroll"}
           stickyHeader={sticky}
+          rowHeight={rowHeight}
           maxHeight={420}
           pagination={mode === "none" ? false : { mode, pageSize, pageSizeOptions: [10, 25, 50, 100] }}
           format={{ currency: "AUD", locale: "en-AU", timeZone: "Australia/Sydney" }}
@@ -164,6 +177,40 @@ function Playground() {
         <p className="note">
           {selected.length} selected · filters are {setFilters ? "set filters" : "whatever each type deserves"}
         </p>
+      </section>
+
+      <section>
+        <h2>Rows that size themselves</h2>
+        <p className="note">
+          <code>rowHeight="auto"</code> — every row is as tall as its tallest cell, and the cell
+          renderer in the last column decides that for itself. No measuring pass: the browser
+          already knows how tall a table row is.
+        </p>
+        <Table
+          theme={theme}
+          data={invoices.slice(0, 6)}
+          rowHeight="auto"
+          pagination={false}
+          columns={[
+            { key: "reference", header: "Invoice", wrap: false },
+            { key: "notes", type: "longText", width: 320 },
+            { key: "tags", type: "tags", width: 200 },
+            {
+              key: "summary",
+              header: "Rendered",
+              sortable: false,
+              filter: false,
+              width: 260,
+              render: ({ row }) => (
+                <div className="stacked">
+                  <strong>{row.customer.name}</strong>
+                  <span>{row.customer.email}</span>
+                  <span>{row.status}</span>
+                </div>
+              ),
+            },
+          ]}
+        />
       </section>
 
       <section>

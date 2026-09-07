@@ -264,8 +264,15 @@ export type ColumnDef<TRow = AnyRow, TNode = unknown> = {
   /** Defaults to true when the table allows reordering at all. */
   reorderable?: boolean
 
-  /** Let the cell wrap onto several lines instead of truncating. */
-  wrap?: boolean
+  /**
+   * Let the cell wrap onto several lines instead of truncating.
+   *
+   * A number caps it at that many lines and puts the ellipsis at the end of
+   * the last one. `false` keeps this column on a single line even when the
+   * table is wrapping — `rowHeight="auto"` or a number — which is how a column
+   * of identifiers stays scannable next to one of prose.
+   */
+  wrap?: boolean | number
 
   /** Monospaced cell text. Defaults to the type's preference. */
   mono?: boolean
@@ -352,6 +359,29 @@ export type TableState = {
   pinned: Record<string, Pin>
   density: Density
 }
+
+/**
+ * How tall a row is.
+ *
+ * - `"fixed"` — one line a cell, truncated with an ellipsis. The default, and
+ *   the right answer for a table of values you scan down.
+ * - `"auto"` — cells wrap and the row grows to fit its tallest one, whatever
+ *   that is: prose, a stack of tags, an image, a whole component from a cell
+ *   renderer. `--tpz-row-height` becomes the minimum rather than the height,
+ *   so rows of short values keep the density's rhythm.
+ * - a number — every row that many pixels, with the cells wrapping to use them
+ *   and anything that will not fit ending in an ellipsis. Asking for taller
+ *   rows and being given one truncated line adrift in the middle of them would
+ *   be a strange reading of it, and so would a height that could not shrink a
+ *   row.
+ *
+ * Auto height costs nothing to arrange because the table is a real `<table>`
+ * in normal flow: the browser sizes the row, so there is no measuring pass, no
+ * `ResizeObserver`, no second layout and nothing to get wrong on the server.
+ * A grid of absolutely-positioned divs has to measure every row to do this,
+ * which is why it is slow and jumpy everywhere else.
+ */
+export type RowHeight = "fixed" | "auto" | number
 
 /** Any subset of table state — what callers pass, and what updates carry. */
 export type PartialTableState = Partial<TableState>

@@ -57,7 +57,19 @@
   --tpz-radius-md: calc(var(--tpz-radius) - 2px);
 
   --tpz-row-height: 2rem;
+  /*
+    The header's own, rather than the row's.
+
+    It is given a value at every density instead of defaulting to
+    `--tpz-row-height`, and that is the whole point: `rowHeight` sets the row
+    token, and a header that borrowed it came out 64px tall on a table of 64px
+    rows — or short enough at 20px to start clipping the sort and menu
+    controls. Density still moves both, because density is meant to.
+  */
+  --tpz-header-height: 2rem;
   --tpz-cell-padding-x: 0.5rem;
+  /* Only used by cells that wrap: a fixed-height row is centred, not padded. */
+  --tpz-cell-padding-y: 0.375rem;
   --tpz-col-min-width: 8rem;
   --tpz-col-max-width: 20rem;
   --tpz-lead-min-width: 12rem;
@@ -194,10 +206,12 @@
 
 .tpz[data-density="compact"] {
   --tpz-row-height: 1.75rem;
+  --tpz-header-height: 1.75rem;
 }
 
 .tpz[data-density="relaxed"] {
   --tpz-row-height: 2.5rem;
+  --tpz-header-height: 2.5rem;
   --tpz-cell-padding-x: 0.75rem;
   --tpz-text-cell: 0.75rem;
 }
@@ -264,7 +278,6 @@
 
 .tpz-th,
 .tpz-td {
-  height: var(--tpz-row-height);
   max-width: var(--tpz-col-max-width);
   min-width: var(--tpz-col-min-width);
   overflow: hidden;
@@ -274,6 +287,14 @@
   text-overflow: ellipsis;
   vertical-align: middle;
   white-space: nowrap;
+}
+
+.tpz-td {
+  height: var(--tpz-row-height);
+}
+
+.tpz-th {
+  height: var(--tpz-header-height);
 }
 
 .tpz-tr > :last-child {
@@ -302,9 +323,204 @@
 
 .tpz-td[data-wrap="true"] {
   height: auto;
-  padding-block: 0.375rem;
+  padding-block: var(--tpz-cell-padding-y);
   text-overflow: clip;
   white-space: normal;
+}
+
+/*
+  Auto row height.
+
+  Every cell wraps, and the row ends up as tall as the tallest one — whatever
+  that turns out to be: two lines of prose, a stack of tags, an avatar, a whole
+  component returned by a cell renderer.
+
+  This is CSS and nothing else. The table is a real `<table>` in normal flow,
+  so the browser already sizes a row to its content; there is no measuring
+  pass, no `ResizeObserver`, no second layout, and the server and the first
+  client paint agree. A grid of absolutely-positioned divs cannot do that — it
+  has to render every row, measure it, then place it — which is why auto height
+  is the slow, jumpy corner of every virtualised grid.
+
+  `height` on a table cell is a minimum rather than a height, so
+  `--tpz-row-height` keeps setting the rhythm for rows whose content is short,
+  and density still means what it meant.
+
+  A number for `rowHeight` wraps in exactly the same way. It would be a strange
+  thing to ask for rows twice the usual height and be given one truncated line
+  adrift in the middle of them, so the only thing a number changes is where the
+  height comes from — and there it is a ceiling as well as a floor, because a
+  row height you cannot shrink is not a row height. What will not fit ends in
+  an ellipsis, the same as it does on one line.
+*/
+.tpz[data-row-height="auto"] .tpz-td,
+.tpz[data-row-height="exact"] .tpz-td {
+  padding-block: var(--tpz-cell-padding-y);
+  text-overflow: clip;
+  white-space: normal;
+  /* A URL or an id with no spaces in it must not push the column wider. */
+  overflow-wrap: anywhere;
+}
+
+/*
+  Wrapped rows align to the top; fixed and exact ones stay centred.
+
+  Under `auto` the row is as tall as its tallest cell, so every other cell has
+  slack — and hanging them from the top is what lines the first line of each
+  column up with the first line of the others, which is what makes a row of
+  wrapped text scannable. Centring would stagger them.
+
+  An exact row keeps the library's usual centring, because there the slack is
+  the point: the cell's content is bounded by `.tpz-fit`, so it can never be
+  taller than the well it sits in, and centring short content in a tall row
+  looks deliberate rather than dropped in from above.
+*/
+/*
+  Where the height comes from is the only difference between the two.
+
+  `auto` lets the row follow its content, with the token as the floor — on a
+  table cell `height` is a minimum, so this is the same declaration the fixed
+  layout makes, meaning something else. A number pins the row to the token and
+  clips what will not fit; asking for rows of exactly this height and then
+  getting a taller one would make the setting meaningless.
+*/
+.tpz[data-row-height="auto"] .tpz-td {
+  height: var(--tpz-row-height);
+  vertical-align: top;
+}
+
+/*
+  `box-sizing` because `height` on a cell sizes the content box, and this mode
+  adds vertical padding — without it a 72px row measures 85, which is not the
+  number anybody typed.
+*/
+.tpz[data-row-height="exact"] .tpz-td {
+  box-sizing: border-box;
+  height: var(--tpz-row-height);
+  overflow: hidden;
+}
+
+/*
+  What makes an exact height exact.
+
+  `height` on a table cell is a minimum, in every engine — a cell whose content
+  is taller pushes the whole row open, and `overflow`, `max-height` and
+  `table-layout: fixed` all fail to stop it. The only thing that does is giving
+  the content an element of its own to be bounded by, so a cell in this mode
+  gets one and the row is finally the height it was asked for.
+
+  Subtracting the padding is what keeps the arithmetic honest: the cell is
+  `border-box`, so its content well is the row height less the padding, and
+  that is exactly what the content is allowed.
+*/
+/*
+  How many lines of this cell the row has room for.
+
+  `text-overflow` only ever finishes one line that was told not to wrap, and
+  `-webkit-line-clamp` wants a count of lines rather than a height — so the
+  count is worked out here, from the height the caller asked for.
+
+  The arithmetic is a ratio of two lengths, which `calc()` will not do: dividing
+  by a length is not division it accepts, and Firefox will not do it at all.
+  `atan2` takes two lengths and returns an angle, and `tan` turns that angle
+  back into the plain number they were a ratio of — which every engine does
+  agree on. Rounded down, because a line the row cannot fit is not a line it
+  has, and floored at one so the smallest row still shows something.
+*/
+.tpz[data-row-height="exact"] .tpz-fit {
+  --tpz-fit-lines: max(
+    1,
+    round(down, tan(atan2(calc(var(--tpz-row-height) - 2 * var(--tpz-cell-padding-y)), 1lh)), 1)
+  );
+
+  display: -webkit-box;
+  /*
+    Both, because they bound different things. The clamp counts lines, and a
+    line is as tall as whatever is on it — a button or an avatar makes one much
+    taller than a line of text, and the row would run over. The height is the
+    promise; the clamp is what puts an ellipsis on the end of it.
+  */
+  max-height: calc(var(--tpz-row-height) - 2 * var(--tpz-cell-padding-y));
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--tpz-fit-lines);
+  line-clamp: var(--tpz-fit-lines);
+}
+
+/*
+  A column that asked for a line count keeps it, unless the row is too short to
+  hold that many — whichever runs out first.
+*/
+.tpz[data-row-height="exact"] .tpz-clamp {
+  --tpz-fit-lines: max(
+    1,
+    round(down, tan(atan2(calc(var(--tpz-row-height) - 2 * var(--tpz-cell-padding-y)), 1lh)), 1)
+  );
+
+  max-height: calc(var(--tpz-row-height) - 2 * var(--tpz-cell-padding-y));
+  -webkit-line-clamp: min(var(--tpz-cell-lines, 2), var(--tpz-fit-lines));
+  line-clamp: min(var(--tpz-cell-lines, 2), var(--tpz-fit-lines));
+}
+
+/*
+  A column that opted out of wrapping ends the way it always did, on one line.
+*/
+.tpz[data-row-height="exact"] .tpz-td[data-wrap="false"] .tpz-fit {
+  display: block;
+  max-height: calc(var(--tpz-row-height) - 2 * var(--tpz-cell-padding-y));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+  Two cells hold nothing a column put there, so nothing wrapped them.
+
+  The checkbox cell would otherwise set the floor on its own: the box is
+  inline, so the cell carries a line box and its leading, and 20px of that plus
+  the padding is 32 — which is why an exact height used to refuse to go below
+  about 33px however small a number it was given. It holds one control, so it
+  needs neither the leading nor the padding.
+
+  A cell spanning the table is the empty, loading or error state, or a caller's
+  appended row. None of those is a row of data and none should be cut off at
+  the data's height.
+*/
+.tpz[data-row-height="auto"] .tpz-select-cell,
+.tpz[data-row-height="exact"] .tpz-select-cell {
+  padding-block: 0;
+  line-height: 0;
+}
+
+.tpz[data-row-height="exact"] .tpz-td[colspan] {
+  height: auto;
+  overflow: visible;
+}
+
+/*
+  One column opting out. A reference, a date or a status stays on its line
+  while the prose beside it wraps, which is what keeps the table scannable.
+*/
+.tpz[data-row-height="auto"] .tpz-td[data-wrap="false"],
+.tpz[data-row-height="exact"] .tpz-td[data-wrap="false"] {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/*
+  `wrap: 3` — wrap, but stop after three lines.
+
+  It needs an element of its own because `-webkit-box` is a display type and a
+  table cell has to stay a table cell, so the renderers put one inside the cell
+  for this case only.
+*/
+.tpz-clamp {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--tpz-cell-lines, 2);
+  line-clamp: var(--tpz-cell-lines, 2);
 }
 
 .tpz-th[data-align="end"],
@@ -332,7 +548,7 @@
 
 .tpz-th-inner {
   display: flex;
-  height: var(--tpz-row-height);
+  height: var(--tpz-header-height);
   min-width: 0;
   align-items: center;
 }
@@ -356,7 +572,7 @@
 
 .tpz-th-button {
   display: flex;
-  height: var(--tpz-row-height);
+  height: var(--tpz-header-height);
   min-width: 0;
   flex: 1;
   align-items: center;
@@ -1084,6 +1300,29 @@
     text-align: left;
   }
 
+  /*
+    Row height is about rows, and a card has none. Left alone, an exact height
+    would go on clamping every field of the card to a row's worth of lines, and
+    the row-derived line count would cap a column's own `wrap: 3`.
+  */
+  .tpz[data-row-height="exact"][data-responsive="cards"] .tpz-td {
+    height: auto;
+    overflow: visible;
+  }
+
+  .tpz[data-row-height="exact"][data-responsive="cards"] .tpz-fit {
+    display: block;
+    max-height: none;
+    -webkit-line-clamp: none;
+    line-clamp: none;
+  }
+
+  .tpz[data-row-height="exact"][data-responsive="cards"] .tpz-clamp {
+    max-height: none;
+    -webkit-line-clamp: var(--tpz-cell-lines, 2);
+    line-clamp: var(--tpz-cell-lines, 2);
+  }
+
   /* A cell with no label to show — the selection box — keeps its own layout. */
   .tpz[data-responsive="cards"] .tpz-select-cell {
     justify-content: flex-start;
@@ -1182,7 +1421,7 @@
    the header sorts and a click on the chevron opens what else the column can do. */
 .tpz-th-menu {
   display: flex;
-  height: var(--tpz-row-height);
+  height: var(--tpz-header-height);
   flex: none;
   align-items: center;
   border: 0;

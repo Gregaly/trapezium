@@ -85,6 +85,7 @@ export type {
   GetRowId,
   PaginationOptions,
   PartialTableState,
+  RowHeight,
   Pin,
   SelectOption,
   SelectionInput,

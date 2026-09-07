@@ -25,6 +25,7 @@ Trapezium is the one that is beautiful out of the box, configured in five lines,
 - **Plug your data straight in.** A Postgres row, a Supabase response, a REST payload, a Prisma model. No mapping layer, no wrapper types, dotted paths for nested fields.
 - **Real filtering and search.** Per-column filters that suit the column's type, including a set filter built from the values actually present, plus global search across everything.
 - **Four kinds of pagination.** Numbered, previous/next, load more, infinite scroll. One prop.
+- **Rows that size themselves.** `rowHeight="auto"` and each row is as tall as its tallest cell — prose, tags, a whole component from a cell renderer. No measuring pass, because a real `<table>` already knows. Appending a page leaves every row above it untouched.
 - **Server or client.** The same component sorts and pages your array, or tells you what to fetch.
 - **Server rendering that actually works.** Correct on the first paint, no effects, no layout shift, and optionally no client JavaScript at all.
 - **Styled by CSS variables**, so it matches your app by overriding a few tokens — or hand it Tailwind classes per slot and take over completely.

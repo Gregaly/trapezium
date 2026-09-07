@@ -17,12 +17,12 @@ import {
   type TableState,
 } from "@trapezium/core"
 
-import { cellText, renderCell } from "./cell.js"
 import { createClasses } from "./classes.js"
 import { TableContext } from "./context.js"
 import { HeaderCell } from "./header-cell.js"
 import { Icon } from "./icon.js"
 import { InfiniteSentinel, Pagination } from "./pagination.js"
+import { Row } from "./row.js"
 import { Toolbar } from "./toolbar.js"
 import type { SearchOptions, TableProps } from "./types.js"
 import { useTable } from "./use-table.js"
@@ -52,6 +52,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
     responsive = "scroll",
     stickyHeader = true,
     maxHeight,
+    rowHeight = "fixed",
     rowHref,
     onRowClick,
     rowClassName,
@@ -178,6 +179,44 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
     setPinOffsets((current) => (shallowEqualNumbers(current, next) ? current : next))
   }, [columns, state.widths, state.density, rows.length])
 
+  /*
+    Both custom properties on one object so the memo has one identity to
+    compare. A number for `rowHeight` is simply the token the whole stylesheet
+    already sizes rows by, which is why it needs no rule of its own — and why
+    it still respects a column that has been told to wrap.
+  */
+  /*
+    A number is its own mode rather than only a token, because it wraps like
+    `auto` does — the token alone could not say that.
+  */
+  const rowHeightMode = rowHeight === "fixed" ? undefined : typeof rowHeight === "number" ? "exact" : "auto"
+
+  const rootStyle = useMemo(() => {
+    const style: Record<string, string> = {}
+    if (maxHeight !== undefined) {
+      style["--tpz-max-height"] = typeof maxHeight === "number" ? `${String(maxHeight)}px` : maxHeight
+    }
+    if (typeof rowHeight === "number") style["--tpz-row-height"] = `${String(rowHeight)}px`
+    return Object.keys(style).length > 0 ? (style as React.CSSProperties) : undefined
+  }, [maxHeight, rowHeight])
+
+  /*
+    Worked out once for the table rather than per cell. The old form asked
+    "is this the last pinned column?" inside every cell of every row, which
+    walked the column list twice each time — quadratic in columns, multiplied
+    by rows, on every render.
+  */
+  const pinEdges = useMemo(() => {
+    const starts = columns.filter((column) => column.pin === "start")
+    const ends = columns.filter((column) => column.pin === "end")
+    const edges: Record<string, true> = {}
+    const first = starts[starts.length - 1]?.key
+    const last = ends[0]?.key
+    if (first) edges[first] = true
+    if (last) edges[last] = true
+    return edges
+  }, [columns])
+
   /* ── Selection ─────────────────────────────────────────────────────────── */
 
   const selectableIds = useMemo(
@@ -192,26 +231,47 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   // expect from a table and almost never get.
   const lastToggled = useRef<string | undefined>(undefined)
 
-  const toggleRow = useCallback(
-    (id: string, event: React.ChangeEvent<HTMLInputElement>) => {
-      // React's change event does not carry the modifier keys; the click
-      // underneath it does.
-      const native = event.nativeEvent
-      const shift = "shiftKey" in native && native.shiftKey === true
-      const anchor = lastToggled.current
+  /*
+    Read through a ref so the handler itself never changes identity. It needs
+    the current ids and the current `update`, and both of those change whenever
+    a page is appended or the caller passes an inline `onStateChange` — which
+    would hand every memoised row a new prop and undo the memo. An event
+    handler is exactly the thing that can be read late instead: it runs on a
+    click, long after the render that would have rebuilt it.
+  */
+  const handlers = useRef({ selectableIds, mode: selection?.mode, update })
+  handlers.current = { selectableIds, mode: selection?.mode, update }
 
-      if (shift && anchor && selection?.mode !== "single") {
-        // The range runs over the selectable rows only, so a disabled row
-        // between two chosen ones is stepped over rather than swept up.
-        update((current) => selectRange(current, selectableIds, anchor, id, !current.selection.includes(id)))
-        return
-      }
+  const toggleRow = useCallback((id: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const { selectableIds: ids, mode, update: apply } = handlers.current
+    // React's change event does not carry the modifier keys; the click
+    // underneath it does.
+    const native = event.nativeEvent
+    const shift = "shiftKey" in native && native.shiftKey === true
+    const anchor = lastToggled.current
 
-      lastToggled.current = id
-      update((current) => toggleSelection(current, id, selection?.mode === "single"))
-    },
-    [selectableIds, selection, update],
-  )
+    if (shift && anchor && mode !== "single") {
+      // The range runs over the selectable rows only, so a disabled row
+      // between two chosen ones is stepped over rather than swept up.
+      apply((current) => selectRange(current, ids, anchor, id, !current.selection.includes(id)))
+      return
+    }
+
+    lastToggled.current = id
+    apply((current) => toggleSelection(current, id, mode === "single"))
+  }, [])
+
+  /*
+    Same trick for the caller's row click: it is nearly always written inline
+    at the call site, and a fresh function every render would be enough on its
+    own to re-render every row in the table.
+  */
+  const clickRef = useRef(onRowClick)
+  clickRef.current = onRowClick
+
+  const handleRowClick = useCallback((row: TRow, event: React.MouseEvent) => {
+    clickRef.current?.(row, event)
+  }, [])
 
   /*
     Reported in an effect rather than from the handler: the selection can also
@@ -305,7 +365,8 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
       data-sticky-header={stickyHeader ? "true" : undefined}
       data-loading={loading ? "true" : undefined}
       data-dragging-out={draggingColumn ? "true" : undefined}
-      style={maxHeight ? ({ "--tpz-max-height": typeof maxHeight === "number" ? `${String(maxHeight)}px` : maxHeight } as React.CSSProperties) : undefined}
+      data-row-height={rowHeightMode}
+      style={rootStyle}
     >
       <div className={classes("frame")}>
         <Toolbar
@@ -408,76 +469,35 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
 
               {rows.map((row, rowIndex) => {
                 const id = rowIds[rowIndex]!
-                const selected = table.selection.has(id)
 
+                /*
+                  Resolved here rather than inside the row, so what the memo
+                  compares is a string that changes when the class changes —
+                  not the identity of a `rowClassName` written inline, which
+                  changes every render and never means anything by it.
+                */
                 return (
-                  <tr
+                  <Row
                     key={id}
-                    className={classes("row", rowClassName?.(row, rowIndex))}
-                    data-selected={selected ? "true" : undefined}
-                    data-clickable={onRowClick ? "true" : undefined}
-                    onClick={onRowClick ? (event) => onRowClick(row, event) : undefined}
-                  >
-                    {selection && (
-                      <td
-                        className={classes("selectCell")}
-                        data-pin="start"
-                        data-key="__select"
-                        style={{ left: pinOffsets["__select"] ?? 0 }}
-                      >
-                        <input
-                          type={selection.mode === "single" ? "radio" : "checkbox"}
-                          className="tpz-checkbox"
-                          checked={selected}
-                          disabled={selection.isSelectable ? !selection.isSelectable(row, rowIndex) : false}
-                          aria-label={`Select row ${String(rowIndex + 1)}`}
-                          onClick={(event) => event.stopPropagation()}
-                          onChange={(event) => toggleRow(id, event)}
-                        />
-                      </td>
-                    )}
-
-                    {columns.map((column, columnIndex) => {
-                      const context = cellText(row, id, rowIndex, column, types, format)
-                      const content = renderCell(context, types)
-                      const leading = columnIndex === 0
-
-                      return (
-                        <td
-                          key={column.key}
-                          className={classes("cell", column.className)}
-                          data-align={column.align}
-                          data-mono={column.mono ? undefined : "false"}
-                          data-wrap={column.wrap ? "true" : undefined}
-                          data-pin={column.pin}
-                          data-pin-edge={isPinEdge(columns, column.key) ? column.pin : undefined}
-                          data-key={column.key}
-                          // Carries the header into the cell so the card layout
-                          // can label it in CSS, with no second render.
-                          data-label={column.header}
-                          style={{
-                            ...(column.pin === "start" ? { left: pinOffsets[column.key] } : {}),
-                            ...(column.pin === "end" ? { right: pinOffsets[column.key] } : {}),
-                            width: column.width,
-                          }}
-                        >
-                          {leading && rowHref ? (
-                            Link ? (
-                              <Link href={rowHref(row)} className="tpz-link tpz-lead">
-                                {content}
-                              </Link>
-                            ) : (
-                              <a href={rowHref(row)} className="tpz-link tpz-lead">
-                                {content}
-                              </a>
-                            )
-                          ) : (
-                            content
-                          )}
-                        </td>
-                      )
-                    })}
-                  </tr>
+                    row={row}
+                    id={id}
+                    rowIndex={rowIndex}
+                    columns={columns}
+                    types={types}
+                    format={format}
+                    classes={classes}
+                    className={rowClassName?.(row, rowIndex)}
+                    href={rowHref?.(row)}
+                    selected={table.selection.has(id)}
+                    selectionMode={selection?.mode}
+                    selectable={selection?.isSelectable ? selection.isSelectable(row, rowIndex) : true}
+                    pinOffsets={pinOffsets}
+                    pinEdges={pinEdges}
+                    fit={rowHeightMode === "exact"}
+                    onRowClick={onRowClick ? handleRowClick : undefined}
+                    onToggle={toggleRow}
+                    linkComponent={Link}
+                  />
                 )
               })}
 

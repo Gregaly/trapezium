@@ -24,8 +24,17 @@ export function trapezium<TRow extends AnyRow>(
     update(next) {
       // Replacing data is the common case and must not disturb the user's
       // sorting, filters or page — so it takes the cheaper path.
-      if (next.data !== previous.data && shallowSameOptions(previous, next)) table?.setData(next.data)
-      else table?.setOptions(next)
+      if (next.data !== previous.data && shallowSameOptions(previous, next)) {
+        table?.setData(next.data)
+      } else {
+        /*
+          `setOptions` merges, so a prop the component stopped receiving would
+          otherwise keep its last value forever. Svelte hands over the props
+          that are set and nothing else; the ones that went missing are reset
+          by name.
+        */
+        table?.setOptions({ ...dropped(previous, next), ...next })
+      }
 
       previous = next
     },
@@ -46,4 +55,13 @@ function shallowSameOptions<TRow extends AnyRow>(a: TableOptions<TRow>, b: Table
   }
 
   return true
+}
+
+/** `undefined` for every key of `previous` that `next` lacks, so a merge forgets them. */
+function dropped<T extends object>(previous: T, next: Partial<T>): Partial<T> {
+  const reset: Partial<T> = {}
+  for (const key in previous) {
+    if (!(key in next)) reset[key] = undefined
+  }
+  return reset
 }

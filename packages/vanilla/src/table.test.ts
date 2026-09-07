@@ -1125,3 +1125,238 @@ describe("options that change while the table is running", () => {
     expect(cells().map((row) => row[0])).toEqual(["Zoe", "Tom", "Ada"])
   })
 })
+
+/**
+ * Row height, and what it costs to add a page.
+ *
+ * jsdom has no layout, so how tall a row ends up is not observable here — the
+ * stylesheet decides that, and the e2e suite measures it in a real browser.
+ * What is observable, and what actually goes wrong, is how much of the table a
+ * render throws away. These assert on element identity: a `<tr>` that is still
+ * the same object was not rebuilt.
+ */
+describe("row height", () => {
+  const many = Array.from({ length: 100 }, (_, index) => ({
+    id: String(index),
+    name: `P${String(index)}`,
+  }))
+
+  function rows() {
+    return [...host.querySelectorAll("tbody tr")]
+  }
+
+  /**
+   * Element identity, not structure. `toEqual` compares DOM nodes with
+   * `isEqualNode`, which a rebuilt row passes — so it cannot tell a row that
+   * was kept from one that was thrown away and built again the same.
+   */
+  function sameNodes(a: Element[], b: Element[]): boolean {
+    return a.length === b.length && a.every((node, index) => node === b[index])
+  }
+
+  it("says nothing by default, so the fixed-height stylesheet applies", () => {
+    createTable(host, { data: people })
+    expect(host.querySelector<HTMLElement>(".tpz")!.dataset["rowHeight"]).toBeUndefined()
+  })
+
+  it("marks the table when rows size themselves", () => {
+    createTable(host, { data: people, rowHeight: "auto" })
+    expect(host.querySelector<HTMLElement>(".tpz")!.dataset["rowHeight"]).toBe("auto")
+  })
+
+  it("sets the height token and marks the table exact when given a number", () => {
+    const table = createTable(host, { data: people, rowHeight: 56 })
+    const root = host.querySelector<HTMLElement>(".tpz")!
+
+    expect(root.style.getPropertyValue("--tpz-row-height")).toBe("56px")
+    expect(root.dataset["rowHeight"]).toBe("exact")
+
+    // And gives both back when the caller changes their mind.
+    table.setOptions({ rowHeight: "fixed" })
+    expect(root.style.getPropertyValue("--tpz-row-height")).toBe("")
+    expect(root.dataset["rowHeight"]).toBeUndefined()
+  })
+
+  it("marks a column told to wrap, one told not to, and clamps one given a count", () => {
+    createTable(host, {
+      data: people,
+      rowHeight: "auto",
+      columns: [{ key: "name", wrap: false }, { key: "plan", wrap: true }, { key: "joined", wrap: 3 }],
+    })
+
+    const [name, plan, joined] = [...host.querySelectorAll("tbody tr:first-child td")]
+    expect(name?.getAttribute("data-wrap")).toBe("false")
+    expect(plan?.getAttribute("data-wrap")).toBe("true")
+    expect(joined?.getAttribute("data-wrap")).toBe("true")
+
+    const clamp = joined?.querySelector<HTMLElement>(".tpz-clamp")
+    expect(clamp?.style.getPropertyValue("--tpz-cell-lines")).toBe("3")
+    expect(clamp?.textContent?.trim()).not.toBe("")
+  })
+
+  /*
+    The bug this whole path exists for: an infinite list holds every page
+    loaded so far, and reaching the sentinel used to rebuild all of them.
+  */
+  it("adds an appended page without rebuilding the rows already on screen", () => {
+    const table = createTable(host, {
+      data: many,
+      getRowId: (row) => row.id,
+      pagination: { mode: "loadMore", pageSize: 10 },
+    })
+
+    const first = rows()
+    expect(first).toHaveLength(10)
+
+    table.setState({ page: 2 })
+
+    const second = rows()
+    expect(second).toHaveLength(20)
+    // The same ten elements, in the same places, untouched.
+    expect(sameNodes(second.slice(0, 10), first)).toBe(true)
+    expect(second[10]?.textContent).toContain("P10")
+  })
+
+  it("keeps the header alive across an append, so focus survives it", () => {
+    const table = createTable(host, {
+      data: many,
+      getRowId: (row) => row.id,
+      pagination: { mode: "loadMore", pageSize: 10 },
+    })
+
+    const header = host.querySelector("thead tr")
+    table.setState({ page: 2 })
+    expect(host.querySelector("thead tr")).toBe(header)
+  })
+
+  it("selects every row loaded so far, not the page the header was built with", () => {
+    const table = createTable(host, {
+      data: many,
+      getRowId: (row) => row.id,
+      selection: "multiple",
+      pagination: { mode: "loadMore", pageSize: 10 },
+    })
+
+    table.setState({ page: 3 })
+    expect(rows()).toHaveLength(30)
+
+    host.querySelector<HTMLInputElement>("thead .tpz-checkbox")!.click()
+    expect(host.querySelectorAll("tbody tr[data-selected]")).toHaveLength(30)
+  })
+
+  it("marks a selected row without rebuilding the table around it", () => {
+    createTable(host, {
+      data: many,
+      getRowId: (row) => row.id,
+      selection: "multiple",
+      pagination: { mode: "loadMore", pageSize: 10 },
+    })
+
+    const before = rows()
+    before[4]!.querySelector<HTMLInputElement>(".tpz-checkbox")!.click()
+
+    expect(sameNodes(rows(), before)).toBe(true)
+    expect((before[4] as HTMLElement).dataset["selected"]).toBe("true")
+    expect(host.querySelectorAll("tbody tr[data-selected]")).toHaveLength(1)
+
+    // And clears it again, still without a rebuild.
+    before[4]!.querySelector<HTMLInputElement>(".tpz-checkbox")!.click()
+    expect(sameNodes(rows(), before)).toBe(true)
+    expect((before[4] as HTMLElement).dataset["selected"]).toBeUndefined()
+  })
+
+  it("rebuilds when the rows themselves changed rather than grew", () => {
+    const table = createTable(host, { data: people, columns: ["name", "plan"] })
+    const before = rows()
+
+    // Sorting is not an append, whatever the ids say.
+    table.setState({ sort: [{ key: "name", direction: "desc" }] })
+    expect(cells().map((row) => row[0])).toEqual(["Zoe", "Tom", "Ada"])
+    expect(rows()[0]).not.toBe(before[0])
+  })
+
+  it("rebuilds when a row is replaced but keeps its id", () => {
+    const table = createTable(host, { data: people, getRowId: (row) => row.id, columns: ["name"] })
+
+    table.setData([{ ...people[0]!, name: "Ada Lovelace" }, ...people.slice(1)])
+    expect(cells()[0]?.[0]).toBe("Ada Lovelace")
+  })
+
+  it("marks the right row when an error is sitting above them", () => {
+    /*
+      An error renders a row of its own, above the data. Anything that finds a
+      row by counting the body's children is off by one from there down — so
+      the rows are held onto directly instead.
+    */
+    createTable(host, {
+      data: many,
+      getRowId: (row) => row.id,
+      selection: "multiple",
+      error: "Could not reach the server",
+      pagination: { mode: "loadMore", pageSize: 10 },
+    })
+
+    const dataRows = [...host.querySelectorAll("tbody tr")].filter((row) =>
+      row.querySelector(".tpz-checkbox"),
+    )
+    expect(dataRows).toHaveLength(10)
+
+    dataRows[4]!.querySelector<HTMLInputElement>(".tpz-checkbox")!.click()
+    expect((dataRows[4] as HTMLElement).dataset["selected"]).toBe("true")
+    expect(host.querySelectorAll("tbody tr[data-selected]")).toHaveLength(1)
+  })
+
+  it("keeps the rows on screen while loading is toggled around an appended page", () => {
+    /*
+      How a server-side "load more" goes: loading on, fetch, rows appended,
+      loading off. Every step but the append comes through `setOptions`, and
+      for a while any call to it rebuilt the body — which made the cheap path
+      unreachable from the Vue and Svelte adapters, where `loading` is a prop.
+    */
+    const table = createTable(host, {
+      data: many.slice(0, 10),
+      getRowId: (row) => row.id,
+      pagination: { mode: "loadMore", pageSize: 10 },
+    })
+    const first = rows()
+
+    table.setOptions({ loading: true })
+    expect(host.querySelector<HTMLElement>(".tpz")!.dataset["loading"]).toBe("true")
+    expect(sameNodes(rows(), first)).toBe(true)
+
+    table.setOptions({ loading: false, data: many.slice(0, 20) })
+    table.setState({ page: 2 })
+    expect(host.querySelector<HTMLElement>(".tpz")!.dataset["loading"]).toBeUndefined()
+
+    const second = rows()
+    expect(second).toHaveLength(20)
+    expect(sameNodes(second.slice(0, 10), first)).toBe(true)
+  })
+
+  it("puts an appended page above the caller's appended row", () => {
+    const appendRow = document.createElement("span")
+    appendRow.textContent = "New row"
+    const table = createTable(host, {
+      data: many,
+      getRowId: (row) => row.id,
+      pagination: { mode: "loadMore", pageSize: 10 },
+      appendRow,
+    })
+
+    table.setState({ page: 2 })
+
+    const all = [...host.querySelectorAll("tbody tr")]
+    expect(all).toHaveLength(21)
+    expect(all[19]?.textContent).toContain("P19")
+    expect(all[20]?.textContent).toBe("New row")
+  })
+
+  it("rebuilds when the columns change", () => {
+    const table = createTable(host, { data: people, columns: ["name"] })
+    expect(headers()).toHaveLength(1)
+
+    table.setOptions({ columns: ["name", "plan"] })
+    expect(headers()).toHaveLength(2)
+    expect(cells()[0]).toHaveLength(2)
+  })
+})

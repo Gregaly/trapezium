@@ -33,6 +33,7 @@ export type {
   Pin,
   ResolvedColumn,
   ResolvedSelection,
+  RowHeight,
   SelectOption,
   SelectionInput,
   SelectionOptions,
@@ -80,6 +81,7 @@ export {
   pruneState,
   reorderColumn,
   reorderColumnTo,
+  COLUMN_SAMPLE_SIZE,
   resolveColumns,
 } from "./columns.js"
 export type { ColumnInput, ResolveColumnsOptions, ResolvedColumns } from "./columns.js"

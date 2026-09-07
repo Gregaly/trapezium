@@ -53,7 +53,8 @@ import { Table } from "@trapezium/react"
 | Prop | Type | Default | |
 |---|---|---|---|
 | `density` | `"compact" \| "normal" \| "relaxed"` | `"normal"` | |
-| `densityControl` | `boolean` | `false` | Offer the row-height switch in the toolbar. |
+| `densityControl` | `boolean` | `false` | Offer the density switch in the toolbar. |
+| `rowHeight` | `"fixed" \| "auto" \| number` | `"fixed"` | `"auto"` sizes each row to its tallest cell; a number gives them all the same height. Both wrap; only `"fixed"` truncates. See [row height](styling.md#row-height). |
 | `responsive` | `"scroll" \| "cards"` | `"scroll"` | |
 | `stickyHeader` | `boolean` | `true` | |
 | `maxHeight` | `number \| string` | — | Caps the scroll area. |
@@ -83,8 +84,8 @@ import { Table } from "@trapezium/react"
 
 ## `ColumnDef`
 
-| Property | Type | Default |
-|---|---|---|
+| Property | Type | Default | |
+|---|---|---|---|
 | `key` | `string` | required |
 | `header` | `string` | humanised key |
 | `type` | `string` | inferred |
@@ -102,7 +103,7 @@ import { Table } from "@trapezium/react"
 | `pin` | `"start" \| "end"` | — |
 | `hidden` | `boolean` | `false` |
 | `resizable` / `reorderable` | `boolean` | `true` |
-| `wrap` | `boolean` | `false` |
+| `wrap` | `boolean \| number` | `false` | `true` wraps; a number caps it at that many lines; `false` keeps one line under any wrapping `rowHeight`. |
 | `mono` | `boolean` | the type's |
 | `icon` | `string \| false` | the type's |
 | `exportable` | `boolean` | `true` |

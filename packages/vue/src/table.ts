@@ -1,5 +1,6 @@
 import {
   Teleport,
+  computed,
   defineComponent,
   h,
   isVNode,
@@ -20,6 +21,7 @@ import type {
   FormatContext,
   PaginationOptions,
   PartialTableState,
+  RowHeight,
   SelectionInput,
   TableSlots,
   TableState,
@@ -97,6 +99,11 @@ export const Table = defineComponent({
     responsive: { type: String as PropType<"scroll" | "cards">, default: "scroll" },
     stickyHeader: { type: Boolean, default: true },
     maxHeight: { type: [Number, String], default: undefined },
+    /**
+     * How tall a row is: `"fixed"` (the default), `"auto"`, or a number of
+     * pixels.
+     */
+    rowHeight: { type: [String, Number] as PropType<RowHeight>, default: undefined },
     theme: { type: String as PropType<"light" | "dark">, default: undefined },
 
     rowHref: { type: Function as PropType<(row: AnyRow) => string>, default: undefined },
@@ -133,6 +140,7 @@ export const Table = defineComponent({
     */
     let mounted: HTMLElement[] = []
 
+    /** Everything, for when the component itself is going away. */
     const releaseVNodes = () => {
       for (const container of mounted) renderVNode(null, container)
       mounted = []
@@ -157,6 +165,25 @@ export const Table = defineComponent({
       return element
     }
 
+    /**
+     * Unmounts only the components whose cells the table has thrown away.
+     *
+     * Run *after* a render rather than before one. The DOM renderer keeps the
+     * rows it already had when a page is appended to the end — that is what
+     * makes an infinite list affordable — so those containers are still on
+     * screen and still need their components alive. What is safe to tear down
+     * is whatever is no longer in the document, and asking each container is
+     * both exact and cheap.
+     */
+    const releaseDetachedVNodes = () => {
+      const kept: HTMLElement[] = []
+      for (const container of mounted) {
+        if (container.isConnected) kept.push(container)
+        else renderVNode(null, container)
+      }
+      mounted = kept
+    }
+
     /** Wraps the caller's renderers so a VNode becomes a real DOM node. */
     const adaptColumns = () =>
       props.columns?.map((column) => {
@@ -177,9 +204,18 @@ export const Table = defineComponent({
         }
       })
 
+    /*
+      Once per `columns` prop rather than once per call. The wrapped renderers
+      are new functions each time this runs, so adapting again for a change to
+      an unrelated prop — `loading` flipping while a page is fetched — would
+      look to the DOM renderer like a new set of columns, and it would rebuild
+      every row it had been carefully keeping.
+    */
+    const adaptedColumns = computed(adaptColumns)
+
     const options = (): TableOptions => ({
       data: props.data,
-      columns: adaptColumns() as TableOptions["columns"],
+      columns: adaptedColumns.value as TableOptions["columns"],
       getRowId: props.getRowId,
       state: props.state,
       server: props.server,
@@ -203,6 +239,7 @@ export const Table = defineComponent({
       responsive: props.responsive,
       stickyHeader: props.stickyHeader,
       maxHeight: props.maxHeight,
+      rowHeight: props.rowHeight,
       theme: props.theme,
       rowHref: props.rowHref,
       rowClassName: props.rowClassName,
@@ -231,8 +268,8 @@ export const Table = defineComponent({
     watch(
       () => props.data,
       (data) => {
-        releaseVNodes()
         table?.setData(data)
+        releaseDetachedVNodes()
       },
     )
 
@@ -241,8 +278,8 @@ export const Table = defineComponent({
     watch(
       () => Object.fromEntries(Object.entries(props).filter(([key]) => key !== "data")),
       () => {
-        releaseVNodes()
         table?.setOptions(options())
+        releaseDetachedVNodes()
       },
       { deep: true },
     )

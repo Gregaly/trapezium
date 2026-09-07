@@ -140,6 +140,111 @@ describe("custom cells", () => {
     expect(host.querySelector(".chip")?.textContent).toBe("ADA")
   })
 
+  it("keeps the components in rows that were already on screen when a page is appended", async () => {
+    /*
+      Vue mounts each custom cell into a container of its own, outside its own
+      tree, and has to unmount them itself or a table that re-renders leaks a
+      component every time. It used to do that before every render, which was
+      safe while the DOM renderer rebuilt every row. It no longer does: an
+      appended page leaves the rows above it alone, so tearing their components
+      down would empty cells that are still on screen.
+
+      The sequence below is what a server-side "load more" does — the page
+      advances, the caller fetches, and the new rows arrive on the `data` prop
+      with the old ones still in front of them.
+    */
+    const Chip = defineComponent({
+      props: { label: { type: String, required: true } },
+      render() {
+        return h("strong", { class: "chip" }, this.label)
+      },
+    })
+
+    const many = ref(Array.from({ length: 20 }, (_, index) => ({ id: String(index), name: `P${index}` })))
+
+    // Held still, the way an app that is not rebuilding its column definitions
+    // on every render holds them — otherwise changing the data also looks like
+    // changing the columns, and everything is rebuilt for a different reason.
+    const columns = [{ key: "name", render: ({ value }: { value: unknown }) => h(Chip, { label: String(value) }) }]
+    const pagination = { mode: "loadMore" as const, pageSize: 10 }
+    const getRowId = (row: Record<string, unknown>) => String(row["id"])
+
+    const host = mount(
+      defineComponent(() => () => h(Table, { data: many.value, getRowId, pagination, columns })),
+    )
+    await nextTick()
+    expect(host.querySelectorAll(".chip")).toHaveLength(10)
+
+    host.querySelector<HTMLButtonElement>(".tpz-pagination button")!.click()
+    await nextTick()
+    expect(host.querySelectorAll(".chip")).toHaveLength(20)
+
+    // The caller appending what they fetched, which is how append pagination
+    // works once the rows are on a server.
+    many.value = [
+      ...many.value,
+      ...Array.from({ length: 10 }, (_, index) => ({ id: String(100 + index), name: `Q${index}` })),
+    ]
+    await nextTick()
+
+    // Still on screen, and still showing what their component rendered.
+    const chips = [...host.querySelectorAll(".chip")]
+    expect(chips).toHaveLength(20)
+    expect(chips.map((chip) => chip.textContent)).toContain("P0")
+    expect(chips.every((chip) => chip.textContent !== "")).toBe(true)
+  })
+
+  it("keeps the rows on screen while loading is toggled around an appended page", async () => {
+    /*
+      Every prop but `data` reaches the DOM renderer through `setOptions`, and
+      the adapted columns used to be rebuilt on each call — new renderer
+      functions every time, which looked like a new set of columns and threw
+      every row away. A server-side "load more" toggles `loading` around each
+      fetch, so that is the sequence checked here.
+    */
+    const Chip = defineComponent({
+      props: { label: { type: String, required: true } },
+      render() {
+        return h("strong", { class: "chip" }, this.label)
+      },
+    })
+
+    const many = ref(Array.from({ length: 10 }, (_, index) => ({ id: String(index), name: `P${index}` })))
+    const loading = ref(false)
+
+    const columns = [{ key: "name", render: ({ value }: { value: unknown }) => h(Chip, { label: String(value) }) }]
+    const pagination = { mode: "loadMore" as const, pageSize: 10 }
+    const getRowId = (row: Record<string, unknown>) => String(row["id"])
+
+    const host = mount(
+      defineComponent(
+        () => () => h(Table, { data: many.value, loading: loading.value, getRowId, pagination, columns }),
+      ),
+    )
+    await nextTick()
+    const first = [...host.querySelectorAll("tbody tr")]
+    expect(first).toHaveLength(10)
+
+    loading.value = true
+    await nextTick()
+    // By identity: `toEqual` on DOM nodes is `isEqualNode`, which a rebuilt row passes.
+    expect([...host.querySelectorAll("tbody tr")].every((row, index) => row === first[index])).toBe(true)
+
+    many.value = [
+      ...many.value,
+      ...Array.from({ length: 10 }, (_, index) => ({ id: String(100 + index), name: `Q${index}` })),
+    ]
+    loading.value = false
+    await nextTick()
+    host.querySelector<HTMLButtonElement>(".tpz-pagination button")!.click()
+    await nextTick()
+
+    const after = [...host.querySelectorAll("tbody tr")]
+    expect(after).toHaveLength(20)
+    expect(after.slice(0, 10).every((row, index) => row === first[index])).toBe(true)
+    expect([...host.querySelectorAll(".chip")].map((chip) => chip.textContent)).toContain("Q9")
+  })
+
   it("still accepts a plain string or DOM node", async () => {
     const host = mount(
       defineComponent(() => () =>

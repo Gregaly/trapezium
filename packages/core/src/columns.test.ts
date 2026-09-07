@@ -216,3 +216,30 @@ describe("the design-system bridges", () => {
     }
   })
 })
+
+/**
+ * The React adapter resolves columns in a memo keyed on these four fields and
+ * nothing else in the state, so that turning a page does not hand every row a
+ * new `columns` prop. If `resolveColumns` starts reading more of the state,
+ * that memo goes stale — and nothing would look broken, it would only render
+ * the old arrangement. This is the test that notices.
+ */
+describe("what is read from the state", () => {
+  it("is the arrangement only: order, hidden, pinned and widths", () => {
+    const touched = new Set<string>()
+    const state = new Proxy(
+      createState({ sort: [{ key: "full_name", direction: "asc" }], page: 3, search: "ada", density: "compact" }),
+      {
+        get(target, property, receiver) {
+          if (typeof property === "string") touched.add(property)
+          return Reflect.get(target, property, receiver)
+        },
+      },
+    )
+
+    resolve(undefined, state)
+    resolve([{ key: "full_name", pin: "start", width: 200 }, { key: "notes", hidden: true }, "id"], state)
+
+    expect([...touched].sort()).toEqual(["hidden", "order", "pinned", "widths"])
+  })
+})

@@ -95,10 +95,50 @@ function cellShape(root: HTMLElement): Array<Record<string, string | null>> {
     mono: cell.getAttribute("data-mono"),
     label: cell.getAttribute("data-label"),
     pin: cell.getAttribute("data-pin"),
+    wrap: cell.getAttribute("data-wrap"),
   }))
 }
 
 describe("the two renderers agree", () => {
+  /*
+    Row height is settled entirely in CSS, so the only thing the two renderers
+    have to agree on is what they say about it — one attribute on the root, one
+    per cell, and the element a clamped column wraps its content in. If they
+    drift here, one stylesheet stops serving both.
+  */
+  it("on how they describe a row's height", () => {
+    const wrapping = {
+      ...options,
+      columns: undefined,
+      rowHeight: "auto" as const,
+    }
+
+    const { container } = render(
+      <Table
+        {...wrapping}
+        columns={[{ key: "name", wrap: false }, { key: "bio", wrap: true }, { key: "email", wrap: 2 }]}
+      />,
+    )
+    const react = container.querySelector<HTMLElement>(".tpz")!
+
+    const host = document.createElement("div")
+    document.body.append(host)
+    createTable(host, {
+      ...wrapping,
+      columns: [{ key: "name", wrap: false }, { key: "bio", wrap: true }, { key: "email", wrap: 2 }],
+    })
+    const vanilla = host.querySelector<HTMLElement>(".tpz")!
+
+    expect(vanilla.dataset["rowHeight"]).toBe(react.dataset["rowHeight"])
+    expect(cellShape(vanilla)).toEqual(cellShape(react))
+    expect(vanilla.querySelectorAll(".tpz-clamp")).toHaveLength(
+      react.querySelectorAll(".tpz-clamp").length,
+    )
+    expect(
+      vanilla.querySelector<HTMLElement>(".tpz-clamp")!.style.getPropertyValue("--tpz-cell-lines"),
+    ).toBe(react.querySelector<HTMLElement>(".tpz-clamp")!.style.getPropertyValue("--tpz-cell-lines"))
+  })
+
   it("on the header", () => {
     expect(headerShape(vanillaTable())).toEqual(headerShape(reactTable()))
   })
