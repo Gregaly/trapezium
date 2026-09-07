@@ -13,7 +13,8 @@
  */
 
 export { createTable, pageWindow } from "./table.js"
-export { renderToString } from "./render-to-string.js"
+export { renderToString, renderToTree } from "./render-to-string.js"
+export { ServerDocument, ServerElement, ServerNode, ServerText } from "./server-dom.js"
 export type { TableInstance, TableOptions, VanillaColumn } from "./table.js"
 export { el, icon, fill, ICONS } from "./dom.js"
 export { openMenuAt, closeMenu, menuItem, menuLink, menuLabel, menuSeparator } from "./menu.js"

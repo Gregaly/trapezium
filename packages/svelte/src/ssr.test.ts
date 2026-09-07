@@ -10,6 +10,8 @@
 import { render } from "svelte/server"
 import { describe, expect, it } from "vitest"
 
+import { el } from "@trapezium/vanilla"
+
 import Table from "./Table.svelte"
 
 const people = [
@@ -33,6 +35,18 @@ describe("server rendering", () => {
     expect(body).toContain('aria-sort="descending"')
     const names = [...body.matchAll(/data-key="name" data-label="Name">([^<]+)</g)].map((match) => match[1])
     expect(names).toEqual(["Zoe", "Tom", "Ada"])
+  })
+
+  it("renders a cell built with the el helper", () => {
+    const { body } = render(Table, {
+      props: {
+        data: people,
+        columns: [{ key: "name", render: ({ value }: { value: unknown }) => el("strong", { class: "loud", text: String(value) }) }],
+        pagination: false,
+      },
+    })
+
+    expect(body).toContain('<strong class="loud">Ada</strong>')
   })
 
   it("writes a cell whose renderer needs the DOM as its text", () => {

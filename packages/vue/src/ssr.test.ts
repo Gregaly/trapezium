@@ -9,7 +9,7 @@
  * second copy appearing.
  */
 import { afterEach, describe, expect, it, vi } from "vitest"
-import { createSSRApp, defineComponent, h } from "vue"
+import { createSSRApp, defineComponent, h, nextTick } from "vue"
 import { renderToString } from "vue/server-renderer"
 
 import { Table } from "./table.js"
@@ -78,7 +78,55 @@ describe("server rendering", () => {
     expect(names).toEqual(["Ada", "Tom", "Zoe"])
   })
 
-  it("writes a component cell as its text on the server, and mounts the component in the browser", async () => {
+  it("renders a template slot and a component cell on the server", async () => {
+    const Chip = defineComponent({
+      props: { label: { type: String, required: true } },
+      render() {
+        return h("strong", { class: "chip" }, this.label.toUpperCase())
+      },
+    })
+    const page = defineComponent(() => () =>
+      h(
+        Table,
+        {
+          data: people,
+          columns: [{ key: "name", render: ({ value }) => h(Chip, { label: String(value) }) }],
+          pagination: false,
+        },
+        { toolbar: () => h("button", { class: "new" }, "New person"), footer: () => "3 people" },
+      ),
+    )
+
+    const html = await renderToString(createSSRApp(page))
+    expect(html).toContain('<strong class="chip">ADA</strong>')
+    expect(html).toContain('<button class="new">New person</button>')
+    expect(html).toContain('class="tpz-footer"')
+    expect(html).toContain(">3 people<")
+
+    host = document.createElement("div")
+    host.innerHTML = html
+    document.body.append(host)
+
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const error = vi.spyOn(console, "error").mockImplementation(() => {})
+    const vue = createSSRApp(page)
+    vue.mount(host)
+    mounted = vue
+    const complaints = [...warn.mock.calls, ...error.mock.calls].map((call) => String(call[0]))
+    warn.mockRestore()
+    error.mockRestore()
+    expect(complaints.filter((message) => /hydrat|mismatch/i.test(message))).toEqual([])
+
+    // The slots are teleported in on the render after mount.
+    await nextTick()
+
+    // The live table has them too, once, and the first-paint copies are gone.
+    expect(host.querySelectorAll(".chip")).toHaveLength(3)
+    expect(host.querySelectorAll(".new")).toHaveLength(1)
+    expect(host.querySelector(".tpz-footer")?.textContent).toBe("3 people")
+  })
+
+  it("hands a component cell over to the live table without leaving a copy behind", async () => {
     const Chip = defineComponent({
       props: { label: { type: String, required: true } },
       render() {
@@ -94,8 +142,7 @@ describe("server rendering", () => {
     )
 
     const html = await renderToString(createSSRApp(withChip))
-    expect(html).toContain(">Ada<")
-    expect(html).not.toContain('class="chip"')
+    expect(html).toContain('<strong class="chip">ADA</strong>')
 
     host = document.createElement("div")
     host.innerHTML = html

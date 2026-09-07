@@ -18,7 +18,7 @@
    */
   import { trapezium } from "./action.js"
   import { renderToString, type TableOptions } from "@trapezium/vanilla"
-  import type { AnyRow, CellContext, TableState } from "@trapezium/core"
+  import type { AnyRow, TableState } from "@trapezium/core"
 
   type Props = TableOptions<AnyRow> & {
     /** Bindable: the table writes its state here whenever anything changes. */
@@ -45,28 +45,11 @@
 
     Written once, the same way on the server and in the browser, so the markup
     Svelte hydrates is the markup it rendered; the action then replaces it with
-    the live table — the same bytes, so nothing moves. A cell renderer that
-    builds a DOM node cannot run on a server, so a cell is written as its text
-    unless the renderer returned a string.
+    the live table — the same bytes, so nothing moves. A cell renderer built
+    with this package's `el` renders here too; one that reaches for `document`
+    is written as the cell's text.
   */
-  const initial = renderToString({
-    ...options,
-    columns: options.columns?.map((column) => {
-      if (typeof column === "string" || !column.render) return column
-      const render = column.render
-      return {
-        ...column,
-        render: (context: CellContext<AnyRow, Node | string>) => {
-          try {
-            const result = render(context)
-            return typeof result === "string" ? result : context.text
-          } catch {
-            return context.text
-          }
-        },
-      }
-    }),
-  })
+  const initial = renderToString(options)
 </script>
 
 <div use:trapezium={settings}>{@html initial}</div>

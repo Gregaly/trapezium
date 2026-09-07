@@ -11,6 +11,7 @@
 import { columns as fullColumns, customTypes, makeRows, type Row } from "@trapezium/core/testing"
 import { afterEach, describe, expect, it, vi } from "vitest"
 
+import { el } from "./dom.js"
 import { renderToString } from "./render-to-string.js"
 import { createTable, type TableOptions, type VanillaColumn } from "./table.js"
 
@@ -119,6 +120,28 @@ describe("renderToString", () => {
     expect(html).not.toContain("<img")
     // Text escapes the three characters HTML text needs escaped, and no more.
     expect(html).toContain('&lt;img src=x onerror="alert(1)"&gt; &amp; "quotes"')
+  })
+
+  it("renders a cell built with the el helper, and writes one built with document as its text", () => {
+    const html = renderToString({
+      data: rows.slice(0, 1),
+      columns: [
+        { key: "name", render: ({ value }) => el("strong", { class: "loud", text: String(value) }) },
+        {
+          key: "plan",
+          render: ({ value }) => {
+            const node = document.createElement("em")
+            node.textContent = String(value)
+            return node
+          },
+        },
+      ],
+      pagination: false,
+    })
+
+    expect(html).toContain(`<strong class="loud">${rows[0]!.name}</strong>`)
+    expect(html).not.toContain("<em")
+    expect(html).toContain(`data-label="Plan">${rows[0]!.plan}</td>`)
   })
 
   it("leaves out a slot it cannot write, and keeps one it can", () => {

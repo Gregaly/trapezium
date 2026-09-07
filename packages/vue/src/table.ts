@@ -12,8 +12,11 @@ import {
   watch,
   type PropType,
   type VNode,
+  type VNodeChild,
 } from "vue"
-import { createTable, renderToString, type TableInstance, type TableOptions } from "@trapezium/vanilla"
+import { createTable, el, renderToTree, type TableInstance, type TableOptions } from "@trapezium/vanilla"
+
+import { treeToVNode } from "./vnodes.js"
 import type {
   AnyRow,
   CellContext,
@@ -289,18 +292,22 @@ export const Table = defineComponent({
     })
 
     /*
-      The table as HTML, for the first paint.
+      The table for the first paint, as VNodes.
+
+      The DOM renderer builds the table against an in-memory document, and
+      that tree is turned into VNodes here — so Vue renders it on the server
+      itself, and everything only Vue can render comes along: a template slot
+      in the toolbar, a component in a cell. Where the renderer would have put
+      one, the tree holds a marker, and the VNode goes in its place.
 
       Computed the same way on the server and in the browser, so the markup
       Vue hydrates is the markup it rendered. The live table replaces it on
-      mount — the same bytes, so nothing moves. A cell renderer that returns a
-      VNode is written as the cell's text here: a component cannot be
-      serialised synchronously, and it mounts a moment later with the rest.
+      mount, and these VNodes are then unmounted — the same bytes, so nothing
+      moves, and no component is left running twice.
     */
-    const initial = renderToString(serverOptions())
-
-    function serverOptions(): TableOptions {
-      return {
+    const cellVNodes = new Map<string, VNodeChild>()
+    const initial = treeToVNode(
+      renderToTree(() => ({
         ...options(),
         columns: props.columns?.map((column) => {
           if (typeof column === "string" || !column.render) return column
@@ -309,16 +316,28 @@ export const Table = defineComponent({
             ...column,
             render: (context: CellContext<AnyRow, unknown>) => {
               const result = render(context)
-              return typeof result === "string" ? result : context.text
+              if (!isVNode(result)) return typeof result === "string" ? result : context.text
+              const key = String(cellVNodes.size)
+              cellVNodes.set(key, result)
+              return el("span", { "data-tpz-vnode": key })
             },
           }
         }) as TableOptions["columns"],
-      }
-    }
+        toolbar: slots["toolbar"] ? el("span", { "data-tpz-slot": "toolbar" }) : undefined,
+        appendRow: slots["appendRow"] ? el("span", { "data-tpz-slot": "appendRow" }) : undefined,
+        footer: slots["footer"] ? el("span", { "data-tpz-slot": "footer" }) : undefined,
+        emptyState: slots["empty"] ? el("span", { "data-tpz-slot": "empty" }) : undefined,
+      })),
+      {
+        cells: cellVNodes,
+        slots: new Map(SLOTS.filter((name) => slots[name]).map((name) => [name, () => slots[name]?.()])),
+      },
+    )
 
     onMounted(() => {
-      ready.value = true
       if (host.value) table = createTable(host.value, options())
+      // The live table is in; the first-paint VNodes can go.
+      ready.value = true
     })
 
     // Data changes far more often than anything else, and replacing it must not
@@ -361,12 +380,11 @@ export const Table = defineComponent({
       : []
 
     /*
-      The server markup goes in as `innerHTML`, which Vue neither diffs nor
-      re-applies on hydration — so the table is on screen before any script
-      runs, and the live one takes its place on mount. The slots' teleports sit
-      beside it rather than inside it, because an element with `innerHTML` has
-      no room for children of its own.
+      Until the live table is in, the inner element holds the first-paint
+      VNodes — on the server, and through hydration. Once it is, they are
+      dropped and the element is the live table's. The slots' teleports sit
+      beside it, into the elements the live table was given.
     */
-    return h("div", { class: "tpz-host" }, [h("div", { ref: "host", innerHTML: this.initial }), ...teleports])
+    return h("div", { class: "tpz-host" }, [h("div", { ref: "host" }, this.ready ? [] : [this.initial]), ...teleports])
   },
 })
