@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react"
 import { setPage, setPageSize, type TableState } from "@trapezium/core"
 
+import { routeClick } from "./header-cell.js"
 import { Icon } from "./icon.js"
 import type { LinkComponent } from "./types.js"
 
@@ -28,6 +29,7 @@ export function Pagination({
   loading,
   buildHref,
   linkComponent,
+  onNavigate,
   className,
 }: {
   mode: "pages" | "simple" | "loadMore" | "infinite"
@@ -42,6 +44,7 @@ export function Pagination({
   loading?: boolean
   buildHref?: (state: TableState) => string
   linkComponent?: LinkComponent
+  onNavigate?: (href: string, event: React.MouseEvent) => void
   className: string
 }) {
   const hasMore = state.page < pageCount
@@ -98,6 +101,7 @@ export function Pagination({
           buildHref={buildHref}
           state={state}
           linkComponent={linkComponent}
+          onNavigate={onNavigate}
         >
           <Icon name="chevronLeft" />
         </PageButton>
@@ -118,6 +122,7 @@ export function Pagination({
                 buildHref={buildHref}
                 state={state}
                 linkComponent={linkComponent}
+                onNavigate={onNavigate}
               >
                 {entry.toLocaleString()}
               </PageButton>
@@ -138,6 +143,7 @@ export function Pagination({
           buildHref={buildHref}
           state={state}
           linkComponent={linkComponent}
+          onNavigate={onNavigate}
         >
           <Icon name="chevronRight" />
         </PageButton>
@@ -156,6 +162,7 @@ function PageButton({
   state,
   buildHref,
   linkComponent: Link,
+  onNavigate,
 }: {
   page: number
   children: React.ReactNode
@@ -166,6 +173,7 @@ function PageButton({
   state: TableState
   buildHref?: (state: TableState) => string
   linkComponent?: LinkComponent
+  onNavigate?: (href: string, event: React.MouseEvent) => void
 }) {
   const className = "tpz-btn tpz-page"
 
@@ -178,7 +186,7 @@ function PageButton({
       "aria-current": current ? ("page" as const) : undefined,
       children,
     }
-    return Link ? <Link {...props} /> : <a {...props} />
+    return Link ? <Link {...props} /> : <a {...props} onClick={routeClick(href, onNavigate)} />
   }
 
   return (

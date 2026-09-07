@@ -18,6 +18,10 @@ Then pick one. Each runs on its own port, so several can be open at the same tim
 | [`vue-app`](vue-app) | Vue 3 | `pnpm --filter @trapezium/example-vue dev` | [localhost:4310](http://localhost:4310) |
 | [`svelte-app`](svelte-app) | Svelte 5 | `pnpm --filter @trapezium/example-svelte dev` | [localhost:4320](http://localhost:4320) |
 | [`plain-html`](plain-html) | None | `pnpm --filter @trapezium/example-plain-html dev` | [localhost:4330](http://localhost:4330) |
+| [`sveltekit-app`](sveltekit-app) | SvelteKit 2 | `pnpm --filter @trapezium/example-sveltekit dev` | [localhost:4340](http://localhost:4340) |
+| [`nuxt-app`](nuxt-app) | Nuxt 4 | `pnpm --filter @trapezium/example-nuxt dev` | [localhost:4350](http://localhost:4350) |
+| [`react-router-app`](react-router-app) | React Router 7 | `pnpm --filter @trapezium/example-react-router dev` | [localhost:4360](http://localhost:4360) |
+| [`astro-app`](astro-app) | Astro 7 | `pnpm --filter @trapezium/example-astro dev` | [localhost:4370](http://localhost:4370) |
 
 ## What each one is for
 
@@ -26,6 +30,12 @@ Then pick one. Each runs on its own port, so several can be open at the same tim
 **`next-server`** — the one to look at for a real application. Sorting, filtering and paging happen in the "database" (`invoices.ts`), the whole view lives in the query string, and the first paint is server-rendered and already correct. Sort a column and watch the address bar; then reload, or press back. Every control is also a real link, so it works before the client bundle loads.
 
 **`vue-app`** and **`svelte-app`** — the same table, the same markup, the same stylesheet, bound with each framework's reactivity. The Vue one includes a cell that renders a real Vue component; the Svelte one uses `bind:tableState` and the `use:trapezium` action.
+
+**`sveltekit-app`** and **`nuxt-app`** — the server-rendered ones, for Svelte and Vue. The rows arrive in the HTML already sorted and paged, the view lives in the query string, and every control is a link — so disable JavaScript and the table still sorts and pages. Sort a column and look at the address bar.
+
+**`react-router-app`** — React Router in framework mode: a loader reads the view out of the URL, the page is server-rendered, and `onNavigate` hands the table's links to the router.
+
+**`astro-app`** — three islands on one page, one per framework, each rendered on the server by Astro and hydrated on the client. They share one query string under three prefixes, so sorting one leaves the others where they were.
 
 **`plain-html`** — one stylesheet, one script tag, no build step and no framework. It needs a server rather than `file://` because it loads its data with `fetch`; the `dev` script is a twenty-line Node static server with no dependencies, serving the repository root so the page can reach `packages/vanilla`.
 

@@ -46,7 +46,8 @@ columnControl · pagination · selection · onSelectionChange(ids, rows) · expo
 densityControl · responsive("scroll"|"cards") · stickyHeader · maxHeight ·
 rowHeight("fixed"|"auto"|number) · types · format ·
 rowHref(row) · onRowClick(row, event) · rowClassName(row, index) · emptyState · emptyMessage ·
-toolbar · appendRow · footer · buildHref(state) · linkComponent · className · classNames ·
+toolbar · appendRow · footer · buildHref(state) · linkComponent (React) · onNavigate(href, event) ·
+className · classNames ·
 unstyled · theme("light"|"dark") · id · aria-label · caption
 
 Booleans default to sensible: filters, sortable, resizable, reorderable, columnMenu, columnControl
@@ -176,10 +177,16 @@ behind an export — are declared once by passing an object instead of `true`:
 
 ## Server rendering
 
-Renders completely on a server with the correct rows in the markup, no effects and no layout shift.
-Formatting defaults (locale "en", timeZone "UTC") are fixed rather than read from the runtime, so a
-server and a browser produce the same string. With `buildHref`, controls render as links and the
-table works with no client JavaScript.
+Renders completely on a server with the correct rows in the markup, no effects and no layout shift —
+in every adapter: Next.js, Nuxt, SvelteKit, React Router, Astro islands, and plain JavaScript via
+renderToString(options) from @trapezium/vanilla. In Vue, Svelte and plain JS the live table replaces
+the server markup on mount (same bytes) and keeps anything done to it first — a box ticked, a
+search typed. Formatting defaults (locale "en", timeZone "UTC") are fixed rather than read from
+the runtime, so a server and a browser produce the same string. With `buildHref` (every adapter),
+controls render as links and the table works with no client JavaScript; `linkComponent` is React only.
+When the URL is the source of truth: state={pickUrlState(stateFromUrl(query, opts))},
+buildHref={(next) => applyStateToUrl(path, next, opts)}, with opts = { defaults: { pageSize } } if the
+table's page size is not 25.
 
 ## Styling
 

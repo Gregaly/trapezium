@@ -13,6 +13,7 @@
 
 export { default as Table } from "./Table.svelte"
 export { trapezium } from "./action.js"
+export { renderToString } from "@trapezium/vanilla"
 
 export {
   DEFAULT_FORMAT,
@@ -24,6 +25,7 @@ export {
   distinctValues,
   inferColumns,
   inferType,
+  pickUrlState,
   stateFromSearchParams,
   stateFromUrl,
   stateToQueryString,
@@ -51,4 +53,5 @@ export type {
   Sort,
   TableState,
   TypeDef,
+  UrlOptions,
 } from "@trapezium/core"

@@ -143,6 +143,16 @@ export function menuItem(
   return item
 }
 
+/**
+ * A menu item that is a link.
+ *
+ * The same markup as `menuItem` on an anchor, for a table whose controls are
+ * URLs — see `buildHref`. Choosing it navigates, so it takes no handler.
+ */
+export function menuLink(label: string, href: string, options: { icon?: Node | null } = {}): HTMLElement {
+  return el("a", { href, class: "tpz-menu-item", "data-menu-item": true }, [options.icon, label])
+}
+
 export function menuSeparator(): HTMLElement {
   return el("div", { class: "tpz-menu-separator", role: "separator" })
 }

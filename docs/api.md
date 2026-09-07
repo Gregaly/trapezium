@@ -25,7 +25,7 @@ import { Table } from "@trapezium/react"
 | Prop | Type | Default | |
 |---|---|---|---|
 | `state` | `Partial<TableState>` | — | Controlled state. Controls exactly the keys it contains; the rest stay with the table. |
-| `defaultState` | `Partial<TableState>` | — | Starting state, uncontrolled. |
+| `defaultState` | `Partial<TableState>` | — | Starting state, uncontrolled. Read once. Every adapter. |
 | `onStateChange` | `(state: TableState) => void` | — | Fires with the complete next state. |
 
 ### Features
@@ -79,8 +79,9 @@ import { Table } from "@trapezium/react"
 | `toolbar` | `ReactNode` | Extra toolbar controls. A slot in Vue; a node or string elsewhere. |
 | `appendRow` | `ReactNode` | A row below the last one. A slot in Vue; a node or string elsewhere. |
 | `footer` | `ReactNode` | Below the table, inside the frame. A slot in Vue; a node or string elsewhere. |
-| `buildHref` | `(state) => string` | Renders controls as links. |
-| `linkComponent` | `(props) => ReactNode` | Your router's `Link`. |
+| `buildHref` | `(state) => string` | Renders controls as links. Every adapter. |
+| `linkComponent` | `(props) => ReactNode` | Your router's `Link`. React only. |
+| `onNavigate` | `(href, event) => void` | A plain click on one of the table's links, with its URL, the browser's navigation prevented — for a router with a `navigate` function. Every adapter; `@navigate` in Vue. |
 
 ## `ColumnDef`
 
@@ -157,6 +158,16 @@ Passed as `server` instead of `true`, when the rows come from a server. Both mem
 
 `FilterOperator` — `eq` `ne` `contains` `notContains` `startsWith` `endsWith` `gt` `gte` `lt` `lte` `between` `in` `notIn` `empty` `notEmpty`
 
+## `renderToString(options)`
+
+```ts
+import { renderToString } from "@trapezium/vanilla"   // also from @trapezium/vue and @trapezium/svelte
+```
+
+The table as HTML, for a server. Takes the same options as `createTable` and returns the markup `createTable` would produce for them, byte for byte; `createTable` on an element that already holds it replaces it in place, and adopts anything done to it first — a box ticked, a search typed. A string slot is written and a node slot is left out; a cell renderer built with `el` renders, one that needs `document` is written as the cell's text. The Vue and Svelte components call this themselves, so a Nuxt or SvelteKit page needs nothing more.
+
+`renderToTree(options)` returns the same table as a tree of server elements, for an adapter that turns it into its own nodes — the Vue adapter makes VNodes of it, which is how Vue slots and component cells render on the server.
+
 ## `useTable(props)`
 
 The model with no markup. Takes the same props as `<Table>` and returns:
@@ -206,7 +217,7 @@ All pure `(state, …) => state`. Anything that changes which rows match resets 
 
 `stateToSearchParams(state, options?, into?)` · `stateToQueryString` · `stateFromSearchParams` · `stateFromUrl` · `pickUrlState(state, options?)` · `applyStateToUrl(url, state, options?)` · `encodeFilters` · `decodeFilters` · `URL_KEYS` · `DEFAULT_URL_KEYS`
 
-`UrlOptions` — `{ include?: UrlStateKey[], prefix?: string }`
+`UrlOptions` — `{ include?: UrlStateKey[], prefix?: string, defaults?: Partial<TableState> }`. `defaults` are the table's own resting values where they differ from the library's — a page size of fifteen, say — and must be passed to every read and write so the two agree.
 
 `pickUrlState` returns the keys the URL carries, with defaults filled in — what to pass as a controlled `state` when the URL is the source of truth, so selection and widths stay with the table.
 

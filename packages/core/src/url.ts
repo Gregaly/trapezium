@@ -72,6 +72,16 @@ export type UrlOptions = {
   /** Which parts of the state to carry. Defaults to everything but selection and widths. */
   include?: UrlStateKey[]
   /**
+   * The table's own defaults, where they differ from the library's.
+   *
+   * A table showing fifteen rows a page has `pageSize: 15` as its resting
+   * state, not twenty-five: reading a URL with no size must give fifteen, and
+   * writing a URL for fifteen must write nothing. Pass the same object to
+   * every call — `stateFromUrl`, `stateToQueryString`, `applyStateToUrl` — so
+   * the two directions agree.
+   */
+  defaults?: PartialTableState
+  /**
    * Prefix for every parameter, so two tables can share a page without
    * fighting over `sort`.
    */
@@ -117,6 +127,7 @@ export function stateToSearchParams(
   into: URLSearchParams = new URLSearchParams(),
 ): URLSearchParams {
   const include = new Set(options.include ?? DEFAULT_URL_KEYS)
+  const resting = { ...DEFAULT_STATE, ...options.defaults }
   const params = into
 
   const write = (key: UrlStateKey, value: string | undefined) => {
@@ -134,7 +145,7 @@ export function stateToSearchParams(
   }
 
   if (include.has("match")) {
-    write("match", state.match && state.match !== DEFAULT_STATE.match ? state.match : undefined)
+    write("match", state.match && state.match !== resting.match ? state.match : undefined)
   }
 
   if (include.has("search")) {
@@ -146,7 +157,7 @@ export function stateToSearchParams(
   }
 
   if (include.has("pageSize")) {
-    write("pageSize", state.pageSize && state.pageSize !== DEFAULT_STATE.pageSize ? String(state.pageSize) : undefined)
+    write("pageSize", state.pageSize && state.pageSize !== resting.pageSize ? String(state.pageSize) : undefined)
   }
 
   if (include.has("columns")) {
@@ -162,7 +173,7 @@ export function stateToSearchParams(
   }
 
   if (include.has("density")) {
-    write("density", state.density && state.density !== DEFAULT_STATE.density ? state.density : undefined)
+    write("density", state.density && state.density !== resting.density ? state.density : undefined)
   }
 
   if (include.has("selection")) {
@@ -395,5 +406,5 @@ export function stateFromUrl(
   input: URLSearchParams | Record<string, string | string[] | undefined> | string,
   options: UrlOptions = {},
 ): TableState {
-  return { ...DEFAULT_STATE, ...stateFromSearchParams(input, options) }
+  return { ...DEFAULT_STATE, ...options.defaults, ...stateFromSearchParams(input, options) }
 }

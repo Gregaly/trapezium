@@ -12,6 +12,36 @@ Three details make that true, and they are worth knowing if you extend the libra
 
 In the Next.js App Router the table is a client component (it has to be — it has state), which still renders on the server. Nothing special is required.
 
+### Vue, Svelte and plain JavaScript
+
+The same is true in Nuxt and SvelteKit, and for the same reason: the table is in the server's HTML with the right rows in it, and the live table takes over on mount. Those three adapters share one DOM renderer, and on a server that renderer runs against a small in-memory document and writes the result out as HTML. It is the same code that builds the live table, so the server's markup and the browser's are the same bytes — a test in the repository compares them — and swapping one for the other moves nothing.
+
+A checkbox is a checkbox with or without JavaScript, and a search box takes typing. Anything done to the server markup before the script arrives — a row ticked, the page selected, a word typed into the search — is read off the old markup and folded into the live table's starting state, with the caret put back where it was. Nothing the person did is lost to the swap.
+
+What a server can render, adapter by adapter:
+
+- **Vue** renders everything on the server — the table, its template slots, and a component returned from a cell renderer — because the server tree is turned into VNodes and rendered through Vue itself.
+- **Svelte and plain JavaScript** render the table and any string slot. A cell renderer built with the package's `el` helper renders on the server too; one that reaches for `document` is written as the cell's text and appears with the live table. A node passed to a slot arrives with the live table.
+
+```js
+import { el } from "@trapezium/svelte"   // or @trapezium/vanilla
+
+{ key: "status", render: ({ value }) => el("span", { class: "badge", text: String(value) }) }
+```
+
+One caveat that is not the library's to fix: `Intl` formatting comes from each engine's own locale data, and for some locales the engines disagree — Node and WebKit write `en-GB`'s short September as "Sept" and "Sep". The rows are still right; one cell's text changes when the live table arrives. Where that matters, pick a locale the engines agree on (`en` is safe) or format that column yourself.
+
+Plain JavaScript gets the same thing as a function: `renderToString(options)` returns the HTML, and `createTable` on an element that already holds it replaces it in place.
+
+```js
+// On the server
+import { renderToString, stateFromUrl } from "@trapezium/vanilla"
+const html = renderToString({ data: rows, columns, state: stateFromUrl(url.search) })
+
+// In the browser, on the element that holds it
+createTable("#people", { data: rows, columns, state: stateFromUrl(location.search) })
+```
+
 ## Putting the state in the URL
 
 This is what makes a view shareable, the back button work, and a server-rendered table correct on its first paint.
@@ -81,6 +111,17 @@ Selection and column widths are left out by default — a selection means nothin
 stateToQueryString(state, { include: ["sort", "filters", "search", "page"] })
 ```
 
+### A table with its own defaults
+
+Only what differs from the defaults is written, and the library's default page size is twenty-five. A table showing fifteen rows a page has fifteen as its resting state, so tell the codec — in both directions, with the same object:
+
+```tsx
+const URL_OPTIONS = { defaults: { pageSize: 15 } }
+
+stateFromUrl(searchParams, URL_OPTIONS)      // no size in the URL means 15
+stateToQueryString(state, URL_OPTIONS)       // a size of 15 writes nothing
+```
+
 ## A table with no JavaScript
 
 Give the table `buildHref` and every control renders as a link instead of a button. Sorting, filtering, paging and hiding columns then work by navigation — on a server-rendered page, with the client bundle never loaded.
@@ -98,6 +139,91 @@ Give the table `buildHref` and every control renders as a link instead of a butt
 ```
 
 The menus still need JavaScript to open, so this is progressive enhancement rather than a no-JS-only mode: the header sorts, the pagination pages, and everything else improves once the bundle arrives.
+
+`buildHref` is the same option in every adapter. To route those links client-side, either give React your framework's link component with `linkComponent`, or — in any adapter — listen for `onNavigate`, which fires with the URL for a plain click and leaves modifier clicks to the browser. SvelteKit intercepts plain anchors itself, so it needs neither; Nuxt uses `@navigate`.
+
+### Nuxt
+
+```vue
+<script setup lang="ts">
+import { TrapeziumTable, applyStateToUrl, pickUrlState, stateFromUrl } from "@trapezium/vue"
+
+const route = useRoute()
+const router = useRouter()
+const state = computed(() => stateFromUrl(route.query))
+const href = (next) => applyStateToUrl("/invoices", next)
+</script>
+
+<template>
+  <TrapeziumTable
+    :data="invoices"
+    :state="pickUrlState(state)"
+    :build-href="href"
+    @update:state="(next) => router.push(href(next))"
+    @navigate="(href) => router.push(href)"
+  />
+</template>
+```
+
+### SvelteKit
+
+```ts
+// +page.ts
+import { stateFromUrl } from "@trapezium/svelte"
+export const load = ({ url }) => ({ state: stateFromUrl(url.searchParams) })
+```
+
+```svelte
+<!-- +page.svelte -->
+<script lang="ts">
+  import { goto } from "$app/navigation"
+  import { Table, applyStateToUrl, pickUrlState } from "@trapezium/svelte"
+  let { data } = $props()
+  const href = (next) => applyStateToUrl("/invoices", next)
+</script>
+
+<Table
+  data={invoices}
+  state={pickUrlState(data.state)}
+  buildHref={href}
+  onStateChange={(next) => goto(href(next))}
+/>
+```
+
+### React Router
+
+```tsx
+import { useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router"
+import { Table, applyStateToUrl, pickUrlState, stateFromUrl } from "@trapezium/react"
+
+export function loader({ request }: LoaderFunctionArgs) {
+  return { state: stateFromUrl(new URL(request.url).searchParams) }
+}
+
+export default function Invoices() {
+  const { state } = useLoaderData<typeof loader>()
+  const navigate = useNavigate()
+  const href = (next) => applyStateToUrl("/invoices", next)
+
+  return (
+    <Table
+      data={invoices}
+      state={pickUrlState(state)}
+      buildHref={href}
+      onNavigate={(url) => navigate(url)}
+      onStateChange={(next) => navigate(href(next))}
+    />
+  )
+}
+```
+
+React Router's `Link` takes `to` rather than `href`, so `onNavigate` is the simpler fit; `linkComponent` works too with a two-line wrapper.
+
+### Astro
+
+An island is a component with `client:load`, rendered on the server by its framework and hydrated in the browser — which is all the table needs. Read the view from `Astro.url` and pass it down; several tables on one page keep apart with a `prefix` each. The example under `examples/astro-app` has a React, a Vue and a Svelte island on the same page.
+
+All of these examples — Nuxt, SvelteKit, React Router and Astro — are in the repository and driven by the browser tests with JavaScript switched off.
 
 ## Saved views
 

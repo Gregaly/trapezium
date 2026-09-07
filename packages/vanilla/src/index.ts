@@ -13,9 +13,11 @@
  */
 
 export { createTable, pageWindow } from "./table.js"
+export { renderToString, renderToTree } from "./render-to-string.js"
+export { ServerDocument, ServerElement, ServerNode, ServerText } from "./server-dom.js"
 export type { TableInstance, TableOptions, VanillaColumn } from "./table.js"
 export { el, icon, fill, ICONS } from "./dom.js"
-export { openMenuAt, closeMenu, menuItem, menuLabel, menuSeparator } from "./menu.js"
+export { openMenuAt, closeMenu, menuItem, menuLink, menuLabel, menuSeparator } from "./menu.js"
 export type { MenuOptions } from "./menu.js"
 
 export {
@@ -56,4 +58,5 @@ export type {
   TableSlots,
   TableState,
   TypeDef,
+  UrlOptions,
 } from "@trapezium/core"

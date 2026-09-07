@@ -37,6 +37,7 @@ import {
   clearFilters,
   clearWidth,
   createClasses,
+  isPlainLinkClick,
   resolveSelection,
   selectRange,
   selectableIds,
@@ -62,8 +63,8 @@ import {
   type TypeDef,
 } from "@trapezium/core"
 
-import { el, fill, icon } from "./dom.js"
-import { closeMenu, menuItem, menuLabel, menuSeparator, openMenuAt } from "./menu.js"
+import { currentDocument, el, fill, fragment, icon, text } from "./dom.js"
+import { closeMenu, menuItem, menuLabel, menuLink, menuSeparator, openMenuAt } from "./menu.js"
 
 /**
  * The table, in plain DOM.
@@ -87,7 +88,10 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
   columns?: readonly (VanillaColumn<TRow> | string)[]
   getRowId?: GetRowId<TRow>
 
+  /** Controlled state. Followed whenever a new object is passed. */
   state?: PartialTableState
+  /** Starting state for a table that manages its own — a saved view, a URL. Read once. */
+  defaultState?: PartialTableState
   onStateChange?: (state: TableState) => void
 
   /**
@@ -171,6 +175,27 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
   /** Content below the table, inside the frame. */
   footer?: Node | string
 
+  /**
+   * Renders every control that changes the view as a link to this URL instead
+   * of a button.
+   *
+   * With it, a server-rendered table sorts, pages and hides columns with no
+   * client JavaScript at all — the server re-renders from the query string.
+   * Pair it with `renderToString` on the server and `stateFromUrl` for the
+   * state. The menus still need JavaScript to open, so this is progressive
+   * enhancement: the header sorts and the pagination pages before the script
+   * arrives, and everything else improves once it has.
+   */
+  buildHref?: (state: TableState) => string
+  /**
+   * Fires when one of the table's own links — a sort header, a page, a menu
+   * action — is clicked plainly, with the URL it points at. The default is
+   * prevented, so hand the URL to your router for a client-side navigation.
+   * A click with a modifier held, or with the middle button, is left to the
+   * browser. The framework-neutral counterpart of React's `linkComponent`.
+   */
+  onNavigate?: (href: string, event: MouseEvent) => void
+
   /** Added to the root element. */
   className?: string
   /** Added per slot, on top of the defaults. */
@@ -205,12 +230,28 @@ export function createTable<TRow extends AnyRow>(
   target: HTMLElement | string,
   options: TableOptions<TRow>,
 ): TableInstance<TRow> {
-  const host = typeof target === "string" ? document.querySelector<HTMLElement>(target) : target
+  const host = typeof target === "string" ? currentDocument().querySelector<HTMLElement>(target) : target
   if (!host) throw new Error(`Trapezium: no element matched ${String(target)}`)
 
   let settings = options
-  let state: TableState = { ...DEFAULT_STATE, ...paginationOf(options)?.stateDefaults, ...options.state }
+  let state: TableState = {
+    ...DEFAULT_STATE,
+    ...paginationOf(options)?.stateDefaults,
+    ...options.defaultState,
+    ...options.state,
+  }
   let lastSelection = state.selection.join(",")
+
+  /*
+    What the person did to the server markup before this script arrived.
+
+    A checkbox is a checkbox with or without JavaScript: tick one on the
+    server-rendered table and it shows ticked. Type into the search box and the
+    text is there. Throwing that away when the live table takes over would be
+    the one visible seam in server rendering, so it is read off the old markup
+    first and folded into the state the live table starts from.
+  */
+  const adopted = readInteractions(host)
 
   /*
     What the body is currently showing.
@@ -275,7 +316,15 @@ export function createTable<TRow extends AnyRow>(
   scroll.append(table)
   frame.append(toolbar, scroll, footer, paginationBar)
   root.append(frame)
-  host.append(root)
+
+  /*
+    Whatever the host already holds is server-rendered markup for this table —
+    `renderToString` writes the same bytes this render produces, so swapping
+    the one for the other moves nothing on screen. An empty host is the plain
+    case, and the table is simply added to it.
+  */
+  if (host.childNodes.length > 0) host.replaceChildren(root)
+  else host.append(root)
 
   /* ── Toolbar, built once so the search box keeps focus ─────────────────── */
 
@@ -504,7 +553,12 @@ export function createTable<TRow extends AnyRow>(
   function update(next: TableState) {
     state = next
     render()
-    settings.onStateChange?.(next)
+    notify()
+  }
+
+  /** Tells the caller about the state, and about the selection if it moved. */
+  function notify() {
+    settings.onStateChange?.(state)
 
     const key = state.selection.join(",")
     if (key !== lastSelection) {
@@ -516,6 +570,38 @@ export function createTable<TRow extends AnyRow>(
         state.selection.map((id) => byId.get(id)).filter((row): row is TRow => row !== undefined),
       )
     }
+  }
+
+  /** Folds what was done to the server markup into the starting state. */
+  function adoptInteractions(): boolean {
+    if (!adopted) return false
+    const before = state
+
+    // The boxes were in the server's row order, so they are matched against
+    // the rows as the server had them — before any search typed since applies.
+    const { rows } = current()
+    const ids = rows.map((row, index) => resolveRowId(row, index, settings.getRowId))
+    const selection = selectionOf()
+
+    if (selection) {
+      if (adopted.header !== undefined && selection.mode === "multiple") {
+        state = setSelected(state, selectableIds(rows, ids, selection.isSelectable), adopted.header)
+      }
+      for (const { index, checked } of adopted.toggled) {
+        const id = ids[index]
+        if (id === undefined) continue
+        if (selection.isSelectable && !selection.isSelectable(rows[index]!, index)) continue
+        if (selection.mode === "single") {
+          state = { ...state, selection: checked ? [id] : state.selection.filter((entry) => entry !== id) }
+        } else {
+          state = setSelected(state, [id], checked)
+        }
+      }
+    }
+
+    if (adopted.search !== undefined && settings.search) state = setSearch(state, adopted.search)
+
+    return state !== before
   }
 
   // Shift-click selects a range, which is the one selection gesture people
@@ -616,24 +702,24 @@ export function createTable<TRow extends AnyRow>(
     if (shape === renderedShape && renderedRows.length > 0 && extendsRendered(rows)) {
       if (rows.length > renderedRows.length) {
         const offsets = measurePinOffsets()
-        const fragment = document.createDocumentFragment()
+        const batch = fragment()
         const added: HTMLElement[] = []
 
         for (let index = renderedRows.length; index < rows.length; index += 1) {
           const tr = buildRow(rows[index]!, rowIds[index]!, index, build)
           added.push(tr)
-          fragment.append(tr)
+          batch.append(tr)
         }
 
         // Positioned before they are in the document, so a frozen column does
         // not spend a frame in the wrong place.
-        applyPinOffsets(fragment, offsets)
+        applyPinOffsets(batch, offsets)
 
         // After the last data row rather than at the end of the body: a
         // caller's appended row sits below the data and must stay there.
         const last = renderedNodes[renderedNodes.length - 1]
-        if (last) last.after(fragment)
-        else body.append(fragment)
+        if (last) last.after(batch)
+        else body.append(batch)
 
         renderedNodes.push(...added)
         renderedRows = rows
@@ -756,6 +842,9 @@ export function createTable<TRow extends AnyRow>(
         class: "tpz-checkbox",
         "aria-label": `Select row ${String(index + 1)}`,
       }) as HTMLInputElement
+      // The attribute as well as the property, so a server render — which can
+      // only write attributes — says the same thing as the live table.
+      box.defaultChecked = selected
       box.checked = selected
       box.disabled = selection?.isSelectable ? !selection.isSelectable(row, index) : false
 
@@ -799,7 +888,7 @@ export function createTable<TRow extends AnyRow>(
       })
       if (column.width) cell.style.width = `${String(column.width)}px`
 
-      const node = typeof content === "string" ? document.createTextNode(content) : content
+      const node = typeof content === "string" ? text(content) : content
 
       /*
         A table cell has to go on being a table cell, so anything that bounds
@@ -937,9 +1026,25 @@ export function createTable<TRow extends AnyRow>(
     const selectedHere = renderedSelectable.filter((id) => state.selection.includes(id)).length
     const all = renderedSelectable.length > 0 && selectedHere === renderedSelectable.length
 
+    selectAllBox.defaultChecked = all
     selectAllBox.checked = all
     selectAllBox.indeterminate = selectedHere > 0 && !all
     selectAllBox.setAttribute("aria-label", all ? "Clear selection" : "Select all rows on this page")
+  }
+
+  /**
+   * Hands a plain click on one of the table's links to `onNavigate`, when the
+   * caller gave one. Anything else — a modifier, the middle button — is the
+   * browser's, so a new tab still opens.
+   */
+  function routed<T extends HTMLElement>(link: T): T {
+    link.addEventListener("click", (event) => {
+      const onNavigate = settings.onNavigate
+      if (!onNavigate || !isPlainLinkClick(event, link.getAttribute("target"))) return
+      event.preventDefault()
+      onNavigate(link.getAttribute("href") ?? "", event)
+    })
+    return link
   }
 
   /** Frozen columns need real pixel offsets, and only layout knows them. */
@@ -1059,11 +1164,28 @@ export function createTable<TRow extends AnyRow>(
     // and "Move right" in the column panel, so the icon announces nothing.
     inner.append(el("span", { class: "tpz-th-icon", "aria-hidden": "true" }, [icon(column.icon)]))
 
-    const label = el(sortable ? "button" : "span", { class: "tpz-th-button", type: sortable ? "button" : undefined }, [
+    const labelChildren = [
       el("span", { class: "tpz-th-label", text: column.header }),
       sort ? icon(sort.direction === "asc" ? "sortAscending" : "sortDescending", 12, "tpz-th-marker") : null,
-    ])
-    if (sortable) label.addEventListener("click", () => update(toggleSort(state, column.key)))
+    ]
+
+    // The class goes on the anchor itself rather than on a span inside it, or
+    // the browser's own link styling underlines every column header.
+    const label =
+      sortable && settings.buildHref
+        ? routed(
+            el(
+              "a",
+              {
+                href: settings.buildHref(toggleSort(state, column.key)),
+                class: "tpz-th-button",
+                "aria-label": `Sort by ${column.header}`,
+              },
+              labelChildren,
+            ),
+          )
+        : el(sortable ? "button" : "span", { class: "tpz-th-button", type: sortable ? "button" : undefined }, labelChildren)
+    if (sortable && !settings.buildHref) label.addEventListener("click", () => update(toggleSort(state, column.key)))
     inner.append(label)
 
     if (settings.columnMenu !== false) {
@@ -1220,22 +1342,23 @@ export function createTable<TRow extends AnyRow>(
     openMenuAt({ anchor, label: `${column.header} column`, theme: settings.theme }, (close) => {
       const items: Array<Node | null> = []
 
+      /**
+       * An action that changes the view: a link when the table has URLs, a
+       * button otherwise — the same choice the React adapter makes.
+       */
+      const action = (label: string, next: TableState, glyph: Node | null) =>
+        settings.buildHref
+          ? routed(menuLink(label, settings.buildHref(next), { icon: glyph }))
+          : menuItem(label, () => {
+              update(next)
+              close()
+            }, { icon: glyph })
+
       if (settings.sortable !== false && column.sortable) {
         items.push(
-          menuItem("Sort ascending", () => {
-            update({ ...state, sort: [{ key: column.key, direction: "asc" }], page: 1 })
-            close()
-          }, { icon: icon("sortAscending") }),
-          menuItem("Sort descending", () => {
-            update({ ...state, sort: [{ key: column.key, direction: "desc" }], page: 1 })
-            close()
-          }, { icon: icon("sortDescending") }),
-          sort
-            ? menuItem("Clear sort", () => {
-                update({ ...state, sort: [] })
-                close()
-              }, { icon: icon("close") })
-            : null,
+          action("Sort ascending", { ...state, sort: [{ key: column.key, direction: "asc" }], page: 1 }, icon("sortAscending")),
+          action("Sort descending", { ...state, sort: [{ key: column.key, direction: "desc" }], page: 1 }, icon("sortDescending")),
+          sort ? action("Clear sort", { ...state, sort: [] }, icon("close")) : null,
           menuSeparator(),
         )
       }
@@ -1272,10 +1395,7 @@ export function createTable<TRow extends AnyRow>(
           },
           { icon: icon("pin") },
         ),
-        menuItem("Hide column", () => {
-          update(hideColumn(state, column.key))
-          close()
-        }, { icon: icon("eyeOff") }),
+        action("Hide column", hideColumn(state, column.key), icon("eyeOff")),
       )
 
       return items
@@ -1673,14 +1793,15 @@ export function createTable<TRow extends AnyRow>(
     const start = el("div", { class: "tpz-toolbar-group" }, [info])
 
     if (pagination.pageSizeOptions && pagination.pageSizeOptions.length > 0) {
+      // Chosen by attribute rather than by setting `value`, so the markup
+      // carries the choice — a server render has nothing else.
       const select = el(
         "select",
         { class: "tpz-input" },
         pagination.pageSizeOptions.map((size) =>
-          el("option", { value: size, text: `${String(size)} per page` }),
+          el("option", { value: size, text: `${String(size)} per page`, selected: size === state.pageSize }),
         ),
       ) as HTMLSelectElement
-      select.value = String(state.pageSize)
       select.addEventListener("change", () => update(setPageSize(state, Number(select.value))))
 
       start.append(
@@ -1691,6 +1812,19 @@ export function createTable<TRow extends AnyRow>(
     const nav = el("nav", { class: "tpz-pages", "aria-label": "Pagination" })
 
     const pageButton = (page: number, label: string, content: Node | string, disabled = false, isCurrent = false) => {
+      // A real link when the table has URLs, so paging works before any script
+      // arrives and middle-click opens a page in a new tab.
+      if (settings.buildHref && !disabled) {
+        return routed(
+          el("a", {
+            href: settings.buildHref(setPage(state, page)),
+            class: "tpz-btn tpz-page",
+            "aria-label": label,
+            "aria-current": isCurrent ? "page" : undefined,
+          }, [content]),
+        )
+      }
+
       const button = el("button", {
         type: "button",
         class: "tpz-btn tpz-page",
@@ -1765,8 +1899,17 @@ export function createTable<TRow extends AnyRow>(
 
   /* ── Instance ──────────────────────────────────────────────────────────── */
 
+  const changed = adoptInteractions()
   buildToolbar()
   render()
+
+  if (adopted?.searchFocused && searchInput) {
+    // Back where the person was typing, caret and all.
+    searchInput.focus()
+    const end = searchInput.value.length
+    searchInput.setSelectionRange(end, end)
+  }
+  if (changed) notify()
 
   return {
     element: root,
@@ -1827,6 +1970,40 @@ export function createTable<TRow extends AnyRow>(
 
 /* ── Helpers shared with the other adapters' behaviour ───────────────────── */
 
+/** What a person did to server-rendered markup before the script arrived. */
+type Interactions = {
+  /** The search text, when it is not what the server wrote. */
+  search: string | undefined
+  searchFocused: boolean
+  /** Row checkboxes whose state is not what the server wrote, by row position. */
+  toggled: Array<{ index: number; checked: boolean }>
+  /** The header checkbox, when it was toggled. */
+  header: boolean | undefined
+}
+
+/**
+ * Reads the interactions off whatever the host holds.
+ *
+ * A control's default — the attribute the server wrote — against its current
+ * state is exactly the record of what was done to it. The selection cells are
+ * found by their key rather than a class, which `unstyled` may have removed.
+ */
+function readInteractions(host: HTMLElement): Interactions | undefined {
+  const previous = host.firstElementChild
+  if (!previous) return undefined
+
+  const search = previous.querySelector<HTMLInputElement>('input[type="search"]')
+  const boxes = [...previous.querySelectorAll<HTMLInputElement>('tbody [data-key="__select"] input')]
+  const header = previous.querySelector<HTMLInputElement>('thead [data-key="__select"] input')
+
+  return {
+    search: search && search.value !== search.defaultValue ? search.value : undefined,
+    searchFocused: search !== null && search === currentDocument().activeElement,
+    toggled: boxes.flatMap((box, index) => (box.checked !== box.defaultChecked ? [{ index, checked: box.checked }] : [])),
+    header: header && header.checked !== header.defaultChecked ? header.checked : undefined,
+  }
+}
+
 /**
  * Options that a row's markup never depends on, so changing one of them does
  * not force the rows already on screen to be rebuilt. Anything not listed here
@@ -1835,6 +2012,8 @@ export function createTable<TRow extends AnyRow>(
  */
 const PASSIVE_OPTIONS: ReadonlySet<string> = new Set([
   "data",
+  "defaultState",
+  "onNavigate",
   "loading",
   "error",
   "total",

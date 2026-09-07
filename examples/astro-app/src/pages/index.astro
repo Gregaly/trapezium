@@ -1,0 +1,48 @@
+---
+/**
+ * Three islands, three frameworks, one page, one URL.
+ *
+ * Each table is server-rendered by its own framework — React, Vue and Svelte —
+ * and hydrated on the client as an island. Each keeps its own view in the same
+ * query string under its own prefix, so sorting one leaves the others alone.
+ */
+import PeopleReact from "../components/PeopleReact"
+import PeopleSvelte from "../components/PeopleSvelte.svelte"
+import PeopleVue from "../components/PeopleVue.vue"
+import "@trapezium/react/styles.css"
+import "../app.css"
+
+const url = Astro.url.pathname + Astro.url.search
+---
+
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Trapezium in Astro</title>
+  </head>
+  <body>
+    <main>
+      <h1>Trapezium in Astro</h1>
+      <p>
+        Three islands, three frameworks, one page. Each is rendered on the server and keeps its own
+        view in the address bar; disable JavaScript and every header still sorts.
+      </p>
+
+      <section>
+        <h2>React</h2>
+        <PeopleReact client:load url={url} />
+      </section>
+
+      <section>
+        <h2>Vue</h2>
+        <PeopleVue client:load url={url} />
+      </section>
+
+      <section>
+        <h2>Svelte</h2>
+        <PeopleSvelte client:load url={url} />
+      </section>
+    </main>
+  </body>
+</html>

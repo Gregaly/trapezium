@@ -131,6 +131,22 @@ describe("pagination", () => {
   })
 })
 
+describe("links", () => {
+  it("hands a plain click on a link to onNavigate, and leaves a modifier click to the browser", () => {
+    const onNavigate = vi.fn()
+    const href = (state: { page: number }) => `/people?page=${String(state.page)}`
+    const many = Array.from({ length: 30 }, (_, index) => ({ id: String(index), name: `P${String(index)}` }))
+    render(<Table data={many} columns={["name"]} pagination={{ pageSize: 10 }} buildHref={href} onNavigate={onNavigate} />)
+
+    const link = screen.getByRole("link", { name: "Next page" })
+    fireEvent.click(link)
+    expect(onNavigate).toHaveBeenCalledWith("/people?page=2", expect.anything())
+
+    fireEvent.click(link, { metaKey: true })
+    expect(onNavigate).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("selection", () => {
   it("reports what was selected", async () => {
     const user = userEvent.setup()

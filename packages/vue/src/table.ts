@@ -1,6 +1,7 @@
 import {
   Teleport,
   computed,
+  getCurrentInstance,
   defineComponent,
   h,
   isVNode,
@@ -11,8 +12,11 @@ import {
   watch,
   type PropType,
   type VNode,
+  type VNodeChild,
 } from "vue"
-import { createTable, type TableInstance, type TableOptions } from "@trapezium/vanilla"
+import { createTable, el, renderToTree, type TableInstance, type TableOptions } from "@trapezium/vanilla"
+
+import { treeToVNode } from "./vnodes.js"
 import type {
   AnyRow,
   CellContext,
@@ -63,7 +67,10 @@ export const Table = defineComponent({
     columns: { type: Array as PropType<readonly (VueColumn | string)[]>, default: undefined },
     getRowId: { type: Function as PropType<(row: AnyRow, index: number) => string>, default: undefined },
 
+    /** Controlled state. Use `v-model:state`, or `:state` with `@update:state`. */
     state: { type: Object as PropType<PartialTableState>, default: undefined },
+    /** Starting state for a table that manages its own — a saved view, a URL. Read once. */
+    defaultState: { type: Object as PropType<PartialTableState>, default: undefined },
 
     /**
      * The rows have already been filtered, sorted and paginated by a server.
@@ -110,6 +117,13 @@ export const Table = defineComponent({
     rowClassName: { type: Function as PropType<(row: AnyRow, index: number) => string | undefined>, default: undefined },
     emptyMessage: { type: String, default: undefined },
 
+    /**
+     * Renders every control that changes the view as a link to this URL
+     * instead of a button, so a server-rendered table sorts and pages before
+     * its JavaScript arrives. Pair it with `stateFromUrl` for the state.
+     */
+    buildHref: { type: Function as PropType<(state: TableState) => string>, default: undefined },
+
     /** Added to the root element. */
     className: { type: String, default: undefined },
     /** Added per slot, on top of the defaults. */
@@ -126,11 +140,26 @@ export const Table = defineComponent({
     "update:state": (state: TableState) => true,
     selectionChange: (ids: string[], rows: AnyRow[]) => true,
     rowClick: (row: AnyRow, event: MouseEvent) => true,
+    /**
+     * A plain click on one of the table's links, with the URL it points at.
+     * Listening prevents the browser's navigation; hand the URL to the router.
+     */
+    navigate: (href: string, event: MouseEvent) => true,
   },
 
   setup(props, { emit, slots }) {
     const host = ref<HTMLElement | null>(null)
     let table: TableInstance | undefined
+
+    /*
+      Whether anyone is listening for a row click. A row with a click handler
+      is marked and styled as clickable, so the handler is only passed on when
+      the template has `@row-click` — otherwise every Vue table would have
+      pointer cursors that React and plain JavaScript do not.
+    */
+    const instance = getCurrentInstance()
+    const listensForRowClick = () => Boolean(instance?.vnode.props?.["onRowClick"])
+    const listensForNavigate = () => Boolean(instance?.vnode.props?.["onNavigate"])
 
     /*
       Containers holding a mounted VNode. Vue will not unmount them on its own —
@@ -155,7 +184,8 @@ export const Table = defineComponent({
     const slotHosts: Partial<Record<SlotName, HTMLElement>> = {}
 
     const slotHost = (name: SlotName): HTMLElement | undefined => {
-      if (!slots[name]) return undefined
+      // A server has no elements to teleport into; the slots arrive on mount.
+      if (!slots[name] || typeof document === "undefined") return undefined
       let element = slotHosts[name]
       if (!element) {
         element = document.createElement("span")
@@ -218,6 +248,7 @@ export const Table = defineComponent({
       columns: adaptedColumns.value as TableOptions["columns"],
       getRowId: props.getRowId,
       state: props.state,
+      defaultState: props.defaultState,
       server: props.server,
       total: props.total,
       loading: props.loading,
@@ -244,6 +275,7 @@ export const Table = defineComponent({
       rowHref: props.rowHref,
       rowClassName: props.rowClassName,
       emptyMessage: props.emptyMessage,
+      buildHref: props.buildHref,
       className: props.className,
       classNames: props.classNames,
       unstyled: props.unstyled,
@@ -255,12 +287,57 @@ export const Table = defineComponent({
       emptyState: slotHost("empty"),
       onStateChange: (state) => emit("update:state", state),
       onSelectionChange: (ids, rows) => emit("selectionChange", ids, rows),
-      onRowClick: (row, event) => emit("rowClick", row, event),
+      onRowClick: listensForRowClick() ? (row, event) => emit("rowClick", row, event) : undefined,
+      onNavigate: listensForNavigate() ? (href, event) => emit("navigate", href, event) : undefined,
     })
 
+    /*
+      The table for the first paint, as VNodes.
+
+      The DOM renderer builds the table against an in-memory document, and
+      that tree is turned into VNodes here — so Vue renders it on the server
+      itself, and everything only Vue can render comes along: a template slot
+      in the toolbar, a component in a cell. Where the renderer would have put
+      one, the tree holds a marker, and the VNode goes in its place.
+
+      Computed the same way on the server and in the browser, so the markup
+      Vue hydrates is the markup it rendered. The live table replaces it on
+      mount, and these VNodes are then unmounted — the same bytes, so nothing
+      moves, and no component is left running twice.
+    */
+    const cellVNodes = new Map<string, VNodeChild>()
+    const initial = treeToVNode(
+      renderToTree(() => ({
+        ...options(),
+        columns: props.columns?.map((column) => {
+          if (typeof column === "string" || !column.render) return column
+          const render = column.render
+          return {
+            ...column,
+            render: (context: CellContext<AnyRow, unknown>) => {
+              const result = render(context)
+              if (!isVNode(result)) return typeof result === "string" ? result : context.text
+              const key = String(cellVNodes.size)
+              cellVNodes.set(key, result)
+              return el("span", { "data-tpz-vnode": key })
+            },
+          }
+        }) as TableOptions["columns"],
+        toolbar: slots["toolbar"] ? el("span", { "data-tpz-slot": "toolbar" }) : undefined,
+        appendRow: slots["appendRow"] ? el("span", { "data-tpz-slot": "appendRow" }) : undefined,
+        footer: slots["footer"] ? el("span", { "data-tpz-slot": "footer" }) : undefined,
+        emptyState: slots["empty"] ? el("span", { "data-tpz-slot": "empty" }) : undefined,
+      })),
+      {
+        cells: cellVNodes,
+        slots: new Map(SLOTS.filter((name) => slots[name]).map((name) => [name, () => slots[name]?.()])),
+      },
+    )
+
     onMounted(() => {
-      ready.value = true
       if (host.value) table = createTable(host.value, options())
+      // The live table is in; the first-paint VNodes can go.
+      ready.value = true
     })
 
     // Data changes far more often than anything else, and replacing it must not
@@ -290,7 +367,7 @@ export const Table = defineComponent({
       table = undefined
     })
 
-    return { host, ready, slotHost, instance: () => table }
+    return { host, ready, initial, slotHost, instance: () => table }
   },
 
   render() {
@@ -302,6 +379,12 @@ export const Table = defineComponent({
         })
       : []
 
-    return h("div", { ref: "host", class: "tpz-host" }, teleports)
+    /*
+      Until the live table is in, the inner element holds the first-paint
+      VNodes — on the server, and through hydration. Once it is, they are
+      dropped and the element is the live table's. The slots' teleports sit
+      beside it, into the elements the live table was given.
+    */
+    return h("div", { class: "tpz-host" }, [h("div", { ref: "host" }, this.ready ? [] : [this.initial]), ...teleports])
   },
 })

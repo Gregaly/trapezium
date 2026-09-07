@@ -36,7 +36,7 @@ Trapezium is the one that is beautiful out of the box, configured in five lines,
 ## Install
 
 ```sh
-npm install @trapezium/react     # React 18 or 19, Next.js, Remix, Vite, Astro
+npm install @trapezium/react     # React 18 or 19, Next.js, React Router (Remix), Vite, Astro
 npm install @trapezium/vue       # Vue 3, Nuxt
 npm install @trapezium/svelte    # Svelte 5, SvelteKit
 npm install @trapezium/vanilla   # plain JavaScript, or a script tag
@@ -103,7 +103,11 @@ Every example in [`examples/`](examples) runs against the local packages.
 | [`playground`](examples/playground) | React | Every feature on one page. `pnpm build`, then open `dist/index.html` |
 | [`next-server`](examples/next-server) | Next.js | Sorting, filtering and paging in the database, all of it in the URL. `pnpm dev` |
 | [`vue-app`](examples/vue-app) | Vue 3 | Including a cell that renders a real Vue component. `pnpm dev` |
+| [`nuxt-app`](examples/nuxt-app) | Nuxt 4 | Server-rendered, the view in the URL, every control a link. `pnpm dev` |
+| [`react-router-app`](examples/react-router-app) | React Router 7 | Server-rendered, a loader reading the URL, links routed by `onNavigate`. `pnpm dev` |
+| [`astro-app`](examples/astro-app) | Astro 7 | Three islands on one page — React, Vue and Svelte — each server-rendered with its own view in the URL. `pnpm dev` |
 | [`svelte-app`](examples/svelte-app) | Svelte 5 | Runes, `bind:tableState`, and the action. `pnpm dev` |
+| [`sveltekit-app`](examples/sveltekit-app) | SvelteKit 2 | Server-rendered, the view in the URL, every control a link. `pnpm dev` |
 | [`plain-html`](examples/plain-html) | None | One file, one script tag, no build step. `pnpm dev` |
 
 ## Browsers

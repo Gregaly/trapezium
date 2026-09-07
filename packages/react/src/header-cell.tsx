@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
 import {
   hideColumn as hideColumnState,
+  isPlainLinkClick,
   moveColumn,
   poof,
   reorderColumnTo,
@@ -41,6 +42,7 @@ export function HeaderCell<TRow extends AnyRow>({
   features,
   buildHref,
   linkComponent,
+  onNavigate,
   style,
   pinOffset,
   isPinEdge,
@@ -65,6 +67,7 @@ export function HeaderCell<TRow extends AnyRow>({
   }
   buildHref?: (state: TableState) => string
   linkComponent?: LinkComponent
+  onNavigate?: (href: string, event: React.MouseEvent) => void
   style?: React.CSSProperties
   pinOffset?: number
   isPinEdge?: boolean
@@ -240,6 +243,7 @@ export function HeaderCell<TRow extends AnyRow>({
           <SortButton
             href={href((current) => toggleSort(current, column.key))}
             Link={Link}
+            onNavigate={onNavigate}
             onSelect={() => apply((current) => toggleSort(current, column.key))}
             columnHeader={column.header}
           >
@@ -276,6 +280,7 @@ export function HeaderCell<TRow extends AnyRow>({
                         page: 1,
                       }))}
                       Link={Link}
+                      onNavigate={onNavigate}
                       onSelect={() => {
                         apply((current) => ({
                           ...current,
@@ -295,6 +300,7 @@ export function HeaderCell<TRow extends AnyRow>({
                         page: 1,
                       }))}
                       Link={Link}
+                      onNavigate={onNavigate}
                       onSelect={() => {
                         apply((current) => ({
                           ...current,
@@ -311,6 +317,7 @@ export function HeaderCell<TRow extends AnyRow>({
                         icon={<Icon name="close" />}
                         href={href((current) => ({ ...current, sort: [] }))}
                         Link={Link}
+                        onNavigate={onNavigate}
                         onSelect={() => {
                           apply((current) => ({ ...current, sort: [] }))
                           close()
@@ -382,6 +389,7 @@ export function HeaderCell<TRow extends AnyRow>({
                   icon={<Icon name="eyeOff" />}
                   href={href((current) => hideColumnState(current, column.key))}
                   Link={Link}
+                  onNavigate={onNavigate}
                   onSelect={() => {
                     apply((current) => hideColumnState(current, column.key))
                     close()
@@ -431,6 +439,7 @@ function Action({
   icon,
   href,
   Link,
+  onNavigate,
   onSelect,
   disabled,
 }: {
@@ -438,6 +447,7 @@ function Action({
   icon?: React.ReactNode
   href?: string
   Link?: LinkComponent
+  onNavigate?: (href: string, event: React.MouseEvent) => void
   onSelect: () => void
   disabled?: boolean
 }) {
@@ -459,23 +469,43 @@ function Action({
   }
 
   return (
-    <a href={href} data-menu-item="" className="tpz-menu-item">
+    <a href={href} data-menu-item="" className="tpz-menu-item" onClick={routeClick(href, onNavigate)}>
       {icon}
       {children}
     </a>
   )
 }
 
+/**
+ * The click handler that hands a plain click on a link to `onNavigate`.
+ *
+ * A modifier held or the middle button means the person asked the browser for
+ * something, and it is left alone.
+ */
+export function routeClick(
+  href: string,
+  onNavigate: ((href: string, event: React.MouseEvent) => void) | undefined,
+): ((event: React.MouseEvent<HTMLAnchorElement>) => void) | undefined {
+  if (!onNavigate) return undefined
+  return (event) => {
+    if (!isPlainLinkClick(event, event.currentTarget.getAttribute("target"))) return
+    event.preventDefault()
+    onNavigate(href, event)
+  }
+}
+
 function SortButton({
   children,
   href,
   Link,
+  onNavigate,
   onSelect,
   columnHeader,
 }: {
   children: React.ReactNode
   href?: string
   Link?: LinkComponent
+  onNavigate?: (href: string, event: React.MouseEvent) => void
   onSelect: () => void
   columnHeader: string
 }) {
@@ -483,7 +513,7 @@ function SortButton({
     // The class goes on the anchor itself rather than on a span inside it, or
     // the browser's own link styling underlines every column header.
     const props = { href, className: "tpz-th-button", "aria-label": `Sort by ${columnHeader}`, children }
-    return Link ? <Link {...props} /> : <a {...props} />
+    return Link ? <Link {...props} /> : <a {...props} onClick={routeClick(href, onNavigate)} />
   }
 
   return (

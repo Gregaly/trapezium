@@ -10,6 +10,30 @@ import { ICONS, iconPath } from "@trapezium/core"
 
 type Attributes = Record<string, string | number | boolean | null | undefined>
 
+/*
+  Where elements come from. The browser's document, unless a server render has
+  put its own in place for the duration of a build — see `renderToString`.
+  Looked up on every call rather than once, because the core rule is that
+  nothing touches `document` at module scope.
+*/
+let serverDocument: Document | undefined
+
+/** The document to build against right now. */
+export function currentDocument(): Document {
+  return serverDocument ?? document
+}
+
+/** Runs `build` with every element created against `doc` instead of the page. */
+export function withDocument<T>(doc: Document, build: () => T): T {
+  const previous = serverDocument
+  serverDocument = doc
+  try {
+    return build()
+  } finally {
+    serverDocument = previous
+  }
+}
+
 /**
  * Creates an element.
  *
@@ -27,7 +51,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   attributes: Attributes = {},
   children: Array<Node | string | null | undefined> = [],
 ): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag)
+  const node = currentDocument().createElement(tag)
 
   for (const [name, value] of Object.entries(attributes)) {
     if (value === null || value === undefined || value === false) continue
@@ -38,7 +62,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(
 
   for (const child of children) {
     if (child === null || child === undefined) continue
-    node.append(typeof child === "string" ? document.createTextNode(child) : child)
+    node.append(typeof child === "string" ? text(child) : child)
   }
 
   return node
@@ -51,7 +75,7 @@ export function icon(name: string | false | undefined, size = 14, className?: st
   const path = iconPath(name)
   if (!path) return null
 
-  const svg = document.createElementNS(SVG_NAMESPACE, "svg")
+  const svg = currentDocument().createElementNS(SVG_NAMESPACE, "svg")
   svg.setAttribute("viewBox", "0 0 16 16")
   svg.setAttribute("width", String(size))
   svg.setAttribute("height", String(size))
@@ -63,7 +87,7 @@ export function icon(name: string | false | undefined, size = 14, className?: st
   svg.setAttribute("aria-hidden", "true")
   if (className) svg.setAttribute("class", className)
 
-  const shape = document.createElementNS(SVG_NAMESPACE, "path")
+  const shape = currentDocument().createElementNS(SVG_NAMESPACE, "path")
   shape.setAttribute("d", path)
   svg.append(shape)
 
@@ -71,6 +95,16 @@ export function icon(name: string | false | undefined, size = 14, className?: st
 }
 
 export { ICONS }
+
+/** A text node, from whichever document is current. */
+export function text(value: string): Text {
+  return currentDocument().createTextNode(value)
+}
+
+/** An empty fragment, from whichever document is current. */
+export function fragment(): DocumentFragment {
+  return currentDocument().createDocumentFragment()
+}
 
 /** Replaces everything inside a node. */
 export function fill(node: Element, children: Array<Node | string | null | undefined>): void {

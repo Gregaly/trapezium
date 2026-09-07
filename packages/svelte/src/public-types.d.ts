@@ -24,6 +24,7 @@ export type TableProps<TRow extends AnyRow = AnyRow> = TableOptions<TRow> & {
 export declare const Table: Component<TableProps>
 
 export { trapezium } from "./action.js"
+export { renderToString } from "@trapezium/vanilla"
 
 export {
   DEFAULT_FORMAT,
@@ -66,4 +67,5 @@ export type {
   TableSlots,
   TableState,
   TypeDef,
+  UrlOptions,
 } from "@trapezium/core"

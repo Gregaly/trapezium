@@ -244,6 +244,14 @@ export type TableProps<TRow extends AnyRow = AnyRow> = {
   buildHref?: (state: TableState) => string
   /** Your framework's link component, used for `buildHref` and `rowHref`. */
   linkComponent?: LinkComponent
+  /**
+   * Fires when one of the table's own links is clicked plainly, with the URL
+   * it points at, and prevents the browser's navigation — for a router with a
+   * `navigate` function rather than a link component. A click with a modifier
+   * held, or with the middle button, is left to the browser. Ignored when
+   * `linkComponent` is given, since the link then routes itself.
+   */
+  onNavigate?: (href: string, event: React.MouseEvent) => void
 
   /** Added to the root element. */
   className?: string

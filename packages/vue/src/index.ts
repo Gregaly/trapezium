@@ -14,6 +14,7 @@
  */
 
 export { Table, Table as TrapeziumTable } from "./table.js"
+export { renderToString } from "@trapezium/vanilla"
 export type { VueColumn } from "./table.js"
 
 export {
@@ -56,4 +57,5 @@ export type {
   TableSlots,
   TableState,
   TypeDef,
+  UrlOptions,
 } from "@trapezium/core"
