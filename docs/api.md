@@ -164,7 +164,9 @@ Passed as `server` instead of `true`, when the rows come from a server. Both mem
 import { renderToString } from "@trapezium/vanilla"   // also from @trapezium/vue and @trapezium/svelte
 ```
 
-The table as HTML, for a server. Takes the same options as `createTable` and returns the markup `createTable` would produce for them, byte for byte; `createTable` on an element that already holds it replaces it in place. Slots that are nodes and cell renderers that return nodes are left out — a string slot is written, a node renderer is written as the cell's text. The Vue and Svelte components call this themselves, so a Nuxt or SvelteKit page needs nothing more.
+The table as HTML, for a server. Takes the same options as `createTable` and returns the markup `createTable` would produce for them, byte for byte; `createTable` on an element that already holds it replaces it in place, and adopts anything done to it first — a box ticked, a search typed. A string slot is written and a node slot is left out; a cell renderer built with `el` renders, one that needs `document` is written as the cell's text. The Vue and Svelte components call this themselves, so a Nuxt or SvelteKit page needs nothing more.
+
+`renderToTree(options)` returns the same table as a tree of server elements, for an adapter that turns it into its own nodes — the Vue adapter makes VNodes of it, which is how Vue slots and component cells render on the server.
 
 ## `useTable(props)`
 

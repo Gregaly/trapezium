@@ -16,10 +16,16 @@ In the Next.js App Router the table is a client component (it has to be — it h
 
 The same is true in Nuxt and SvelteKit, and for the same reason: the table is in the server's HTML with the right rows in it, and the live table takes over on mount. Those three adapters share one DOM renderer, and on a server that renderer runs against a small in-memory document and writes the result out as HTML. It is the same code that builds the live table, so the server's markup and the browser's are the same bytes — a test in the repository compares them — and swapping one for the other moves nothing.
 
-Two things a server cannot do, and how they are handled:
+What a server can render, adapter by adapter:
 
-- **A cell renderer that builds a DOM node** — or returns a Vue component — is written as the cell's text on the server. The component mounts a moment later with the live table.
-- **The slots** (`toolbar`, `appendRow`, `footer`, `emptyState`) are written when they are strings and arrive with the live table when they are nodes. Vue's template slots arrive with the live table.
+- **Vue** renders everything on the server — the table, its template slots, and a component returned from a cell renderer — because the server tree is turned into VNodes and rendered through Vue itself.
+- **Svelte and plain JavaScript** render the table and any string slot. A cell renderer built with the package's `el` helper renders on the server too; one that reaches for `document` is written as the cell's text and appears with the live table. A node passed to a slot arrives with the live table.
+
+```js
+import { el } from "@trapezium/svelte"   // or @trapezium/vanilla
+
+{ key: "status", render: ({ value }) => el("span", { class: "badge", text: String(value) }) }
+```
 
 One caveat that is not the library's to fix: `Intl` formatting comes from each engine's own locale data, and for some locales the engines disagree — Node and WebKit write `en-GB`'s short September as "Sept" and "Sep". The rows are still right; one cell's text changes when the live table arrives. Where that matters, pick a locale the engines agree on (`en` is safe) or format that column yourself.
 
