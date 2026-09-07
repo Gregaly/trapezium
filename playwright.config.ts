@@ -97,5 +97,17 @@ export default defineConfig({
       // Nuxt builds its server on the way up, so it is allowed longer.
       timeout: 240_000,
     },
+    {
+      command: "pnpm --filter @trapezium/example-react-router dev",
+      url: "http://localhost:4360",
+      reuseExistingServer: !CI,
+      timeout: 120_000,
+    },
+    {
+      command: "pnpm --filter @trapezium/example-astro dev",
+      url: "http://localhost:4370",
+      reuseExistingServer: !CI,
+      timeout: 240_000,
+    },
   ],
 })

@@ -15,7 +15,8 @@ reuses one that is already up.
 | | What it covers |
 |---|---|
 | `next-server.spec.ts` | Server-side data: the first paint, sorting and paging with **no JavaScript at all**, the URL as the whole view, the back button, set filters that ask the server, and an export that contains every matching row. |
-| `server-rendered.spec.ts` | The Nuxt and SvelteKit examples: the first paint, sorting and paging with **no JavaScript at all**, the server's markup being the browser's markup byte for byte, and the live table taking over without losing a selection. |
+| `server-rendered.spec.ts` | The Nuxt, SvelteKit and React Router examples: the first paint, sorting and paging with **no JavaScript at all**, the server's markup being the browser's markup byte for byte, and the live table taking over without losing a selection. |
+| `islands.spec.ts` | The Astro example: three islands — React, Vue, Svelte — on one page, each server-rendered, each sorting by link without disturbing the others, each hydrating without complaint. |
 | `adapters.spec.ts` | The same script against Vue, Svelte and plain JavaScript — sort, search, filter, page, select, export, reorder, hide. They share a renderer, so this is what catches the day one of them stops. |
 | `playground.spec.ts` | The things that only exist with real layout: load more, infinite scroll, the card layout at 375px, dragging a column out of the table, density, and the empty, loading and error states. |
 | `accessibility.spec.ts` | An axe pass (WCAG 2.1 AA) over every example, with a menu open as well as closed, plus the keyboard paths. |

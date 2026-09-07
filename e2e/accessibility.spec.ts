@@ -20,6 +20,8 @@ const PAGES = [
   { name: "playground (react)", url: "http://localhost:4330/examples/playground/dist/", column: "Customer" },
   { name: "sveltekit", url: "http://localhost:4340/", column: "Name" },
   { name: "nuxt", url: "http://localhost:4350/", column: "Name" },
+  { name: "react-router", url: "http://localhost:4360/", column: "Name" },
+  { name: "astro", url: "http://localhost:4370/", column: "Name" },
 ]
 
 /** WCAG 2.1 A and AA, which is the promise the documentation makes. */

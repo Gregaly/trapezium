@@ -3,17 +3,19 @@ import { expect, test, type Page } from "@playwright/test"
 import { Table } from "./table.js"
 
 /**
- * The meta-framework examples: the table on a server, in Vue and in Svelte.
+ * The meta-framework examples: the table on a server, in Svelte, Vue and React
+ * Router.
  *
- * The Next example proves this for React. These prove it for the adapters
- * that share the DOM renderer — the first paint is already the right table,
- * every control is a link that works before any script has arrived, and once
- * the script has arrived the live table takes over without moving anything.
+ * The Next example proves this for React on its own. These prove it for the
+ * rest — the first paint is already the right table, every control is a link
+ * that works before any script has arrived, and once the script has arrived
+ * the live table takes over without moving anything.
  */
 
 const EXAMPLES = [
   { name: "sveltekit", url: "http://localhost:4340/" },
   { name: "nuxt", url: "http://localhost:4350/" },
+  { name: "react-router", url: "http://localhost:4360/" },
 ] as const
 
 /** The server's markup for a URL, as the browser would parse it. */
@@ -39,8 +41,12 @@ async function hydrated(table: Table): Promise<void> {
     .not.toBe("0px")
 }
 
-/** Markup with the measured offsets taken out, which are the one thing a server cannot write. */
-const unmeasured = (html: string) => html.replace(/left: \d+px;/g, "left: 0px;")
+/**
+ * Markup with the measured offsets taken out, which are the one thing a server
+ * cannot write. React writes none at all until it has measured, so an offset
+ * that is the whole of a style attribute goes too.
+ */
+const unmeasured = (html: string) => html.replace(/ style="left: \d+px;"/g, "").replace(/left: \d+px;/g, "left: 0px;")
 
 for (const example of EXAMPLES) {
   test.describe(example.name, () => {
@@ -116,6 +122,8 @@ for (const example of EXAMPLES) {
 
         await table.header("Name").getByRole("link").first().click()
         await expect(page).toHaveURL(/sort=name/)
+        // The URL changes first; the rows follow once the router has loaded.
+        await expect(table.header("Name")).toHaveAttribute("aria-sort", "ascending")
         const names = await table.column("Name")
         expect(names).toEqual([...names].sort())
 
