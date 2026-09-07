@@ -4,10 +4,10 @@
  *
  * The rows arrive in the HTML already sorted, filtered and paged. With
  * `buildHref` the header sorts and the pagination pages by navigation, so the
- * table works before its JavaScript has loaded. Once it has, the links are
- * caught and turned into router navigations, so nothing reloads.
+ * table works before its JavaScript has loaded. Once it has, `navigate`
+ * hands those same links to the router, so nothing reloads.
  */
-import { computed, onBeforeUnmount, onMounted } from "vue"
+import { computed } from "vue"
 import {
   TrapeziumTable,
   applyStateToUrl,
@@ -59,19 +59,6 @@ const onStateChange = (next: TableState) => {
   if (url !== href(state.value)) void router.push(url)
 }
 
-/*
-  The table's own links go through the router rather than reloading the page.
-  On the document rather than the page, because the column menus open in a
-  portal outside it and their links are links too.
-*/
-const followLink = (event: MouseEvent) => {
-  const link = (event.target as HTMLElement).closest<HTMLAnchorElement>(".tpz a[href^='/']")
-  if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey) return
-  event.preventDefault()
-  void router.push(link.getAttribute("href") ?? "/")
-}
-onMounted(() => document.addEventListener("click", followLink))
-onBeforeUnmount(() => document.removeEventListener("click", followLink))
 </script>
 
 <template>
@@ -95,6 +82,7 @@ onBeforeUnmount(() => document.removeEventListener("click", followLink))
       :format="{ currency: 'GBP', locale: 'en' }"
       aria-label="People"
       @update:state="onStateChange"
+      @navigate="(href) => router.push(href)"
     />
   </main>
 </template>
