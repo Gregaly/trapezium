@@ -25,6 +25,7 @@ export {
   distinctValues,
   inferColumns,
   inferType,
+  pickUrlState,
   stateFromSearchParams,
   stateFromUrl,
   stateToQueryString,

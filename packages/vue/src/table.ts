@@ -111,6 +111,13 @@ export const Table = defineComponent({
     rowClassName: { type: Function as PropType<(row: AnyRow, index: number) => string | undefined>, default: undefined },
     emptyMessage: { type: String, default: undefined },
 
+    /**
+     * Renders every control that changes the view as a link to this URL
+     * instead of a button, so a server-rendered table sorts and pages before
+     * its JavaScript arrives. Pair it with `stateFromUrl` for the state.
+     */
+    buildHref: { type: Function as PropType<(state: TableState) => string>, default: undefined },
+
     /** Added to the root element. */
     className: { type: String, default: undefined },
     /** Added per slot, on top of the defaults. */
@@ -255,6 +262,7 @@ export const Table = defineComponent({
       rowHref: props.rowHref,
       rowClassName: props.rowClassName,
       emptyMessage: props.emptyMessage,
+      buildHref: props.buildHref,
       className: props.className,
       classNames: props.classNames,
       unstyled: props.unstyled,
