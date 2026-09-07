@@ -38,7 +38,8 @@ async function serverMarkup(page: Page, url: string): Promise<string> {
 async function hydrated(table: Table): Promise<void> {
   await expect
     .poll(() => table.root.locator('thead th[data-key="name"]').evaluate((cell) => cell.style.left))
-    .not.toBe("0px")
+    // A measured offset: not the server's zero, and not React's nothing-yet.
+    .toMatch(/^[1-9]\d*px$/)
 }
 
 /**
