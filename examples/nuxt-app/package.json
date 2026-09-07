@@ -1,0 +1,16 @@
+{
+  "name": "@trapezium/example-nuxt",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "nuxt dev --port 4350",
+    "build": "nuxt build",
+    "preview": "nuxt preview"
+  },
+  "dependencies": {
+    "@trapezium/vue": "workspace:*",
+    "nuxt": "^4.0.0",
+    "vue": "^3.5.0"
+  }
+}
