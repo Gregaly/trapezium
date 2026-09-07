@@ -25,6 +25,23 @@ async function serverMarkup(page: Page, url: string): Promise<string> {
   }, html)
 }
 
+/**
+ * Waits until the live table has replaced the server markup.
+ *
+ * The two are the same bytes, so there is nothing to look for in the markup
+ * itself — except that a server cannot measure, and the live table can. The
+ * second frozen column sits at the width of the first once the browser has
+ * measured it, and at zero until then.
+ */
+async function hydrated(table: Table): Promise<void> {
+  await expect
+    .poll(() => table.root.locator('thead th[data-key="name"]').evaluate((cell) => cell.style.left))
+    .not.toBe("0px")
+}
+
+/** Markup with the measured offsets taken out, which are the one thing a server cannot write. */
+const unmeasured = (html: string) => html.replace(/left: \d+px;/g, "left: 0px;")
+
 for (const example of EXAMPLES) {
   test.describe(example.name, () => {
     test.describe("before any JavaScript", () => {
@@ -83,12 +100,11 @@ for (const example of EXAMPLES) {
         await page.goto(example.url)
         const table = new Table(page)
         await expect(table.rows()).toHaveCount(15)
+        await hydrated(table)
 
-        // Once the live table has taken over, its header is a real link still
-        // — and clicking sorts without a full page load.
         const server = await serverMarkup(page, example.url)
         const client = await table.root.evaluate((node) => node.outerHTML)
-        expect(client).toBe(server)
+        expect(unmeasured(client)).toBe(unmeasured(server))
 
         expect(complaints.filter((text) => /hydrat|mismatch/i.test(text))).toEqual([])
       })
@@ -96,7 +112,7 @@ for (const example of EXAMPLES) {
       test("sorts, pages and searches once the script has arrived", async ({ page }) => {
         await page.goto(example.url)
         const table = new Table(page)
-        await expect(table.rows()).toHaveCount(15)
+        await hydrated(table)
 
         await table.header("Name").getByRole("link").first().click()
         await expect(page).toHaveURL(/sort=name/)
@@ -112,7 +128,7 @@ for (const example of EXAMPLES) {
       test("keeps a selection while the URL changes", async ({ page }) => {
         await page.goto(example.url)
         const table = new Table(page)
-        await expect(table.rows()).toHaveCount(15)
+        await hydrated(table)
 
         const enabled = table.rows().getByRole("checkbox").and(page.locator(":enabled"))
         await enabled.first().check()
