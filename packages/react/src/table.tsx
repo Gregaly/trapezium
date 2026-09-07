@@ -64,6 +64,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
     caption,
     buildHref,
     linkComponent: Link,
+    onNavigate,
     className,
     classNames,
     unstyled,
@@ -427,6 +428,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
                     features={features}
                     buildHref={buildHref}
                     linkComponent={Link}
+                    onNavigate={onNavigate}
                     pinOffset={pinOffsets[column.key]}
                     isPinEdge={isPinEdge(columns, column.key)}
                     theme={theme}
@@ -540,6 +542,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
             loading={loading}
             buildHref={buildHref}
             linkComponent={Link}
+            onNavigate={onNavigate}
             className={classes("pagination")}
           />
         )}
