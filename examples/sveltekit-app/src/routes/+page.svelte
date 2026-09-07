@@ -12,6 +12,7 @@
   import "@trapezium/svelte/styles.css"
 
   import { makePeople } from "$lib/data"
+  import { URL_OPTIONS } from "$lib/url"
   import "../app.css"
 
   let { data } = $props()
@@ -27,7 +28,7 @@
     { key: "remote", type: "boolean" },
   ]
 
-  const href = (next: TableState) => applyStateToUrl("/", next)
+  const href = (next: TableState) => applyStateToUrl("/", next, URL_OPTIONS)
 
   /*
     Only the keys the URL carries are controlled from it; the selection and

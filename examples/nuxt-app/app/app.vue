@@ -8,7 +8,14 @@
  * caught and turned into router navigations, so nothing reloads.
  */
 import { computed } from "vue"
-import { TrapeziumTable, applyStateToUrl, pickUrlState, stateFromUrl, type TableState } from "@trapezium/vue"
+import {
+  TrapeziumTable,
+  applyStateToUrl,
+  pickUrlState,
+  stateFromUrl,
+  type TableState,
+  type UrlOptions,
+} from "@trapezium/vue"
 
 import { makePeople } from "./data"
 
@@ -26,9 +33,18 @@ const columns = [
   { key: "remote", type: "boolean" },
 ]
 
-const state = computed(() => stateFromUrl(route.query as Record<string, string | string[] | undefined>))
+/*
+  The table shows fifteen rows a page, so fifteen is its resting size: a URL
+  with no size means fifteen, and a size of fifteen writes nothing. The same
+  object goes to every read and every write so the two agree.
+*/
+const URL_OPTIONS: UrlOptions = { defaults: { pageSize: 15 } }
 
-const href = (next: TableState) => applyStateToUrl("/", next)
+const state = computed(() =>
+  stateFromUrl(route.query as Record<string, string | string[] | undefined>, URL_OPTIONS),
+)
+
+const href = (next: TableState) => applyStateToUrl("/", next, URL_OPTIONS)
 
 /*
   Only the keys the URL carries are controlled from it; the selection and any

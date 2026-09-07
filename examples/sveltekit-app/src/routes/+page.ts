@@ -1,5 +1,6 @@
 import { stateFromUrl } from "@trapezium/svelte"
 
+import { URL_OPTIONS } from "$lib/url"
 import type { PageLoad } from "./$types"
 
 /**
@@ -8,4 +9,4 @@ import type { PageLoad } from "./$types"
  * that. The table is rendered from it either way, which is what makes the first
  * paint already sorted and paged, and a shared link reproduce the whole view.
  */
-export const load: PageLoad = ({ url }) => ({ state: stateFromUrl(url.searchParams) })
+export const load: PageLoad = ({ url }) => ({ state: stateFromUrl(url.searchParams, URL_OPTIONS) })
