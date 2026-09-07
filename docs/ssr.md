@@ -16,6 +16,8 @@ In the Next.js App Router the table is a client component (it has to be — it h
 
 The same is true in Nuxt and SvelteKit, and for the same reason: the table is in the server's HTML with the right rows in it, and the live table takes over on mount. Those three adapters share one DOM renderer, and on a server that renderer runs against a small in-memory document and writes the result out as HTML. It is the same code that builds the live table, so the server's markup and the browser's are the same bytes — a test in the repository compares them — and swapping one for the other moves nothing.
 
+A checkbox is a checkbox with or without JavaScript, and a search box takes typing. Anything done to the server markup before the script arrives — a row ticked, the page selected, a word typed into the search — is read off the old markup and folded into the live table's starting state, with the caret put back where it was. Nothing the person did is lost to the swap.
+
 What a server can render, adapter by adapter:
 
 - **Vue** renders everything on the server — the table, its template slots, and a component returned from a cell renderer — because the server tree is turned into VNodes and rendered through Vue itself.
