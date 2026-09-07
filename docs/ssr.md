@@ -132,7 +132,7 @@ Give the table `buildHref` and every control renders as a link instead of a butt
 
 The menus still need JavaScript to open, so this is progressive enhancement rather than a no-JS-only mode: the header sorts, the pagination pages, and everything else improves once the bundle arrives.
 
-`buildHref` is the same option in every adapter. `linkComponent` is React's alone: it exists so `next/link` can wrap the anchors. SvelteKit intercepts plain anchors itself; in Nuxt, catch clicks on the table's links and hand them to the router, as the example does.
+`buildHref` is the same option in every adapter. To route those links client-side, either give React your framework's link component with `linkComponent`, or — in any adapter — listen for `onNavigate`, which fires with the URL for a plain click and leaves modifier clicks to the browser. SvelteKit intercepts plain anchors itself, so it needs neither; Nuxt uses `@navigate`.
 
 ### Nuxt
 
@@ -152,6 +152,7 @@ const href = (next) => applyStateToUrl("/invoices", next)
     :state="pickUrlState(state)"
     :build-href="href"
     @update:state="(next) => router.push(href(next))"
+    @navigate="(href) => router.push(href)"
   />
 </template>
 ```

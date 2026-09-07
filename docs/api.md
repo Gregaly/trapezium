@@ -25,7 +25,7 @@ import { Table } from "@trapezium/react"
 | Prop | Type | Default | |
 |---|---|---|---|
 | `state` | `Partial<TableState>` | — | Controlled state. Controls exactly the keys it contains; the rest stay with the table. |
-| `defaultState` | `Partial<TableState>` | — | Starting state, uncontrolled. |
+| `defaultState` | `Partial<TableState>` | — | Starting state, uncontrolled. Read once. Every adapter. |
 | `onStateChange` | `(state: TableState) => void` | — | Fires with the complete next state. |
 
 ### Features
@@ -80,7 +80,8 @@ import { Table } from "@trapezium/react"
 | `appendRow` | `ReactNode` | A row below the last one. A slot in Vue; a node or string elsewhere. |
 | `footer` | `ReactNode` | Below the table, inside the frame. A slot in Vue; a node or string elsewhere. |
 | `buildHref` | `(state) => string` | Renders controls as links. Every adapter. |
-| `linkComponent` | `(props) => ReactNode` | Your router's `Link`. React only; the other adapters render plain anchors. |
+| `linkComponent` | `(props) => ReactNode` | Your router's `Link`. React only. |
+| `onNavigate` | `(href, event) => void` | A plain click on one of the table's links, with its URL, the browser's navigation prevented — for a router with a `navigate` function. Every adapter; `@navigate` in Vue. |
 
 ## `ColumnDef`
 
