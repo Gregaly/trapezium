@@ -37,6 +37,7 @@ import {
   clearFilters,
   clearWidth,
   createClasses,
+  isPlainLinkClick,
   resolveSelection,
   selectRange,
   selectableIds,
@@ -87,7 +88,10 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
   columns?: readonly (VanillaColumn<TRow> | string)[]
   getRowId?: GetRowId<TRow>
 
+  /** Controlled state. Followed whenever a new object is passed. */
   state?: PartialTableState
+  /** Starting state for a table that manages its own — a saved view, a URL. Read once. */
+  defaultState?: PartialTableState
   onStateChange?: (state: TableState) => void
 
   /**
@@ -183,6 +187,14 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
    * arrives, and everything else improves once it has.
    */
   buildHref?: (state: TableState) => string
+  /**
+   * Fires when one of the table's own links — a sort header, a page, a menu
+   * action — is clicked plainly, with the URL it points at. The default is
+   * prevented, so hand the URL to your router for a client-side navigation.
+   * A click with a modifier held, or with the middle button, is left to the
+   * browser. The framework-neutral counterpart of React's `linkComponent`.
+   */
+  onNavigate?: (href: string, event: MouseEvent) => void
 
   /** Added to the root element. */
   className?: string
@@ -222,7 +234,12 @@ export function createTable<TRow extends AnyRow>(
   if (!host) throw new Error(`Trapezium: no element matched ${String(target)}`)
 
   let settings = options
-  let state: TableState = { ...DEFAULT_STATE, ...paginationOf(options)?.stateDefaults, ...options.state }
+  let state: TableState = {
+    ...DEFAULT_STATE,
+    ...paginationOf(options)?.stateDefaults,
+    ...options.defaultState,
+    ...options.state,
+  }
   let lastSelection = state.selection.join(",")
 
   /*
@@ -1015,6 +1032,21 @@ export function createTable<TRow extends AnyRow>(
     selectAllBox.setAttribute("aria-label", all ? "Clear selection" : "Select all rows on this page")
   }
 
+  /**
+   * Hands a plain click on one of the table's links to `onNavigate`, when the
+   * caller gave one. Anything else — a modifier, the middle button — is the
+   * browser's, so a new tab still opens.
+   */
+  function routed<T extends HTMLElement>(link: T): T {
+    link.addEventListener("click", (event) => {
+      const onNavigate = settings.onNavigate
+      if (!onNavigate || !isPlainLinkClick(event, link.getAttribute("target"))) return
+      event.preventDefault()
+      onNavigate(link.getAttribute("href") ?? "", event)
+    })
+    return link
+  }
+
   /** Frozen columns need real pixel offsets, and only layout knows them. */
   function measurePinOffsets(): Record<string, number> {
     const cells = [...head.querySelectorAll<HTMLElement>("[data-pin]")]
@@ -1141,14 +1173,16 @@ export function createTable<TRow extends AnyRow>(
     // the browser's own link styling underlines every column header.
     const label =
       sortable && settings.buildHref
-        ? el(
-            "a",
-            {
-              href: settings.buildHref(toggleSort(state, column.key)),
-              class: "tpz-th-button",
-              "aria-label": `Sort by ${column.header}`,
-            },
-            labelChildren,
+        ? routed(
+            el(
+              "a",
+              {
+                href: settings.buildHref(toggleSort(state, column.key)),
+                class: "tpz-th-button",
+                "aria-label": `Sort by ${column.header}`,
+              },
+              labelChildren,
+            ),
           )
         : el(sortable ? "button" : "span", { class: "tpz-th-button", type: sortable ? "button" : undefined }, labelChildren)
     if (sortable && !settings.buildHref) label.addEventListener("click", () => update(toggleSort(state, column.key)))
@@ -1314,7 +1348,7 @@ export function createTable<TRow extends AnyRow>(
        */
       const action = (label: string, next: TableState, glyph: Node | null) =>
         settings.buildHref
-          ? menuLink(label, settings.buildHref(next), { icon: glyph })
+          ? routed(menuLink(label, settings.buildHref(next), { icon: glyph }))
           : menuItem(label, () => {
               update(next)
               close()
@@ -1781,12 +1815,14 @@ export function createTable<TRow extends AnyRow>(
       // A real link when the table has URLs, so paging works before any script
       // arrives and middle-click opens a page in a new tab.
       if (settings.buildHref && !disabled) {
-        return el("a", {
-          href: settings.buildHref(setPage(state, page)),
-          class: "tpz-btn tpz-page",
-          "aria-label": label,
-          "aria-current": isCurrent ? "page" : undefined,
-        }, [content])
+        return routed(
+          el("a", {
+            href: settings.buildHref(setPage(state, page)),
+            class: "tpz-btn tpz-page",
+            "aria-label": label,
+            "aria-current": isCurrent ? "page" : undefined,
+          }, [content]),
+        )
       }
 
       const button = el("button", {
@@ -1976,6 +2012,8 @@ function readInteractions(host: HTMLElement): Interactions | undefined {
  */
 const PASSIVE_OPTIONS: ReadonlySet<string> = new Set([
   "data",
+  "defaultState",
+  "onNavigate",
   "loading",
   "error",
   "total",

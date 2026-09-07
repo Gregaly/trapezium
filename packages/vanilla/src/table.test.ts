@@ -1114,6 +1114,21 @@ describe("options that change while the table is running", () => {
     expect(cells()[0]?.[0]).toBe("P0")
   })
 
+  it("starts from defaultState and never reads it again", () => {
+    const table = createTable(host, {
+      data: people,
+      columns: ["name"],
+      defaultState: { sort: [{ key: "name", direction: "desc" }] },
+    })
+    expect(cells().map((row) => row[0])).toEqual(["Zoe", "Tom", "Ada"])
+
+    // The person changes the sort; a new defaultState from the caller is not a
+    // new instruction, the way a new `state` would be.
+    host.querySelector<HTMLButtonElement>(".tpz-th-button")!.click()
+    table.setOptions({ defaultState: { sort: [{ key: "name", direction: "desc" }] } })
+    expect(cells().map((row) => row[0])).not.toEqual(["Zoe", "Tom", "Ada"])
+  })
+
   it("follows a new state, and leaves the rest of the arrangement alone", () => {
     const table = createTable(host, { data: people, columns: ["name", "plan"] })
 

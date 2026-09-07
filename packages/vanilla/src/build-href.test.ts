@@ -9,7 +9,7 @@
  * Svelte and plain JavaScript — must render the same anchors.
  */
 import { createState, hideColumn, stateToQueryString } from "@trapezium/core"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 
 import { renderToString } from "./render-to-string.js"
 import { createTable } from "./table.js"
@@ -94,6 +94,34 @@ describe("with buildHref", () => {
     link.click()
 
     expect(host.querySelector("thead th")?.getAttribute("aria-sort")).toBe("none")
+  })
+
+  it("hands a plain click to onNavigate and leaves a modifier click to the browser", () => {
+    const onNavigate = vi.fn()
+    createTable(host, { data: people, columns: ["name"], pagination: { pageSize: 10 }, buildHref: href, onNavigate })
+
+    const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Next page"]')!
+    const plain = new MouseEvent("click", { bubbles: true, cancelable: true })
+    link.dispatchEvent(plain)
+    expect(onNavigate).toHaveBeenCalledWith("/people?page=2&size=10", plain)
+    expect(plain.defaultPrevented).toBe(true)
+
+    const newTab = new MouseEvent("click", { bubbles: true, cancelable: true, metaKey: true })
+    link.dispatchEvent(newTab)
+    expect(onNavigate).toHaveBeenCalledTimes(1)
+    expect(newTab.defaultPrevented).toBe(false)
+  })
+
+  it("routes the menu's links the same way", () => {
+    const onNavigate = vi.fn()
+    createTable(host, { data: people, columns: ["name", "plan"], buildHref: href, onNavigate })
+    host.querySelector<HTMLButtonElement>(".tpz-th-menu")!.click()
+
+    const item = [...document.querySelectorAll<HTMLAnchorElement>(".tpz-portal a[data-menu-item]")].find((node) =>
+      node.textContent?.includes("Sort descending"),
+    )!
+    item.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }))
+    expect(onNavigate).toHaveBeenCalledWith("/people?sort=name%3Adesc", expect.anything())
   })
 
   it("renders the same links on a server", () => {
