@@ -62,7 +62,7 @@ import {
   type TypeDef,
 } from "@trapezium/core"
 
-import { el, fill, icon } from "./dom.js"
+import { currentDocument, el, fill, fragment, icon, text } from "./dom.js"
 import { closeMenu, menuItem, menuLabel, menuSeparator, openMenuAt } from "./menu.js"
 
 /**
@@ -205,7 +205,7 @@ export function createTable<TRow extends AnyRow>(
   target: HTMLElement | string,
   options: TableOptions<TRow>,
 ): TableInstance<TRow> {
-  const host = typeof target === "string" ? document.querySelector<HTMLElement>(target) : target
+  const host = typeof target === "string" ? currentDocument().querySelector<HTMLElement>(target) : target
   if (!host) throw new Error(`Trapezium: no element matched ${String(target)}`)
 
   let settings = options
@@ -275,7 +275,15 @@ export function createTable<TRow extends AnyRow>(
   scroll.append(table)
   frame.append(toolbar, scroll, footer, paginationBar)
   root.append(frame)
-  host.append(root)
+
+  /*
+    Whatever the host already holds is server-rendered markup for this table —
+    `renderToString` writes the same bytes this render produces, so swapping
+    the one for the other moves nothing on screen. An empty host is the plain
+    case, and the table is simply added to it.
+  */
+  if (host.childNodes.length > 0) host.replaceChildren(root)
+  else host.append(root)
 
   /* ── Toolbar, built once so the search box keeps focus ─────────────────── */
 
@@ -616,24 +624,24 @@ export function createTable<TRow extends AnyRow>(
     if (shape === renderedShape && renderedRows.length > 0 && extendsRendered(rows)) {
       if (rows.length > renderedRows.length) {
         const offsets = measurePinOffsets()
-        const fragment = document.createDocumentFragment()
+        const batch = fragment()
         const added: HTMLElement[] = []
 
         for (let index = renderedRows.length; index < rows.length; index += 1) {
           const tr = buildRow(rows[index]!, rowIds[index]!, index, build)
           added.push(tr)
-          fragment.append(tr)
+          batch.append(tr)
         }
 
         // Positioned before they are in the document, so a frozen column does
         // not spend a frame in the wrong place.
-        applyPinOffsets(fragment, offsets)
+        applyPinOffsets(batch, offsets)
 
         // After the last data row rather than at the end of the body: a
         // caller's appended row sits below the data and must stay there.
         const last = renderedNodes[renderedNodes.length - 1]
-        if (last) last.after(fragment)
-        else body.append(fragment)
+        if (last) last.after(batch)
+        else body.append(batch)
 
         renderedNodes.push(...added)
         renderedRows = rows
@@ -756,6 +764,9 @@ export function createTable<TRow extends AnyRow>(
         class: "tpz-checkbox",
         "aria-label": `Select row ${String(index + 1)}`,
       }) as HTMLInputElement
+      // The attribute as well as the property, so a server render — which can
+      // only write attributes — says the same thing as the live table.
+      box.defaultChecked = selected
       box.checked = selected
       box.disabled = selection?.isSelectable ? !selection.isSelectable(row, index) : false
 
@@ -799,7 +810,7 @@ export function createTable<TRow extends AnyRow>(
       })
       if (column.width) cell.style.width = `${String(column.width)}px`
 
-      const node = typeof content === "string" ? document.createTextNode(content) : content
+      const node = typeof content === "string" ? text(content) : content
 
       /*
         A table cell has to go on being a table cell, so anything that bounds
@@ -937,6 +948,7 @@ export function createTable<TRow extends AnyRow>(
     const selectedHere = renderedSelectable.filter((id) => state.selection.includes(id)).length
     const all = renderedSelectable.length > 0 && selectedHere === renderedSelectable.length
 
+    selectAllBox.defaultChecked = all
     selectAllBox.checked = all
     selectAllBox.indeterminate = selectedHere > 0 && !all
     selectAllBox.setAttribute("aria-label", all ? "Clear selection" : "Select all rows on this page")
@@ -1673,14 +1685,15 @@ export function createTable<TRow extends AnyRow>(
     const start = el("div", { class: "tpz-toolbar-group" }, [info])
 
     if (pagination.pageSizeOptions && pagination.pageSizeOptions.length > 0) {
+      // Chosen by attribute rather than by setting `value`, so the markup
+      // carries the choice — a server render has nothing else.
       const select = el(
         "select",
         { class: "tpz-input" },
         pagination.pageSizeOptions.map((size) =>
-          el("option", { value: size, text: `${String(size)} per page` }),
+          el("option", { value: size, text: `${String(size)} per page`, selected: size === state.pageSize }),
         ),
       ) as HTMLSelectElement
-      select.value = String(state.pageSize)
       select.addEventListener("change", () => update(setPageSize(state, Number(select.value))))
 
       start.append(
