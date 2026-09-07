@@ -60,7 +60,7 @@
     selection={{ isSelectable: (person) => person.team !== "Sales" }}
     export={true}
     pagination={{ mode: "pages", pageSize: 15, pageSizeOptions: [15, 30, 60] }}
-    format={{ currency: "GBP", locale: "en-GB" }}
+    format={{ currency: "GBP", locale: "en" }}
     ariaLabel="People"
   />
 </main>

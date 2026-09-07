@@ -7,7 +7,7 @@
  * table works before its JavaScript has loaded. Once it has, the links are
  * caught and turned into router navigations, so nothing reloads.
  */
-import { computed } from "vue"
+import { computed, onBeforeUnmount, onMounted } from "vue"
 import {
   TrapeziumTable,
   applyStateToUrl,
@@ -18,6 +18,8 @@ import {
 } from "@trapezium/vue"
 
 import { makePeople } from "./data"
+
+useHead({ title: "Trapezium in Nuxt", htmlAttrs: { lang: "en" } })
 
 const route = useRoute()
 const router = useRouter()
@@ -57,17 +59,23 @@ const onStateChange = (next: TableState) => {
   if (url !== href(state.value)) void router.push(url)
 }
 
-/** The table's own links go through the router rather than reloading the page. */
+/*
+  The table's own links go through the router rather than reloading the page.
+  On the document rather than the page, because the column menus open in a
+  portal outside it and their links are links too.
+*/
 const followLink = (event: MouseEvent) => {
   const link = (event.target as HTMLElement).closest<HTMLAnchorElement>(".tpz a[href^='/']")
   if (!link || event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey) return
   event.preventDefault()
   void router.push(link.getAttribute("href") ?? "/")
 }
+onMounted(() => document.addEventListener("click", followLink))
+onBeforeUnmount(() => document.removeEventListener("click", followLink))
 </script>
 
 <template>
-  <main @click="followLink">
+  <main>
     <h1>Trapezium in Nuxt</h1>
     <p>
       Server-rendered, with every control a real link. Disable JavaScript and the header still
@@ -84,7 +92,7 @@ const followLink = (event: MouseEvent) => {
       :selection="{ isSelectable: (person) => person.team !== 'Sales' }"
       export
       :pagination="{ mode: 'pages', pageSize: 15, pageSizeOptions: [15, 30, 60] }"
-      :format="{ currency: 'GBP', locale: 'en-GB' }"
+      :format="{ currency: 'GBP', locale: 'en' }"
       aria-label="People"
       @update:state="onStateChange"
     />
