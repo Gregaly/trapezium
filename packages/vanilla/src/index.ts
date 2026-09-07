@@ -57,4 +57,5 @@ export type {
   TableSlots,
   TableState,
   TypeDef,
+  UrlOptions,
 } from "@trapezium/core"

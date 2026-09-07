@@ -53,4 +53,5 @@ export type {
   Sort,
   TableState,
   TypeDef,
+  UrlOptions,
 } from "@trapezium/core"

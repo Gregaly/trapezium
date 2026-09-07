@@ -119,6 +119,25 @@ describe("applyStateToUrl", () => {
   })
 })
 
+describe("a table with its own defaults", () => {
+  const options = { defaults: { pageSize: 15 } }
+
+  it("reads a URL with no size as the table's size, not the library's", () => {
+    expect(stateFromUrl("", options).pageSize).toBe(15)
+    expect(stateFromUrl("?size=30", options).pageSize).toBe(30)
+  })
+
+  it("writes nothing for the resting size, and the size when it differs", () => {
+    expect(stateToQueryString(createState({ pageSize: 15 }), options)).toBe("")
+    expect(stateToQueryString(createState({ pageSize: 25 }), options)).toBe("size=25")
+  })
+
+  it("round-trips", () => {
+    const state = createState({ pageSize: 15, page: 3, density: "compact" })
+    expect(stateFromUrl(stateToQueryString(state, options), options)).toEqual(state)
+  })
+})
+
 describe("pickUrlState", () => {
   const state = createState({
     sort: [{ key: "name", direction: "asc" }],
