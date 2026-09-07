@@ -13,6 +13,7 @@
 
 export { default as Table } from "./Table.svelte"
 export { trapezium } from "./action.js"
+export { renderToString } from "@trapezium/vanilla"
 
 export {
   DEFAULT_FORMAT,

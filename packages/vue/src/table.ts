@@ -1,6 +1,7 @@
 import {
   Teleport,
   computed,
+  getCurrentInstance,
   defineComponent,
   h,
   isVNode,
@@ -12,7 +13,7 @@ import {
   type PropType,
   type VNode,
 } from "vue"
-import { createTable, type TableInstance, type TableOptions } from "@trapezium/vanilla"
+import { createTable, renderToString, type TableInstance, type TableOptions } from "@trapezium/vanilla"
 import type {
   AnyRow,
   CellContext,
@@ -133,6 +134,15 @@ export const Table = defineComponent({
     let table: TableInstance | undefined
 
     /*
+      Whether anyone is listening for a row click. A row with a click handler
+      is marked and styled as clickable, so the handler is only passed on when
+      the template has `@row-click` — otherwise every Vue table would have
+      pointer cursors that React and plain JavaScript do not.
+    */
+    const instance = getCurrentInstance()
+    const listensForRowClick = () => Boolean(instance?.vnode.props?.["onRowClick"])
+
+    /*
       Containers holding a mounted VNode. Vue will not unmount them on its own —
       they are outside its tree — so they are tracked and torn down before every
       rebuild. Without this a table that re-renders a thousand times leaks a
@@ -155,7 +165,8 @@ export const Table = defineComponent({
     const slotHosts: Partial<Record<SlotName, HTMLElement>> = {}
 
     const slotHost = (name: SlotName): HTMLElement | undefined => {
-      if (!slots[name]) return undefined
+      // A server has no elements to teleport into; the slots arrive on mount.
+      if (!slots[name] || typeof document === "undefined") return undefined
       let element = slotHosts[name]
       if (!element) {
         element = document.createElement("span")
@@ -255,8 +266,36 @@ export const Table = defineComponent({
       emptyState: slotHost("empty"),
       onStateChange: (state) => emit("update:state", state),
       onSelectionChange: (ids, rows) => emit("selectionChange", ids, rows),
-      onRowClick: (row, event) => emit("rowClick", row, event),
+      onRowClick: listensForRowClick() ? (row, event) => emit("rowClick", row, event) : undefined,
     })
+
+    /*
+      The table as HTML, for the first paint.
+
+      Computed the same way on the server and in the browser, so the markup
+      Vue hydrates is the markup it rendered. The live table replaces it on
+      mount — the same bytes, so nothing moves. A cell renderer that returns a
+      VNode is written as the cell's text here: a component cannot be
+      serialised synchronously, and it mounts a moment later with the rest.
+    */
+    const initial = renderToString(serverOptions())
+
+    function serverOptions(): TableOptions {
+      return {
+        ...options(),
+        columns: props.columns?.map((column) => {
+          if (typeof column === "string" || !column.render) return column
+          const render = column.render
+          return {
+            ...column,
+            render: (context: CellContext<AnyRow, unknown>) => {
+              const result = render(context)
+              return typeof result === "string" ? result : context.text
+            },
+          }
+        }) as TableOptions["columns"],
+      }
+    }
 
     onMounted(() => {
       ready.value = true
@@ -290,7 +329,7 @@ export const Table = defineComponent({
       table = undefined
     })
 
-    return { host, ready, slotHost, instance: () => table }
+    return { host, ready, initial, slotHost, instance: () => table }
   },
 
   render() {
@@ -302,6 +341,13 @@ export const Table = defineComponent({
         })
       : []
 
-    return h("div", { ref: "host", class: "tpz-host" }, teleports)
+    /*
+      The server markup goes in as `innerHTML`, which Vue neither diffs nor
+      re-applies on hydration — so the table is on screen before any script
+      runs, and the live one takes its place on mount. The slots' teleports sit
+      beside it rather than inside it, because an element with `innerHTML` has
+      no room for children of its own.
+    */
+    return h("div", { class: "tpz-host" }, [h("div", { ref: "host", innerHTML: this.initial }), ...teleports])
   },
 })

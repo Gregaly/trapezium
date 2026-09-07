@@ -17,8 +17,8 @@
    *     }
    */
   import { trapezium } from "./action.js"
-  import type { TableOptions } from "@trapezium/vanilla"
-  import type { AnyRow, TableState } from "@trapezium/core"
+  import { renderToString, type TableOptions } from "@trapezium/vanilla"
+  import type { AnyRow, CellContext, TableState } from "@trapezium/core"
 
   type Props = TableOptions<AnyRow> & {
     /** Bindable: the table writes its state here whenever anything changes. */
@@ -39,6 +39,34 @@
   }
 
   const settings = $derived({ ...options, onStateChange: reportState })
+
+  /*
+    The table as HTML, for the first paint.
+
+    Written once, the same way on the server and in the browser, so the markup
+    Svelte hydrates is the markup it rendered; the action then replaces it with
+    the live table — the same bytes, so nothing moves. A cell renderer that
+    builds a DOM node cannot run on a server, so a cell is written as its text
+    unless the renderer returned a string.
+  */
+  const initial = renderToString({
+    ...options,
+    columns: options.columns?.map((column) => {
+      if (typeof column === "string" || !column.render) return column
+      const render = column.render
+      return {
+        ...column,
+        render: (context: CellContext<AnyRow, Node | string>) => {
+          try {
+            const result = render(context)
+            return typeof result === "string" ? result : context.text
+          } catch {
+            return context.text
+          }
+        },
+      }
+    }),
+  })
 </script>
 
-<div use:trapezium={settings}></div>
+<div use:trapezium={settings}>{@html initial}</div>
