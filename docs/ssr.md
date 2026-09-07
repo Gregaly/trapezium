@@ -188,7 +188,40 @@ export const load = ({ url }) => ({ state: stateFromUrl(url.searchParams) })
 />
 ```
 
-Both examples are in the repository, under `examples/nuxt-app` and `examples/sveltekit-app`, and both are driven by the browser tests with JavaScript switched off.
+### React Router
+
+```tsx
+import { useLoaderData, useNavigate, type LoaderFunctionArgs } from "react-router"
+import { Table, applyStateToUrl, pickUrlState, stateFromUrl } from "@trapezium/react"
+
+export function loader({ request }: LoaderFunctionArgs) {
+  return { state: stateFromUrl(new URL(request.url).searchParams) }
+}
+
+export default function Invoices() {
+  const { state } = useLoaderData<typeof loader>()
+  const navigate = useNavigate()
+  const href = (next) => applyStateToUrl("/invoices", next)
+
+  return (
+    <Table
+      data={invoices}
+      state={pickUrlState(state)}
+      buildHref={href}
+      onNavigate={(url) => navigate(url)}
+      onStateChange={(next) => navigate(href(next))}
+    />
+  )
+}
+```
+
+React Router's `Link` takes `to` rather than `href`, so `onNavigate` is the simpler fit; `linkComponent` works too with a two-line wrapper.
+
+### Astro
+
+An island is a component with `client:load`, rendered on the server by its framework and hydrated in the browser — which is all the table needs. Read the view from `Astro.url` and pass it down; several tables on one page keep apart with a `prefix` each. The example under `examples/astro-app` has a React, a Vue and a Svelte island on the same page.
+
+All of these examples — Nuxt, SvelteKit, React Router and Astro — are in the repository and driven by the browser tests with JavaScript switched off.
 
 ## Saved views
 
