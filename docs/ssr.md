@@ -21,6 +21,8 @@ Two things a server cannot do, and how they are handled:
 - **A cell renderer that builds a DOM node** — or returns a Vue component — is written as the cell's text on the server. The component mounts a moment later with the live table.
 - **The slots** (`toolbar`, `appendRow`, `footer`, `emptyState`) are written when they are strings and arrive with the live table when they are nodes. Vue's template slots arrive with the live table.
 
+One caveat that is not the library's to fix: `Intl` formatting comes from each engine's own locale data, and for some locales the engines disagree — Node and WebKit write `en-GB`'s short September as "Sept" and "Sep". The rows are still right; one cell's text changes when the live table arrives. Where that matters, pick a locale the engines agree on (`en` is safe) or format that column yourself.
+
 Plain JavaScript gets the same thing as a function: `renderToString(options)` returns the HTML, and `createTable` on an element that already holds it replaces it in place.
 
 ```js
