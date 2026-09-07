@@ -84,5 +84,18 @@ export default defineConfig({
       reuseExistingServer: !CI,
       timeout: 120_000,
     },
+    {
+      command: "pnpm --filter @trapezium/example-sveltekit dev",
+      url: "http://localhost:4340",
+      reuseExistingServer: !CI,
+      timeout: 120_000,
+    },
+    {
+      command: "pnpm --filter @trapezium/example-nuxt dev",
+      url: "http://localhost:4350",
+      reuseExistingServer: !CI,
+      // Nuxt builds its server on the way up, so it is allowed longer.
+      timeout: 240_000,
+    },
   ],
 })
