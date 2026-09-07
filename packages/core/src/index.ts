@@ -179,6 +179,7 @@ export {
   getPath,
   humanise,
   isEmpty,
+  isPlainLinkClick,
   shallowEqual,
   textEndsWith,
   textEquals,

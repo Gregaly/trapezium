@@ -182,6 +182,26 @@ export function clamp(value: number, min: number, max: number): number {
 }
 
 /** A shallow-equality check used to skip no-op state updates. */
+/**
+ * Whether a click on a link is the plain kind a router may take over.
+ *
+ * A modifier held, a middle button or a link that opens elsewhere means the
+ * person asked the browser for something — a new tab, a download — and a
+ * router that intercepts that is the most hated bug on the web.
+ */
+export function isPlainLinkClick(event: {
+  button: number
+  metaKey: boolean
+  ctrlKey: boolean
+  shiftKey: boolean
+  altKey: boolean
+  defaultPrevented: boolean
+}, target?: string | null): boolean {
+  if (event.defaultPrevented || event.button !== 0) return false
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return false
+  return !target || target === "_self"
+}
+
 export function shallowEqual(a: unknown, b: unknown): boolean {
   if (Object.is(a, b)) return true
   if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false
