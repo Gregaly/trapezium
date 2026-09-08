@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { renderToString } from "react-dom/server"
+import type { ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup } from "@testing-library/react"
 
@@ -144,6 +145,30 @@ describe("links", () => {
 
     fireEvent.click(link, { metaKey: true })
     expect(onNavigate).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps a header link from dragging as a URL, so the column is what moves", () => {
+    /*
+      A link is natively draggable, and a drag starts at the innermost
+      draggable element — so a header that is a link would drag its URL, with
+      the column's drop indicator moving along as if it were working, right up
+      until the drop opened the URL.
+    */
+    const href = (state: { sort: unknown[] }) => `/people?sort=${String(state.sort.length)}`
+    render(<Table data={people} columns={["name", "plan"]} buildHref={href} />)
+
+    const link = screen.getByRole("link", { name: "Sort by Name" })
+    expect(link.getAttribute("draggable")).toBe("false")
+    expect(link.closest("th")?.getAttribute("draggable")).toBe("true")
+  })
+
+  it("asks a custom link component for the same", () => {
+    const Link = vi.fn((props: { href: string; children: ReactNode; "aria-label"?: string }) => <a {...props} />)
+    const href = (state: { sort: unknown[] }) => `/people?sort=${String(state.sort.length)}`
+    render(<Table data={people} columns={["name"]} buildHref={href} linkComponent={Link} />)
+
+    const props = Link.mock.calls.map((call) => call[0]).find((call) => call["aria-label"] === "Sort by Name")
+    expect(props).toMatchObject({ draggable: false })
   })
 })
 

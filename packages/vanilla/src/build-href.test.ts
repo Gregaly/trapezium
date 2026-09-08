@@ -44,6 +44,20 @@ describe("with buildHref", () => {
     expect(host.querySelector("thead button.tpz-th-button")).toBeNull()
   })
 
+  it("keeps a header link from dragging as a URL, so the column is what moves", () => {
+    /*
+      A link is natively draggable, and a drag starts at the innermost
+      draggable element — so a header that is a link would drag its URL, with
+      the column's drop indicator moving along as if it were working, right up
+      until the drop opened the URL.
+    */
+    createTable(host, { data: people, columns: ["name", "plan"], buildHref: href })
+
+    const link = host.querySelector<HTMLAnchorElement>("thead th a.tpz-th-button")
+    expect(link?.getAttribute("draggable")).toBe("false")
+    expect(link?.closest("th")?.getAttribute("draggable")).toBe("true")
+  })
+
   it("carries the current view into every link, and cycles the sort", () => {
     createTable(host, {
       data: people,
@@ -126,7 +140,7 @@ describe("with buildHref", () => {
 
   it("renders the same links on a server", () => {
     const html = renderToString({ data: people, columns: ["name"], pagination: { pageSize: 10 }, buildHref: href })
-    expect(html).toContain('<a href="/people?sort=name%3Aasc&amp;size=10" class="tpz-th-button" aria-label="Sort by Name">')
+    expect(html).toContain('<a href="/people?sort=name%3Aasc&amp;size=10" class="tpz-th-button" aria-label="Sort by Name" draggable="false">')
     expect(html).toContain('<a href="/people?page=2&amp;size=10" class="tpz-btn tpz-page" aria-label="Next page">')
   })
 })

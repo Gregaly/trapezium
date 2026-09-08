@@ -82,6 +82,6 @@ describe("server rendering", () => {
       },
     })
 
-    expect(body).toContain('<a href="/people?sort=name:asc" class="tpz-th-button" aria-label="Sort by Name">')
+    expect(body).toContain('<a href="/people?sort=name:asc" class="tpz-th-button" aria-label="Sort by Name" draggable="false">')
   })
 })
