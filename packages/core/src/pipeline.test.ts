@@ -301,3 +301,55 @@ describe("set filters in server mode", () => {
     warn.mockRestore()
   })
 })
+
+describe("searching arrays", () => {
+  type Tagged = { name: string; tags: string[] | null; centres: string[] | null }
+
+  const tagged: Tagged[] = [
+    { name: "Ada", tags: ["professional", "remote"], centres: ["syd-north"] },
+    { name: "Tom", tags: ["Contractor"], centres: ["mel-east", "syd-south"] },
+    { name: "Zoë", tags: [], centres: null },
+  ]
+
+  const state = createState()
+  const columns = resolveColumns<Tagged, unknown>({
+    columns: [
+      { key: "name" },
+      { key: "tags" },
+      {
+        key: "centres",
+        type: "tags",
+        formatOptions: {
+          options: [
+            { value: "syd-north", label: "Sydney North" },
+            { value: "syd-south", label: "Sydney South" },
+            { value: "mel-east", label: "Melbourne East" },
+          ],
+        },
+      },
+    ],
+    rows: tagged,
+    state,
+    types: defaultTypeRegistry,
+  }).visible
+
+  const find = (query: string) =>
+    searchRows(tagged, columns, query, defaultTypeRegistry, DEFAULT_FORMAT).map((row) => row.name)
+
+  it("infers a list of strings as tags", () => {
+    expect(columns.find((column) => column.key === "tags")?.type).toBe("tags")
+  })
+
+  it("matches part of any element, not just the first or the whole", () => {
+    expect(find("prof")).toEqual(["Ada"])
+    expect(find("mote")).toEqual(["Ada"])
+    expect(find("contract")).toEqual(["Tom"])
+    expect(find("professional")).toEqual(["Ada"])
+  })
+
+  it("matches the label a tag is shown with, and the raw value behind it", () => {
+    expect(find("sydney")).toEqual(["Ada", "Tom"])
+    expect(find("melb")).toEqual(["Tom"])
+    expect(find("syd-s")).toEqual(["Tom"])
+  })
+})

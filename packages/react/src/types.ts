@@ -101,6 +101,12 @@ export type LinkComponent = (props: {
   "aria-current"?: "page" | undefined
   "aria-label"?: string
   title?: string
+  /**
+   * `false` on a link inside a draggable header, so that dragging the header
+   * moves the column rather than starting the browser's own drag of the URL.
+   * Spread it onto the anchor along with everything else.
+   */
+  draggable?: false
 }) => ReactNode
 
 export type TableProps<TRow extends AnyRow = AnyRow> = {

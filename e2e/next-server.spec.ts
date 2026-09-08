@@ -93,6 +93,34 @@ test.describe("with JavaScript", () => {
     await expect(table.count()).toHaveText("1 selected")
   })
 
+  test("moves a column by dragging its header, even though the header is a link", async ({ page, browserName }) => {
+    /*
+      Chromium only, because only Chromium can synthesise a native drag. The
+      point of doing it here rather than in the playground: with `buildHref`
+      each header is a link, and a link is natively draggable — so without
+      care the drag that starts is the browser's drag of a URL, the drop
+      indicator moves as if a column were coming, and the drop opens the URL.
+    */
+    test.skip(browserName !== "chromium", "only chromium can synthesise a native drag")
+
+    await page.goto("/")
+    const table = new Table(page)
+    await expect(table.header("Amount").getByRole("link")).toBeVisible()
+
+    const headers = async () => (await table.root.locator("thead th").allInnerTexts()).map((text) => text.trim())
+    const before = await headers()
+
+    await table.header("Amount").dragTo(table.header("Customer"), { targetPosition: { x: 4, y: 8 } })
+
+    // The example keeps column order in the URL, so the new order arrives with
+    // the next render rather than on the drop itself.
+    await expect.poll(headers).not.toEqual(before)
+    const after = await headers()
+    expect(after.indexOf("Amount")).toBeLessThan(after.indexOf("Customer"))
+    // The column moved; no link was followed.
+    await expect(page).not.toHaveURL(/sort=/)
+  })
+
   test("a set filter offers values the page never held", async ({ page }) => {
     await page.goto("/?setf=1")
     const table = new Table(page)

@@ -6,8 +6,41 @@
  * something else is worse than no export at all.
  */
 
+import { resolveRowId } from "./pipeline.js"
 import { formatWithType, type TypeRegistry } from "./registry.js"
-import type { AnyRow, CellContext, FormatContext, ResolvedColumn } from "./types.js"
+import type { AnyRow, CellContext, FormatContext, GetRowId, ResolvedColumn } from "./types.js"
+
+/**
+ * Which rows an export or a copy should contain.
+ *
+ * A selection is a deliberate choice of rows, so it wins over everything the
+ * filters match: a person who ticked three rows and pressed "export" wants
+ * those three, not the four hundred behind them. With nothing selected the
+ * rows are returned as given.
+ *
+ * `complete` says whether the answer is whole without asking the caller for
+ * more. It is true only when every selected id was found among `rows` — a
+ * selection made on this page, or on a client-side table that has every row.
+ * It is false when some selected rows are not here, as when a server-side
+ * table's selection spans pages, and false with no selection at all, because
+ * a server-side table's rows on hand are one page of many. An adapter with a
+ * `fetchRows` calls it when `complete` is false and passes the result back
+ * through this function; without one, what is on hand is the best it can do.
+ *
+ * Identity is worked out the way the table works it out everywhere else, so a
+ * caller's `getRowId` is honoured.
+ */
+export function rowsToExport<TRow extends AnyRow>(
+  rows: readonly TRow[],
+  selection: readonly string[],
+  getRowId?: GetRowId<TRow>,
+): { rows: TRow[]; complete: boolean } {
+  if (selection.length === 0) return { rows: [...rows], complete: false }
+
+  const wanted = new Set(selection)
+  const selected = rows.filter((row, index) => wanted.has(resolveRowId(row, index, getRowId)))
+  return { rows: selected, complete: selected.length === wanted.size }
+}
 
 export type ExportOptions<TRow, TNode = unknown> = {
   columns: readonly ResolvedColumn<TRow, TNode>[]

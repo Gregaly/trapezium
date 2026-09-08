@@ -18,6 +18,7 @@ import {
   reorderColumnTo,
   resolveColumns,
   resolveRowId,
+  rowsToExport,
   setFilter,
   setMatch,
   setOrder,
@@ -443,11 +444,20 @@ export function createTable<TRow extends AnyRow>(
               close()
 
               void (async () => {
-                // The caller's rows if they have them — a server-side table's
-                // real answer — and otherwise the ones on hand.
+                /*
+                  A selection wins over everything matched, for the file as
+                  for the clipboard. The selected rows are usually on hand;
+                  only when some are not — a server-side table whose selection
+                  spans pages — or when nothing is selected and the caller can
+                  see more than this page, are the caller's rows asked for.
+                */
                 const fetchRows = config.fetchRows ?? source()?.all
                 if (!fetchRows && settings.server && !config.onExport) warnAboutServerExport()
-                const exported = fetchRows ? await fetchRows(state) : onHand
+                const chosen = rowsToExport(onHand, state.selection, settings.getRowId)
+                const exported =
+                  fetchRows && !chosen.complete
+                    ? rowsToExport(await fetchRows(state), state.selection, settings.getRowId).rows
+                    : chosen.rows
 
                 if (config.onExport) {
                   config.onExport(state, exported)
@@ -468,13 +478,10 @@ export function createTable<TRow extends AnyRow>(
               const { rows, matched, columns } = current()
               const exported = config.scope === "page" ? rows : matched
 
-              // A selection is a deliberate choice of rows, so it wins.
-              const chosen =
-                state.selection.length > 0
-                  ? exported.filter((row, index) =>
-                      state.selection.includes(resolveRowId(row, index, settings.getRowId)),
-                    )
-                  : exported
+              // The selection when there is one, and only what is on hand:
+              // the clipboard has to be written inside the click, so there is
+              // no room to fetch.
+              const chosen = rowsToExport(exported, state.selection, settings.getRowId).rows
 
               void copyText(
                 toDelimitedText(chosen, {
@@ -1171,6 +1178,14 @@ export function createTable<TRow extends AnyRow>(
 
     // The class goes on the anchor itself rather than on a span inside it, or
     // the browser's own link styling underlines every column header.
+    //
+    // A link is draggable on its own — the browser lets a person drag a URL
+    // to another tab or the desktop — and inside a draggable header that
+    // native drag wins, because a drag starts at the innermost draggable
+    // element. The header's handlers still fire as it bubbles, so the drop
+    // indicator moves as if a column were coming, but what lands is a URL and
+    // the browser opens it. Turning the link's own drag off lets the header
+    // be the thing that is dragged.
     const label =
       sortable && settings.buildHref
         ? routed(
@@ -1180,6 +1195,7 @@ export function createTable<TRow extends AnyRow>(
                 href: settings.buildHref(toggleSort(state, column.key)),
                 class: "tpz-th-button",
                 "aria-label": `Sort by ${column.header}`,
+                draggable: "false",
               },
               labelChildren,
             ),

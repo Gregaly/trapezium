@@ -512,7 +512,22 @@ function SortButton({
   if (href) {
     // The class goes on the anchor itself rather than on a span inside it, or
     // the browser's own link styling underlines every column header.
-    const props = { href, className: "tpz-th-button", "aria-label": `Sort by ${columnHeader}`, children }
+    /*
+      A link is draggable on its own — the browser lets a person drag a URL
+      to another tab or the desktop. Inside a draggable header that native
+      link drag wins, because the drag starts at the innermost draggable
+      element: the header's own handlers still fire as it bubbles, so the drop
+      indicator moves as if a column were coming, but what lands is a URL, and
+      wherever it lands the browser opens it. Turning the link's own drag off
+      lets the header be the thing that is dragged.
+    */
+    const props = {
+      href,
+      className: "tpz-th-button",
+      "aria-label": `Sort by ${columnHeader}`,
+      draggable: false as const,
+      children,
+    }
     return Link ? <Link {...props} /> : <a {...props} onClick={routeClick(href, onNavigate)} />
   }
 
