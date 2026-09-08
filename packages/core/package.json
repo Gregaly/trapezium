@@ -1,6 +1,6 @@
 {
   "name": "@trapezium/core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Framework-agnostic engine behind Trapezium tables: column model, type registry, filtering, sorting, pagination, selection and URL state. Zero dependencies.",
   "license": "MIT",
   "repository": {

@@ -1,6 +1,6 @@
 {
   "name": "@trapezium/svelte",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A data table for Svelte 5 that looks right out of the box: zero-config columns, filtering, search, pagination, selection and custom renderers.",
   "license": "MIT",
   "repository": {

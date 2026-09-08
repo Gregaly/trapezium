@@ -1,5 +1,15 @@
 # @trapezium/vanilla
 
+## 0.1.1
+
+### Patch Changes
+
+- bf50f78: - A header that is a link (`buildHref`) no longer drags as a URL: dragging it moves the column, as it does for a header that is a button.
+  - "Download CSV" exports the selected rows when there are any, as "Copy to clipboard" already did. `rowsToExport` in the core is the rule, for anyone building their own control.
+  - Tests pin down that global search matches part of any element of an array (a `tags` column), by raw value and by label.
+- Updated dependencies [bf50f78]
+  - @trapezium/core@0.1.1
+
 ## 0.1.0
 
 ### Minor Changes

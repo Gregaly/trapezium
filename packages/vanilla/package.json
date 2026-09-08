@@ -1,6 +1,6 @@
 {
   "name": "@trapezium/vanilla",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "A data table for plain JavaScript: zero-config columns, filtering, search, pagination and selection, with no framework and no dependencies.",
   "license": "MIT",
   "repository": {
