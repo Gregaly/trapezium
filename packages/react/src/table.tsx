@@ -3,8 +3,8 @@ import {
   formatWithType,
   copyText,
   downloadText,
-  resolveRowId,
   resolveSelection,
+  rowsToExport,
   selectRange,
   selectableIds as selectableIdsOf,
   setSelected,
@@ -319,10 +319,19 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
     ? {
         onDownload: () => {
           void (async () => {
-            // The caller's rows if they have them — a server-side table's real
-            // answer — and otherwise the ones on hand.
+            /*
+              A selection wins over everything matched, for the file as for
+              the clipboard. The selected rows are usually on hand; only when
+              some are not — a server-side table whose selection spans pages —
+              or when nothing is selected and the caller can see more than
+              this page, are the caller's rows asked for.
+            */
             const fetchRows = exportOptions.fetchRows ?? serverSource?.all
-            const rows = fetchRows ? await fetchRows(state) : exportRows
+            const onHand = rowsToExport(exportRows, state.selection, getRowId)
+            const rows =
+              fetchRows && !onHand.complete
+                ? rowsToExport(await fetchRows(state), state.selection, getRowId).rows
+                : onHand.rows
 
             if (exportOptions.onExport) {
               exportOptions.onExport(state, rows)
@@ -339,13 +348,10 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
           exportOptions.clipboard === false
             ? undefined
             : () => {
-                // A selection is a deliberate choice of rows, so it wins.
-                const selected =
-                  state.selection.length > 0
-                    ? exportRows.filter((row, index) =>
-                        table.selection.has(resolveRowId(row, index, getRowId)),
-                      )
-                    : exportRows
+                // The selection when there is one, and only what is on hand:
+                // the clipboard has to be written inside the click, so there
+                // is no room to fetch.
+                const selected = rowsToExport(exportRows, state.selection, getRowId).rows
 
                 void copyText(toDelimitedText(selected, { columns, types, format, delimiter: "\t", getRowId }))
               },

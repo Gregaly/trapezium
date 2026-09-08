@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
 import { resolveColumns } from "./columns.js"
-import { toCsv, toDelimitedText } from "./csv.js"
+import { rowsToExport, toCsv, toDelimitedText } from "./csv.js"
 import { DEFAULT_FORMAT } from "./format.js"
 import { createTypeRegistry, defaultTypeRegistry } from "./registry.js"
 import { createState } from "./state.js"
@@ -146,5 +146,41 @@ describe("the shape of the file", () => {
 
     expect(toCsv(rows, { columns: visible, types, format }).startsWith("﻿")).toBe(true)
     expect(toCsv(rows, { columns: visible, types, format, bom: false }).startsWith("﻿")).toBe(false)
+  })
+})
+
+describe("which rows an export contains", () => {
+  const rows = [
+    { id: "a", name: "Ada" },
+    { id: "b", name: "Bea" },
+    { id: "c", name: "Cy" },
+  ]
+
+  it("is everything, when nothing is selected — and the caller may still know more", () => {
+    const result = rowsToExport(rows, [])
+    expect(result.rows).toEqual(rows)
+    expect(result.rows).not.toBe(rows)
+    expect(result.complete).toBe(false)
+  })
+
+  it("is the selection, in row order, when there is one", () => {
+    const result = rowsToExport(rows, ["c", "a"])
+    expect(result.rows.map((row) => row.id)).toEqual(["a", "c"])
+    expect(result.complete).toBe(true)
+  })
+
+  it("says so when part of the selection is not on hand", () => {
+    const result = rowsToExport(rows, ["a", "zz"])
+    expect(result.rows.map((row) => row.id)).toEqual(["a"])
+    expect(result.complete).toBe(false)
+  })
+
+  it("finds rows by the caller's own identity", () => {
+    const keyed = [{ code: "x1" }, { code: "x2" }]
+    expect(rowsToExport(keyed, ["x2"], (row) => row.code).rows).toEqual([{ code: "x2" }])
+  })
+
+  it("counts a repeated id once", () => {
+    expect(rowsToExport(rows, ["a", "a"]).complete).toBe(true)
   })
 })

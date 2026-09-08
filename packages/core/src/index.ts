@@ -164,7 +164,7 @@ export {
 } from "./url.js"
 export type { UrlOptions, UrlStateKey } from "./url.js"
 
-export { copyText, downloadText, exportCell, toCsv, toDelimitedText } from "./csv.js"
+export { copyText, downloadText, exportCell, rowsToExport, toCsv, toDelimitedText } from "./csv.js"
 export { poof } from "./effects.js"
 export type { PoofOptions } from "./effects.js"
 export type { ExportOptions } from "./csv.js"

@@ -63,6 +63,10 @@ const [selected, setSelected] = useState<string[]>([])
 
 Only rows currently rendered can be handed back as objects; ids for rows on other pages stay in `state.selection` regardless.
 
+## Exporting a selection
+
+With `export` on as well, a selection is what gets exported: "Download CSV" and "Copy to clipboard" both contain the selected rows whenever there are any, and everything the filters match otherwise. In server mode, a selection that reaches past the page on screen is completed through `export.fetchRows` or `server.all`; the clipboard, which has to be written inside the click, copies the selected rows that are on hand.
+
 ## Controlling it
 
 Selection is part of table state, so you can set it, clear it or persist it like anything else:

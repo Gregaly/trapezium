@@ -878,6 +878,46 @@ describe("what an export contains", () => {
     expect(onExport.mock.calls[0]?.[1]).toHaveLength(120)
     expect(downloaded).toBeUndefined()
   })
+
+  it("holds the selection when there is one", () => {
+    const exported = download({ selection: true, state: { selection: ["3", "7"] } })
+
+    expect(exported).toHaveLength(2)
+    expect(downloaded).toContain("Person 003")
+    expect(downloaded).toContain("Person 007")
+  })
+
+  it("hands the selection to onExport", () => {
+    const onExport = vi.fn()
+    download({ selection: true, state: { selection: ["3", "7"] }, export: { onExport } })
+
+    expect(onExport.mock.calls[0]?.[1]).toHaveLength(2)
+  })
+
+  it("does not ask the caller for rows it already has", () => {
+    const fetchRows = vi.fn(() => many)
+    download({ server: true, total: 480, selection: true, state: { selection: ["3", "7"] }, export: { fetchRows } })
+
+    expect(fetchRows).not.toHaveBeenCalled()
+    expect(downloaded).toContain("Person 003")
+  })
+
+  it("asks for the rest when the selection reaches past the page it can see", async () => {
+    // Row 3 is on the page; row 115 is not, and only the caller can supply it.
+    const fetchRows = vi.fn(() => many)
+    download({
+      data: many.slice(0, 10),
+      server: true,
+      total: 480,
+      selection: true,
+      state: { selection: ["3", "115"] },
+      export: { fetchRows },
+    })
+
+    expect(fetchRows).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(downloaded).toContain("Person 115"))
+    expect((downloaded ?? "").trim().split("\r\n").slice(1)).toHaveLength(2)
+  })
 })
 
 describe("server-side data, made whole", () => {

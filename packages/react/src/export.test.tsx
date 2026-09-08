@@ -131,6 +131,50 @@ describe("what an export contains", () => {
   })
 })
 
+describe("what a selection does to an export", () => {
+  const selected = (props: Record<string, unknown> = {}) =>
+    exportFrom({ selection: true, defaultState: { selection: ["3", "7"] }, ...props })
+
+  it("downloads the selection when there is one", async () => {
+    await selected()
+
+    expect(lines(downloaded)).toHaveLength(2)
+    expect(downloaded).toContain("Person 003")
+    expect(downloaded).toContain("Person 007")
+  })
+
+  it("hands the selection to onExport", async () => {
+    const onExport = vi.fn()
+    await selected({ export: { onExport } })
+
+    expect(onExport.mock.calls[0]?.[1]).toHaveLength(2)
+  })
+
+  it("does not ask the caller for rows it already has", async () => {
+    const fetchRows = vi.fn(() => rows)
+    await selected({ server: true, total: 480, export: { fetchRows } })
+
+    expect(fetchRows).not.toHaveBeenCalled()
+    expect(lines(downloaded)).toHaveLength(2)
+  })
+
+  it("asks for the rest when the selection reaches past the page it can see", async () => {
+    // Row 3 is on the page; row 115 is not, and only the caller can supply it.
+    const fetchRows = vi.fn(() => rows)
+    await selected({
+      server: true,
+      total: 480,
+      data: rows.slice(0, 10),
+      export: { fetchRows },
+      defaultState: { selection: ["3", "115"] },
+    })
+
+    expect(fetchRows).toHaveBeenCalledTimes(1)
+    await vi.waitFor(() => expect(lines(downloaded)).toHaveLength(2))
+    expect(downloaded).toContain("Person 115")
+  })
+})
+
 describe("copying to the clipboard", () => {
   it("copies every matching row when nothing is selected", async () => {
     await exportFrom({}, /Copy to clipboard/i)
