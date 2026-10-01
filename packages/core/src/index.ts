@@ -28,11 +28,15 @@ export type {
   FormatOptions,
   GetRowId,
   HeaderContext,
+  HeaderSearchInput,
+  HeaderSearchOptions,
   PaginationOptions,
   PartialTableState,
   Pin,
   ResolvedColumn,
+  ResolvedHeaderSearch,
   ResolvedSelection,
+  ResolvedSorting,
   RowHeight,
   SelectOption,
   SelectionInput,
@@ -40,6 +44,8 @@ export type {
   ServerSource,
   Sort,
   SortDirection,
+  SortInput,
+  SortOptions,
   TableRows,
   TableState,
 } from "./types.js"
@@ -90,10 +96,12 @@ export {
   LIST_OPERATORS,
   OPERATOR_LABELS,
   RANGE_OPERATORS,
+  TEXT_OPERATORS,
   VALUELESS_OPERATORS,
   filterRows,
   isFilterUsable,
   isListOperator,
+  isTextOperator,
   matchesFilter,
   needsValue,
   normaliseFilter,
@@ -114,17 +122,22 @@ export type { PipelineOptions } from "./pipeline.js"
 export {
   DEFAULT_STATE,
   addFilter,
+  addSort,
   clearFilters,
   clearSelection,
   clearSort,
   clearWidth,
+  columnSearchText,
   createState,
   hideColumn,
   isFiltering,
   removeFilter,
   removeFilterAt,
+  removeSort,
+  resetSort,
   resetView,
   selectRange,
+  setColumnSearch,
   setDensity,
   setFilter,
   setMatch,
@@ -144,6 +157,8 @@ export {
 } from "./state.js"
 
 export { resolveSelection, selectableIds } from "./selection.js"
+export { canResetSort, resolveSorting, sortPriority, sortsEqual } from "./sorting.js"
+export { HEADER_SEARCH_DEBOUNCE, resolveHeaderSearch } from "./header-search.js"
 export { SLOT_CLASSES, createClasses, cx } from "./classes.js"
 export type { ClassResolver, TableSlots } from "./classes.js"
 
@@ -176,6 +191,7 @@ export {
   clamp,
   compareUnknown,
   createTextMatcher,
+  createTextTest,
   getPath,
   humanise,
   isEmpty,

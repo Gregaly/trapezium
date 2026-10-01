@@ -49,19 +49,23 @@ export function createState(partial?: PartialTableState): TableState {
  * way back to the order the data arrived in, and clicking the same header again
  * is where everyone looks for it.
  *
- * `additive` appends a level instead of replacing — shift-click, in most UIs.
+ * `additive` leaves the other levels alone — a shift-click, in most UIs. A
+ * column not yet in the sort joins the end of it; one already there turns over
+ * *where it is*, because flipping the primary sort's direction and having it
+ * drop to last place would rearrange a view the user only meant to reverse.
  */
 export function toggleSort(state: TableState, key: string, additive = false): TableState {
   const existing = state.sort.find((sort) => sort.key === key)
-  const others = state.sort.filter((sort) => sort.key !== key)
 
-  const next: Sort[] = !existing
-    ? [{ key, direction: "asc" }]
+  const next: Sort | undefined = !existing
+    ? { key, direction: "asc" }
     : existing.direction === "asc"
-      ? [{ key, direction: "desc" }]
-      : []
+      ? { key, direction: "desc" }
+      : undefined
 
-  return { ...state, sort: additive ? [...others, ...next] : next, page: 1 }
+  if (!additive) return { ...state, sort: next ? [next] : [], page: 1 }
+  if (!next) return removeSort(state, key)
+  return addSort(state, key, next.direction)
 }
 
 /** Sets one column's sort explicitly, replacing whatever was there. */
@@ -69,8 +73,36 @@ export function setSort(state: TableState, key: string, direction: SortDirection
   return { ...state, sort: [{ key, direction }], page: 1 }
 }
 
+/**
+ * Adds a level to the sort, after the ones already there.
+ *
+ * A column that is already a level keeps its place and takes the new
+ * direction, so this is also how one level of several is reversed.
+ */
+export function addSort(state: TableState, key: string, direction: SortDirection): TableState {
+  const level: Sort = { key, direction }
+  const sort = state.sort.some((entry) => entry.key === key)
+    ? state.sort.map((entry) => (entry.key === key ? level : entry))
+    : [...state.sort, level]
+
+  return { ...state, sort, page: 1 }
+}
+
+/** Takes one column out of the sort, leaving the other levels in order. */
+export function removeSort(state: TableState, key: string): TableState {
+  return { ...state, sort: state.sort.filter((entry) => entry.key !== key), page: 1 }
+}
+
 export function clearSort(state: TableState): TableState {
   return { ...state, sort: [], page: 1 }
+}
+
+/**
+ * Puts the sort back to the one the table rests in — none, unless told
+ * otherwise. What the reset control does.
+ */
+export function resetSort(state: TableState, to: readonly Sort[] = []): TableState {
+  return { ...state, sort: to.map((entry) => ({ key: entry.key, direction: entry.direction })), page: 1 }
 }
 
 export function setFilter(state: TableState, filter: ColumnFilter): TableState {
@@ -93,6 +125,40 @@ export function removeFilterAt(state: TableState, index: number): TableState {
 
 export function clearFilters(state: TableState): TableState {
   return { ...state, filters: [], page: 1 }
+}
+
+/**
+ * The text a column is being searched for from its header, or `""`.
+ *
+ * A header search is a `contains` filter on the column, so that is the only
+ * filter read back as one: a column filtered some other way — a set of
+ * choices, a range — opens its search box empty rather than showing a value
+ * that was never typed there.
+ */
+export function columnSearchText(state: TableState, key: string): string {
+  const filter = state.filters.find((entry) => entry.key === key)
+  if (!filter || filter.operator !== "contains") return ""
+  if (filter.value === undefined || filter.value === null || Array.isArray(filter.value)) return ""
+  return String(filter.value)
+}
+
+/**
+ * Searches one column, the way typing into its header does.
+ *
+ * Text becomes a `contains` filter on the column, replacing whatever filter it
+ * had. Nothing typed removes that filter — but only if it was a search: an
+ * empty box closed over a column filtered some other way leaves that filter
+ * exactly as it was, and returns the same state so nothing is told to change.
+ */
+export function setColumnSearch(state: TableState, key: string, text: string): TableState {
+  const query = text.trim()
+
+  if (query === "") {
+    return columnSearchText(state, key) === "" ? state : removeFilter(state, key)
+  }
+
+  if (columnSearchText(state, key) === query) return state
+  return setFilter(state, { key, operator: "contains", value: query })
 }
 
 export function setMatch(state: TableState, match: "all" | "any"): TableState {

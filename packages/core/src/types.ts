@@ -34,6 +34,70 @@ export type Sort = {
 }
 
 /**
+ * How a table sorts.
+ *
+ * Both properties default to on, so `sortable` and `sortable={{}}` mean the
+ * same thing. The object exists for the two exceptions: a backend that can
+ * only order by one column, and a table that rests in an order of its own.
+ */
+export type SortOptions = {
+  /**
+   * Whether more than one column can be sorted at once.
+   *
+   * A shift-click on a header — or "Then sort" in its menu — adds a level
+   * instead of replacing the sort, and each sorted header shows its place in
+   * the order. Defaults to `true`. Set it to `false` when whatever does the
+   * sorting can only order by one column.
+   */
+  multiple?: boolean
+
+  /**
+   * The reset control in the toolbar, shown while the sort is not the one the
+   * table rests in.
+   *
+   * `true`, the default, returns to no sort at all — the order the data
+   * arrived in. An array names the resting sort instead: the control returns
+   * to it, and stays hidden while the table is already there. `false` leaves
+   * the control out.
+   *
+   * It lives in the toolbar, so a table with every toolbar control switched
+   * off has no reset; "Clear sort" in the column menu is still there.
+   */
+  reset?: boolean | readonly Sort[]
+}
+
+/** Every way a caller can ask for sorting: a switch, or the options. */
+export type SortInput = boolean | SortOptions
+
+/** Sorting as the adapters read it, with every default decided. */
+export type ResolvedSorting = {
+  multiple: boolean
+  /** Where the reset control returns to, or `undefined` when there is no control. */
+  reset: readonly Sort[] | undefined
+}
+
+/**
+ * Searching a column from its header.
+ *
+ * `true` on a table switches it on for every column that can be filtered; a
+ * column's own `headerSearch` overrides that either way.
+ */
+export type HeaderSearchOptions = {
+  /** Milliseconds to wait after a keystroke before the search applies. Defaults to 150. */
+  debounce?: number
+}
+
+/** Every way a caller can ask for header search: a switch, or the options. */
+export type HeaderSearchInput = boolean | HeaderSearchOptions
+
+/** Header search as the adapters read it, with every default decided. */
+export type ResolvedHeaderSearch = {
+  /** Whether columns that do not say for themselves are searchable from the header. */
+  enabled: boolean
+  debounce: number
+}
+
+/**
  * Every comparison a filter can make.
  *
  * Which of them a column offers is decided by its type — asking whether a
@@ -244,6 +308,21 @@ export type ColumnDef<TRow = AnyRow, TNode = unknown> = {
   /** `true` uses the type's control; a string forces one; an object configures it. */
   filter?: FilterOption
 
+  /**
+   * Search this column from its header, without opening its menu.
+   *
+   * A magnifier appears in the header on hover; choosing it turns the header
+   * into a text box, and what is typed there filters the column as
+   * "contains" — against the text the cells show as well as the values
+   * underneath, so "Aug" finds a date and "1,2" finds $1,240.00. It is the
+   * same filter the column's menu edits, so it appears as a chip, travels in
+   * the URL and reaches `onStateChange` like any other.
+   *
+   * Defaults to the table's `headerSearch`, which is off. Set it on a column
+   * to opt that one in or out.
+   */
+  headerSearch?: boolean
+
   /** Defaults to the type's alignment — numbers end, booleans centre, everything else start. */
   align?: Align
 
@@ -303,7 +382,7 @@ export type ColumnDef<TRow = AnyRow, TNode = unknown> = {
  */
 export type ResolvedColumn<TRow = AnyRow, TNode = unknown> = Omit<
   ColumnDef<TRow, TNode>,
-  "type" | "accessor" | "header"
+  "type" | "accessor" | "header" | "headerSearch"
 > & {
   key: string
   header: string
@@ -316,6 +395,8 @@ export type ResolvedColumn<TRow = AnyRow, TNode = unknown> = Omit<
   mono: boolean
   filterKind: FilterKind
   operators: FilterOperator[]
+  /** Whether the column can be searched from its header. */
+  headerSearch: boolean
   /**
    * The choices a set filter should offer, if the column named any.
    *

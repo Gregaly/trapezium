@@ -54,6 +54,8 @@ export const ICONS = {
   close: "M4 4l8 8M12 4l-8 8",
   filter: "M2.5 4h11l-4.2 5v4.2L6.7 12V9z",
   search: "M7.2 2.5a4.7 4.7 0 110 9.4 4.7 4.7 0 010-9.4zM10.7 10.7l2.8 2.8",
+  // Anticlockwise, which is the direction "back to how it was" has always been drawn.
+  reset: "M2.6 8a5.5 5.5 0 105.4-5.5A5.5 5.5 0 003.2 5M2.5 2.5v3h3",
   columns: "M2.5 4A1.5 1.5 0 014 2.5h8A1.5 1.5 0 0113.5 4v8a1.5 1.5 0 01-1.5 1.5H4A1.5 1.5 0 012.5 12zM6.5 2.5v11M10 2.5v11",
   eyeOff: "M2 2l12 12M6.5 6.6A2 2 0 008 10a2 2 0 001.4-.6M4 4.7A8.6 8.6 0 001 8s2.6 4 7 4c1.2 0 2.3-.3 3.2-.8M7 4.1A6.5 6.5 0 018 4c4.4 0 7 4 7 4a11 11 0 01-1.9 2.2",
   grip: "M6 4h.01M6 8h.01M6 12h.01M10 4h.01M10 8h.01M10 12h.01",

@@ -158,6 +158,84 @@ describe("pruneState", () => {
   })
 })
 
+describe("header search", () => {
+  const columns: ColumnDef<Row>[] = [
+    { key: "full_name" },
+    { key: "total_cents", type: "currency" },
+    { key: "created_at", type: "datetime" },
+    { key: "notes", filter: false },
+  ]
+
+  const resolveWith = (headerSearch: boolean | undefined, input: (ColumnDef<Row> | string)[] = columns) =>
+    resolveColumns<Row, unknown>({ columns: input, rows, state: createState(), types: defaultTypeRegistry, headerSearch })
+      .visible
+
+  const searchable = (resolved: ReturnType<typeof resolveWith>) =>
+    Object.fromEntries(resolved.map((column) => [column.key, column.headerSearch]))
+
+  it("is off until somebody asks for it", () => {
+    expect(searchable(resolveWith(undefined))).toEqual({
+      full_name: false,
+      total_cents: false,
+      created_at: false,
+      notes: false,
+    })
+  })
+
+  it("covers every column that can be filtered when the table asks", () => {
+    // `notes` turned its filter off, and a search is a filter.
+    expect(searchable(resolveWith(true))).toEqual({
+      full_name: true,
+      total_cents: true,
+      created_at: true,
+      notes: false,
+    })
+  })
+
+  it("leaves out a type that has nothing to type against", () => {
+    const resolved = resolveColumns({
+      columns: [{ key: "photo", type: "image" }, { key: "blob", type: "json" }, { key: "name" }],
+      rows: [{ photo: "a.png", blob: { a: 1 }, name: "Ada" }],
+      state: createState(),
+      types: defaultTypeRegistry,
+      headerSearch: true,
+    }).visible
+
+    expect(resolved.map((column) => column.headerSearch)).toEqual([false, false, true])
+  })
+
+  it("lets a column opt in on its own, and out of the table's", () => {
+    expect(searchable(resolveWith(undefined, [{ key: "full_name", headerSearch: true }, "notes"]))).toEqual({
+      full_name: true,
+      notes: false,
+    })
+    expect(searchable(resolveWith(true, [{ key: "full_name", headerSearch: false }, "id"]))).toEqual({
+      full_name: false,
+      id: true,
+    })
+  })
+
+  it("takes a column at its word even when its filter is off", () => {
+    const [notes] = resolveWith(undefined, [{ key: "notes", filter: false, headerSearch: true }])
+    expect(notes?.headerSearch).toBe(true)
+  })
+
+  it("makes a searched column answer contains, whatever its type", () => {
+    const [name, total, created] = resolveWith(true)
+    // Text already did.
+    expect(name?.operators.filter((operator) => operator === "contains")).toHaveLength(1)
+    expect(total?.operators).toContain("contains")
+    expect(created?.operators).toContain("contains")
+    // Added after the type's own, so the menu still opens on the type's default.
+    expect(total?.operators[0]).toBe("eq")
+  })
+
+  it("leaves a column's operators alone when it is not searched", () => {
+    const [, total] = resolveWith(undefined)
+    expect(total?.operators).not.toContain("contains")
+  })
+})
+
 describe("headerless columns", () => {
   it("gets no icon, because there is nothing for one to label", () => {
     const [actions] = resolve([{ key: "actions", header: "" }]).visible

@@ -48,6 +48,11 @@ export type ResolveColumnsOptions<TRow, TNode> = {
   resizable?: boolean
   /** False switches off reordering for the whole table, whatever a column says. */
   reorderable?: boolean
+  /**
+   * True makes every column that can be filtered searchable from its header.
+   * A column's own `headerSearch` wins over this either way.
+   */
+  headerSearch?: boolean
 }
 
 export type ResolvedColumns<TRow, TNode> = {
@@ -138,6 +143,14 @@ function resolveColumn<TRow extends AnyRow, TNode>(
 
   const filter = resolveFilter(merged.filter, type)
 
+  /*
+    The table's switch covers the columns that can be filtered at all; a
+    picture or a blob of JSON has nothing to type against, and a column with
+    its filter turned off has said it does not want one. A column that asks
+    for itself is taken at its word.
+  */
+  const headerSearch = merged.headerSearch ?? (options.headerSearch === true && filter.kind !== "none")
+
   return {
     ...merged,
     key,
@@ -153,7 +166,14 @@ function resolveColumn<TRow extends AnyRow, TNode>(
     exportable: merged.exportable ?? true,
     mono: merged.mono ?? type.mono ?? false,
     filterKind: filter.kind,
-    operators: filter.operators,
+    /*
+      A header search is a `contains` filter, so a column searched that way
+      answers `contains` whatever its type — by the text its cells show — and
+      its menu has to be able to show the filter the header just made.
+    */
+    operators:
+      headerSearch && !filter.operators.includes("contains") ? [...filter.operators, "contains"] : filter.operators,
+    headerSearch,
     filterOptions: filter.options,
     // A column with no header has nothing for an icon to label, and an actions
     // column showing a stray "text" glyph looks like a mistake.
