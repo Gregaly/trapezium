@@ -118,6 +118,35 @@ describe("who gets a magnifier", () => {
   })
 })
 
+describe("where the magnifier goes", () => {
+  it("takes the type icon's place rather than a place of its own", () => {
+    setup()
+    const slot = trigger("Name")
+
+    expect(slot.className).toBe("tpz-th-icon tpz-th-search")
+    expect(header("name").querySelector(".tpz-th-inner")?.firstElementChild).toBe(slot)
+    // Both drawn, so the stylesheet can show the icon at rest and the glass on hover.
+    expect([...slot.children].map((child) => child.getAttribute("class"))).toEqual(["tpz-th-type", "tpz-th-glass"])
+    expect(header("name").querySelectorAll(".tpz-th-icon")).toHaveLength(1)
+  })
+
+  it("stands in for the icon on a column that has none", () => {
+    setup({ columns: [{ key: "name", icon: false }] })
+    const slot = trigger("Name")
+
+    expect(slot.dataset["bare"]).toBe("true")
+    expect([...slot.children].map((child) => child.getAttribute("class"))).toEqual(["tpz-th-glass"])
+  })
+
+  it("leaves a column that is not searched with its plain, silent icon", () => {
+    setup({ headerSearch: undefined })
+    const icon = header("name").querySelector(".tpz-th-icon")
+
+    expect(icon?.tagName).toBe("SPAN")
+    expect(icon?.getAttribute("aria-hidden")).toBe("true")
+  })
+})
+
 describe("the box", () => {
   it("opens over the header, focused, with the column's name where it was", async () => {
     const user = userEvent.setup()
@@ -662,7 +691,7 @@ describe("on a server", () => {
   it("renders the magnifiers, the rows already searched, and never the box", () => {
     const html = renderToString(element)
 
-    expect(html.match(/class="tpz-th-search"/g)).toHaveLength(5)
+    expect(html.match(/class="tpz-th-icon tpz-th-search"/g)).toHaveLength(5)
     expect(html).not.toContain("tpz-th-searchbox")
     expect(html).toContain('aria-label="Search Joined, searching for 2024"')
     expect(html).toContain("Ada Lovelace")
@@ -713,8 +742,7 @@ describe("accessibility", () => {
     const user = userEvent.setup()
     setup({ columnControl: false, columns: [{ key: "name" }] })
 
-    // The sort control, then the magnifier.
-    await user.tab()
+    // The magnifier leads the header, where the type icon was.
     await user.tab()
     expect(document.activeElement).toBe(trigger("Name"))
 

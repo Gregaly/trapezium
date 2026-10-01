@@ -342,7 +342,7 @@ describe("on a server", () => {
     expect(html).toContain('<span class="tpz-th-order" aria-hidden="true">1</span>')
     expect(html).toContain('aria-label="Sort by Name, sort level 2"')
     expect(html).toContain('class="tpz-btn tpz-btn-icon tpz-sort-reset"')
-    expect(html.match(/class="tpz-th-search"/g)).toHaveLength(3)
+    expect(html.match(/class="tpz-th-icon tpz-th-search"/g)).toHaveLength(3)
     expect(html).toContain('aria-label="Search Joined, searching for 2024"')
     expect(html).not.toContain("tpz-th-searchbox")
 

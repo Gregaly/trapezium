@@ -1427,9 +1427,31 @@ export function createTable<TRow extends AnyRow>(
       attachColumnDrag(cell, key)
     }
 
-    // Dragging is a pointer affordance; the keyboard equivalent is "Move left"
-    // and "Move right" in the column panel, so the icon announces nothing.
-    inner.append(el("span", { class: "tpz-th-icon", "aria-hidden": "true" }, [icon(column.icon)]))
+    /*
+      A column that can be searched from its header has the magnifier where its
+      icon would be — the same slot, as a button, drawing both and leaving the
+      stylesheet to decide which is seen. Otherwise the icon announces nothing:
+      dragging is a pointer affordance, and its keyboard equivalent is "Move
+      left" and "Move right" in the column panel.
+    */
+    let search: HTMLElement | undefined
+    if (settings.filters !== false && column.headerSearch) {
+      const type = icon(column.icon, 14, "tpz-th-type")
+      search = el(
+        "button",
+        {
+          type: "button",
+          class: "tpz-th-icon tpz-th-search",
+          // With no icon to stand in for, the magnifier is the slot's resting state.
+          "data-bare": type ? undefined : "true",
+        },
+        [type, icon("search", 14, "tpz-th-glass")],
+      )
+      search.addEventListener("click", () => openHeaderSearch(cell, key))
+      inner.append(search)
+    } else {
+      inner.append(el("span", { class: "tpz-th-icon", "aria-hidden": "true" }, [icon(column.icon)]))
+    }
 
     // The class goes on the anchor itself rather than on a span inside it, or
     // the browser's own link styling underlines every column header.
@@ -1478,13 +1500,6 @@ export function createTable<TRow extends AnyRow>(
       })
     }
     inner.append(label)
-
-    let search: HTMLElement | undefined
-    if (settings.filters !== false && column.headerSearch) {
-      search = el("button", { type: "button", class: "tpz-th-search" }, [icon("search", 12)])
-      search.addEventListener("click", () => openHeaderSearch(cell, key))
-      inner.append(search)
-    }
 
     if (settings.columnMenu !== false) {
       const trigger = el(
@@ -1640,6 +1655,10 @@ export function createTable<TRow extends AnyRow>(
 
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
+        // Prevented, or the key carries on to wherever focus lands. Focus goes
+        // back to the magnifier, and Enter on a button presses it: the box
+        // would close and open again in one keystroke.
+        event.preventDefault()
         commit()
         closeHeaderSearch(true)
       }

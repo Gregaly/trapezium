@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { iconPath } from "@trapezium/core"
 
 import { Icon } from "./icon.js"
 
@@ -6,39 +7,53 @@ import { Icon } from "./icon.js"
  * Searching a column from its header.
  *
  * Two pieces, because they live in different places: the magnifier sits in the
- * header beside the sort control, and the box it opens is laid over the whole
- * header cell. Nothing here knows what a search *does* — it is handed the text
+ * header where the column's icon was, and the box it opens is laid over the
+ * whole header cell. Nothing here knows what a search *does* — it is handed the text
  * the column is being searched for and says when that should change, so the
  * filter it becomes is decided in one place, by the core.
  */
 
-/** The magnifier. Out of sight until the header is hovered, focused or already searched. */
+/**
+ * The magnifier.
+ *
+ * It takes the place of the column's type icon rather than a place of its own:
+ * the same slot, showing the icon until the header is hovered or focused and
+ * the magnifier while it is. That is why it draws both, and lets the
+ * stylesheet decide which is seen.
+ */
 export function HeaderSearchTrigger({
   header,
+  icon,
   text,
   onOpen,
   buttonRef,
 }: {
   /** The column's header text, which names the control. */
   header: string
+  /** The column's own icon, shown while the magnifier is not. */
+  icon: string | false
   /** What the column is being searched for, or `""`. */
   text: string
   onOpen: () => void
   buttonRef: React.Ref<HTMLButtonElement>
 }) {
   const label = text === "" ? `Search ${header}` : `Search ${header}, searching for ${text}`
+  const type = <Icon name={icon} className="tpz-th-type" />
 
   return (
     <button
       ref={buttonRef}
       type="button"
-      className="tpz-th-search"
+      className="tpz-th-icon tpz-th-search"
       aria-label={label}
       title={label}
       data-active={text === "" ? undefined : "true"}
+      // With no icon to stand in for, the magnifier is the slot's resting state.
+      data-bare={iconPath(icon) === undefined ? "true" : undefined}
       onClick={onOpen}
     >
-      <Icon name="search" size={12} />
+      {type}
+      <Icon name="search" className="tpz-th-glass" />
     </button>
   )
 }
@@ -129,6 +144,12 @@ export function HeaderSearchBox({
         }}
         onKeyDown={(event) => {
           if (event.key === "Enter") {
+            /*
+              Prevented, or the key carries on to wherever focus lands. Focus
+              goes back to the magnifier, and Enter on a button presses it: the
+              box would close and open again in one keystroke.
+            */
+            event.preventDefault()
             commit(value)
             onClose(true)
           }

@@ -139,10 +139,34 @@ describe("who gets a magnifier", () => {
     expect(host.querySelector(".tpz-th-search")).toBeNull()
   })
 
-  it("sits between the sort control and the menu, where the stylesheet expects it", () => {
+  it("takes the type icon's place rather than a place of its own", () => {
     setup()
     const order = [...(header("name").querySelector(".tpz-th-inner")?.children ?? [])].map((child) => child.className)
-    expect(order).toEqual(["tpz-th-icon", "tpz-th-button", "tpz-th-search", "tpz-th-menu", "tpz-resizer"])
+    expect(order).toEqual(["tpz-th-icon tpz-th-search", "tpz-th-button", "tpz-th-menu", "tpz-resizer"])
+
+    // Both drawn, so the stylesheet can show the icon at rest and the glass on hover.
+    const slot = trigger("name")
+    expect([...(slot?.children ?? [])].map((child) => child.getAttribute("class"))).toEqual([
+      "tpz-th-type",
+      "tpz-th-glass",
+    ])
+    expect(slot?.hasAttribute("data-bare")).toBe(false)
+  })
+
+  it("stands in for the icon on a column that has none", () => {
+    setup({ columns: [{ key: "name", icon: false }] })
+
+    const slot = trigger("name")
+    expect(slot?.dataset["bare"]).toBe("true")
+    expect([...(slot?.children ?? [])].map((child) => child.getAttribute("class"))).toEqual(["tpz-th-glass"])
+  })
+
+  it("leaves a column that is not searched with its plain, silent icon", () => {
+    setup({ headerSearch: undefined })
+    const icon = header("name").querySelector(".tpz-th-icon")
+
+    expect(icon?.tagName).toBe("SPAN")
+    expect(icon?.getAttribute("aria-hidden")).toBe("true")
   })
 
   it("follows the option being switched on and off while the table is running", () => {
@@ -806,7 +830,7 @@ describe("on a server", () => {
   it("writes the magnifiers, the rows already searched, and never the box", () => {
     const html = renderToString(options)
 
-    expect(html.match(/class="tpz-th-search"/g)).toHaveLength(5)
+    expect(html.match(/class="tpz-th-icon tpz-th-search"/g)).toHaveLength(5)
     expect(html).not.toContain("tpz-th-searchbox")
     expect(html).toContain('aria-label="Search Joined, searching for 2024"')
     expect(html).toContain('data-active="true"')

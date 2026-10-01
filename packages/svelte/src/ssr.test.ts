@@ -92,7 +92,7 @@ describe("server rendering", () => {
     expect(body).toContain('<span class="tpz-th-order" aria-hidden="true">1</span>')
     expect(body).toContain('aria-label="Sort by Name, sort level 2"')
     expect(body).toContain('<a href="/people" class="tpz-btn tpz-btn-icon tpz-sort-reset" aria-label="Reset sort" title="Reset sort">')
-    expect(body.match(/class="tpz-th-search"/g)).toHaveLength(2)
+    expect(body.match(/class="tpz-th-icon tpz-th-search"/g)).toHaveLength(2)
     expect(body).toContain('aria-label="Search Name, searching for o"')
     // The box is opened by a click, so a server never writes one.
     expect(body).not.toContain("tpz-th-searchbox")

@@ -307,9 +307,23 @@ export function HeaderCell<TRow extends AnyRow>({
       }
     >
       <div className="tpz-th-inner">
-        <span className="tpz-th-icon" aria-hidden="true">
-          <Icon name={column.icon} />
-        </span>
+        {/*
+          A column that can be searched from its header has the magnifier
+          where its icon would be — the same slot, as a button.
+        */}
+        {searchable ? (
+          <HeaderSearchTrigger
+            header={column.header}
+            icon={column.icon}
+            text={searchText}
+            buttonRef={searchTrigger}
+            onOpen={() => setSearching(true)}
+          />
+        ) : (
+          <span className="tpz-th-icon" aria-hidden="true">
+            <Icon name={column.icon} />
+          </span>
+        )}
 
         {/*
           Clicking the header sorts. Everything else is behind the chevron
@@ -329,15 +343,6 @@ export function HeaderCell<TRow extends AnyRow>({
           </SortButton>
         ) : (
           <span className="tpz-th-button">{label}</span>
-        )}
-
-        {searchable && (
-          <HeaderSearchTrigger
-            header={column.header}
-            text={searchText}
-            buttonRef={searchTrigger}
-            onOpen={() => setSearching(true)}
-          />
         )}
 
         {features.menu && (
