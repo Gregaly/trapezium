@@ -85,7 +85,27 @@ export const Table = defineComponent({
 
     search: { type: [Boolean, Object] as PropType<TableOptions["search"]>, default: false },
     filters: { type: Boolean, default: true },
-    sortable: { type: Boolean, default: true },
+    /**
+     * Search each column from its header, without opening its menu.
+     *
+     * A magnifier appears in a header on hover and turns it into a text box;
+     * what is typed filters that column as "contains", against the text its
+     * cells show. `true` switches it on for every column that can be
+     * filtered, and `{ debounce }` sets how long it waits after a keystroke.
+     * Off by default — and a single column can opt in or out with its own
+     * `headerSearch`, whatever is said here.
+     */
+    headerSearch: { type: [Boolean, Object] as PropType<TableOptions["headerSearch"]>, default: false },
+    /**
+     * Column sorting. Defaults to true.
+     *
+     * A shift-click on a header adds a level to the sort, and a reset control
+     * appears in the toolbar while a sort is applied. Pass an object to change
+     * either: `{ multiple: false }` for a backend that orders by one column
+     * only, `{ reset: false }` to leave the control out, or
+     * `{ reset: [{ key, direction }] }` to name the order the table rests in.
+     */
+    sortable: { type: [Boolean, Object] as PropType<TableOptions["sortable"]>, default: true },
     resizable: { type: Boolean, default: true },
     reorderable: { type: Boolean, default: true },
     columnMenu: { type: Boolean, default: true },
@@ -255,6 +275,7 @@ export const Table = defineComponent({
       error: props.error,
       search: props.search,
       filters: props.filters,
+      headerSearch: props.headerSearch,
       sortable: props.sortable,
       resizable: props.resizable,
       reorderable: props.reorderable,
