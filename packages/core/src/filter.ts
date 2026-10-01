@@ -11,6 +11,7 @@
  * datetime column by that whole day rather than by an exact instant.
  */
 
+import { cachedText, textCacheKey } from "./cell-text.js"
 import { toText } from "./format.js"
 import type { TypeDef } from "./registry.js"
 import type {
@@ -21,10 +22,19 @@ import type {
   FormatOptions,
   ResolvedColumn,
 } from "./types.js"
-import { isEmpty, textEndsWith, textEquals, textIncludes, textStartsWith } from "./util.js"
+import { createTextTest, isEmpty, textEquals } from "./util.js"
 
 /** Operators that take no value: the field's presence is the whole condition. */
 export const VALUELESS_OPERATORS: readonly FilterOperator[] = ["empty", "notEmpty"]
+
+/**
+ * Operators that compare text.
+ *
+ * They ask about what a cell *says*, so they are answered from the value
+ * written out and from the text the column displays — which is what lets
+ * "contains Aug" find a date and "contains 1,2" find $1,240.00.
+ */
+export const TEXT_OPERATORS: readonly FilterOperator[] = ["contains", "notContains", "startsWith", "endsWith"]
 
 /** Operators whose value is a list. */
 export const LIST_OPERATORS: readonly FilterOperator[] = ["in", "notIn"]
@@ -57,6 +67,16 @@ export function needsValue(operator: FilterOperator): boolean {
 
 export function isListOperator(operator: FilterOperator): boolean {
   return LIST_OPERATORS.includes(operator)
+}
+
+/**
+ * Whether an operator compares text, whatever the column's type.
+ *
+ * A filter control uses it to offer a plain text box for "contains" on a date
+ * or a number, where the type's own input could not hold what is being typed.
+ */
+export function isTextOperator(operator: FilterOperator): boolean {
+  return TEXT_OPERATORS.includes(operator)
 }
 
 /**
@@ -149,35 +169,9 @@ export function matchesFilter(
   // matching "is less than 10".
   if (isEmpty(value)) return false
 
-  /*
-    A type with no rule of its own falls back to the value itself — except for
-    an object, where `String(value)` is "[object Object]" and would make
-    "contains object" true of every structured cell. Those are rendered instead,
-    which is what the reader sees.
-  */
-  const normalise = (input: unknown) =>
-    type.normalise
-      ? type.normalise(input, context)
-      : typeof input === "object" && input !== null && !Array.isArray(input)
-        ? (type.format?.(input, context) ?? toText(input, context))
-        : input
+  if (isTextOperator(filter.operator)) return matchesText(value, textQuery(filter), type, context)
 
   switch (filter.operator) {
-    case "contains":
-    case "notContains": {
-      const needle = String(filter.value)
-      const hit = Array.isArray(value)
-        ? value.some((entry) => textIncludes(String(entry), needle))
-        : textIncludes(String(normalise(value) ?? ""), needle)
-      return filter.operator === "contains" ? hit : !hit
-    }
-
-    case "startsWith":
-      return textStartsWith(String(normalise(value) ?? ""), String(filter.value))
-
-    case "endsWith":
-      return textEndsWith(String(normalise(value) ?? ""), String(filter.value))
-
     case "eq":
     case "ne": {
       const hit = equals(value, filter.value, type, context)
@@ -207,6 +201,78 @@ export function matchesFilter(
     default:
       return true
   }
+}
+
+/** One text condition, prepared once so that applying it to a row is only the comparison. */
+type TextQuery = {
+  test: (text: string) => boolean
+  /** True for "does not contain", which is the same question with the answer turned over. */
+  negated: boolean
+  /** Where the column's formatted text is remembered, when it has a formatter to remember for. */
+  cacheKey?: string
+}
+
+function textQuery(filter: ColumnFilter): TextQuery {
+  const mode =
+    filter.operator === "startsWith" ? "startsWith" : filter.operator === "endsWith" ? "endsWith" : "includes"
+
+  return { test: createTextTest(mode, String(filter.value)), negated: filter.operator === "notContains" }
+}
+
+/**
+ * A text condition against everything a cell says.
+ *
+ * Two things count: the value written out, and the text the column shows for
+ * it. A date stored as `2026-08-13` and shown as "Aug 13, 2026" is found by
+ * either; so is an amount by its digits or by "$1,240.00", and a choice by its
+ * key or its label. The same rule global search follows, one column wide —
+ * the words on the screen are the words a person will type.
+ *
+ * `row` is only for remembering formatted text against, and may be left out.
+ */
+function matchesText(
+  value: unknown,
+  query: TextQuery,
+  type: TypeDef,
+  context: FormatContext & FormatOptions,
+  row?: unknown,
+): boolean {
+  let hit = valueSays(value, query.test)
+
+  if (!hit) {
+    const shown =
+      query.cacheKey !== undefined && typeof row === "object" && row !== null
+        ? cachedText(row, query.cacheKey, type, value, context)
+        : shownText(value, type, context)
+
+    hit = shown !== "" && query.test(shown)
+  }
+
+  return query.negated ? !hit : hit
+}
+
+/**
+ * The value itself, as text.
+ *
+ * Only what is already text-like is compared as it stands. `String({…})` is
+ * "[object Object]", which would make "contains object" true of every address,
+ * every file and every blob of JSON — and a `Date` writes itself out in the
+ * runtime's own zone and language, which is nobody's idea of what the cell
+ * says. Those are answered by the text the column shows instead.
+ */
+function valueSays(value: unknown, test: (text: string) => boolean): boolean {
+  if (Array.isArray(value)) return value.some((entry) => typeof entry !== "object" && test(String(entry)))
+  return typeof value !== "object" && test(String(value))
+}
+
+/**
+ * The text a column shows for a value, when that differs from the value
+ * written out. A plain value in a column with no formatter shows as itself,
+ * which `valueSays` has already compared.
+ */
+function shownText(value: unknown, type: TypeDef, context: FormatContext & FormatOptions): string {
+  if (type.format) return type.format(value, context)
+  return typeof value === "object" && !Array.isArray(value) ? toText(value, context) : ""
 }
 
 /**
@@ -326,29 +392,42 @@ export function filterRows<TRow, TNode = unknown>(
       const column = columns.find((candidate) => candidate.key === filter.key)
       if (!column) return undefined
 
-      return {
-        filter,
-        accessor: column.accessor,
-        type: types(column.type),
-        context: column.formatOptions ? { ...context, ...column.formatOptions } : context,
+      const type = types(column.type)
+      const columnContext = column.formatOptions ? { ...context, ...column.formatOptions } : context
+
+      /*
+        A text condition is prepared here: its query folded once rather than
+        once a row, and the key its column's formatted text is remembered
+        under — the same one global search uses, so a table searched both ways
+        formats each cell once.
+      */
+      let text: TextQuery | undefined
+      if (isTextOperator(filter.operator)) {
+        text = textQuery(filter)
+        if (type.format) text.cacheKey = textCacheKey(column.key, type, columnContext)
       }
+
+      return { filter, accessor: column.accessor, type, context: columnContext, text }
     })
     .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
 
   if (usable.length === 0) return rows as TRow[]
 
+  const passes = (entry: (typeof usable)[number], row: TRow): boolean => {
+    const value = entry.accessor(row)
+    if (!entry.text) return matchesFilter(value, entry.filter, entry.type, entry.context)
+    // The same answer `matchesFilter` gives an empty cell: it cannot satisfy a
+    // comparison, in either direction.
+    if (isEmpty(value)) return false
+    return matchesText(value, entry.text, entry.type, entry.context, row)
+  }
+
   // Short-circuited rather than collected: "all" stops at the first refusal and
   // "any" at the first acceptance, which for several conditions is most of the
   // comparisons never made.
-  if (match === "any") {
-    return rows.filter((row) =>
-      usable.some((entry) => matchesFilter(entry.accessor(row), entry.filter, entry.type, entry.context)),
-    )
-  }
+  if (match === "any") return rows.filter((row) => usable.some((entry) => passes(entry, row)))
 
-  return rows.filter((row) =>
-    usable.every((entry) => matchesFilter(entry.accessor(row), entry.filter, entry.type, entry.context)),
-  )
+  return rows.filter((row) => usable.every((entry) => passes(entry, row)))
 }
 
 /** Adds or replaces the filter on a column, which is what a column menu does. */

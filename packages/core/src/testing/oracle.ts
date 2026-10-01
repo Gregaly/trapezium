@@ -19,9 +19,16 @@ export type OracleColumn = {
   minorUnits?: boolean
 }
 
-/** Case- and accent-insensitive, exactly as the docs promise for text. */
+/**
+ * Case- and accent-insensitive, and blind to which kind of space was used,
+ * exactly as the docs promise for text.
+ */
 function fold(value: string): string {
-  return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+  return value
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(/[   -   　]/g, " ")
+    .toLowerCase()
 }
 
 export function isBlank(value: unknown): boolean {
@@ -255,12 +262,38 @@ function isTemporal(type: string): boolean {
   return type === "date" || type === "datetime" || type === "relativeTime"
 }
 
+/**
+ * Everything a cell says, as text.
+ *
+ * The documented rule for the text operators: they are answered from the
+ * value written out — when it is a plain value, or a list of them — and from
+ * the text the column shows for it. An object is never written out, because
+ * "[object Object]" is not something a cell says.
+ */
+function said(column: OracleColumn, value: unknown, now: Date): string[] {
+  const texts: string[] = []
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      if (typeof entry !== "object") texts.push(String(entry))
+    }
+  } else if (typeof value !== "object") {
+    texts.push(String(value))
+  }
+
+  const shown = displayed(column, value, now)
+  if (shown !== "") texts.push(shown)
+
+  return texts
+}
+
 /** One value against one condition. The heart of the reference. */
 export function matches(
   column: OracleColumn,
   value: unknown,
   operator: FilterOperator,
   target: unknown,
+  now: Date,
 ): boolean {
   if (operator === "empty") return isBlank(value)
   if (operator === "notEmpty") return !isBlank(value)
@@ -272,23 +305,19 @@ export function matches(
   // A cell with nothing in it cannot satisfy a comparison.
   if (isBlank(value)) return false
 
-  const left = comparable(column, value)
-
   switch (operator) {
     case "contains":
     case "notContains": {
       const needle = fold(String(target))
-      const hit = Array.isArray(value)
-        ? value.some((entry) => fold(String(entry)).includes(needle))
-        : fold(String(left ?? "")).includes(needle)
+      const hit = said(column, value, now).some((text) => fold(text).includes(needle))
       return operator === "contains" ? hit : !hit
     }
 
     case "startsWith":
-      return fold(String(left ?? "")).startsWith(fold(String(target)))
+      return said(column, value, now).some((text) => fold(text).startsWith(fold(String(target))))
 
     case "endsWith":
-      return fold(String(left ?? "")).endsWith(fold(String(target)))
+      return said(column, value, now).some((text) => fold(text).endsWith(fold(String(target))))
 
     case "eq":
       return equals(column, value, target)

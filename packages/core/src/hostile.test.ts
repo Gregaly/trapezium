@@ -212,10 +212,13 @@ describe("filters that ask for the impossible", () => {
     ).toEqual([5])
   })
 
-  it("refuses an operator the type does not offer, rather than guessing", () => {
+  it("answers an operator the type does not offer, rather than guessing", () => {
     // `contains` on a number is not in the type's list, but a URL can still ask
-    // for it — and the answer must be defined rather than a crash.
-    expect(() => run([{ key: "n", operator: "contains", value: "1" }])).not.toThrow()
+    // for it, and so can a header search — and the answer is defined: the
+    // number as it reads.
+    expect(run([{ key: "n", operator: "contains", value: "1" }])).toEqual([1, 10])
+    expect(run([{ key: "n", operator: "startsWith", value: "1" }])).toEqual([1, 10])
+    expect(run([{ key: "n", operator: "endsWith", value: "0" }])).toEqual([10])
   })
 })
 

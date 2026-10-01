@@ -121,7 +121,7 @@ describe("filtering matches the reference, for every type and every operator", (
               ...FORMAT,
               ...column.formatOptions,
             })
-            const theirs = matches(oracle, value, operator, target)
+            const theirs = matches(oracle, value, operator, target, NOW)
 
             if (mine !== theirs) {
               disagreements.push(
@@ -287,7 +287,7 @@ describe("the whole pipeline matches the reference", () => {
       /* The reference does the same four steps, plainly. */
       let expected = rows.filter((row) => {
         const results = state.filters.map((filter) =>
-          matches(oracleOf(filter.key), row[filter.key as keyof Row], filter.operator, filter.value),
+          matches(oracleOf(filter.key), row[filter.key as keyof Row], filter.operator, filter.value, NOW),
         )
         return state.match === "any" ? results.some(Boolean) : results.every(Boolean)
       })

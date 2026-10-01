@@ -10,12 +10,12 @@
  * produced — no effect, no correction after paint, no flash of unsorted rows.
  */
 
+import { cachedText, textCacheKey } from "./cell-text.js"
 import { filterRows } from "./filter.js"
-import { type TypeDef, type TypeRegistry } from "./registry.js"
+import { type TypeRegistry } from "./registry.js"
 import type {
   AnyRow,
   FormatContext,
-  FormatOptions,
   GetRowId,
   ResolvedColumn,
   TableRows,
@@ -155,63 +155,6 @@ export function pageCount(total: number, pageSize: number): number {
 }
 
 /**
- * The text a cell shows, remembered per row.
- *
- * Search compares against what is on the screen as well as what is underneath,
- * which means formatting every date, every amount and every duration — and
- * `Intl` formatting costs roughly a microsecond a cell. Over ten thousand rows
- * and a handful of formatted columns that is a fifth of a second on every
- * keystroke.
- *
- * So it is remembered against the row object itself. Filtering and sorting hand
- * back the same objects, and an application replacing its data replaces those
- * objects — so the cache is invalidated by exactly the thing that should
- * invalidate it, and holds nothing alive that the caller has let go of.
- */
-const searchText = new WeakMap<object, Map<string, string>>()
-
-function cachedText(
-  row: object,
-  cacheKey: string,
-  type: TypeDef,
-  value: unknown,
-  context: FormatContext & FormatOptions,
-): string {
-  let perRow = searchText.get(row)
-  if (!perRow) {
-    perRow = new Map()
-    searchText.set(row, perRow)
-  }
-
-  const remembered = perRow.get(cacheKey)
-  if (remembered !== undefined) return remembered
-
-  const text = type.format ? type.format(value, context) : ""
-  perRow.set(cacheKey, text)
-  return text
-}
-
-/**
- * Identifies the formatting that produced a cached string.
- *
- * Two tables over the same rows in different currencies must not read each
- * other's cache, and neither must one table before and after its locale changes.
- */
-function formatSignature(context: FormatContext & FormatOptions): string {
-  return [
-    context.locale,
-    context.timeZone,
-    context.currency,
-    context.currencyInMinorUnits ? "1" : "0",
-    context.decimals ?? "",
-    // `now` moves, and a relative time formatted an hour ago reads differently
-    // — but only to the minute, which is close enough to key on.
-    context.now ? Math.floor(context.now.getTime() / 60_000) : "",
-    context.options ? context.options.map((option) => `${option.value}=${option.label ?? ""}`).join(",") : "",
-  ].join("|")
-}
-
-/**
  * Global search.
  *
  * Matches against each column's *formatted* text as well as its raw value, so
@@ -245,7 +188,7 @@ export function searchRows<TRow extends AnyRow, TNode = unknown>(
         // Only a type that renders something other than its raw value needs the
         // expensive pass at all.
         formats: type.format !== undefined,
-        cacheKey: `${column.key}|${type.name}|${formatSignature(context)}`,
+        cacheKey: textCacheKey(column.key, type, context),
       }
     })
 

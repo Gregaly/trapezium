@@ -32,6 +32,196 @@ describe("text operators", () => {
   })
 })
 
+/**
+ * The text operators ask what a cell *says*, so each type is asked in the
+ * words a person reading its column would type — and, where the stored value
+ * reads differently from the screen, in those words too.
+ */
+describe("text operators answer from what the cell shows, for every type", () => {
+  const now = new Date("2026-08-13T12:00:00.000Z")
+  const context = { ...format, now }
+
+  const contains = (
+    value: unknown,
+    typeName: string,
+    query: string,
+    options: Partial<typeof context> & { options?: Array<{ value: string; label?: string }> } = {},
+  ) => matchesFilter(value, { key: "c", operator: "contains", value: query }, type(typeName), { ...context, ...options })
+
+  it("text and long text", () => {
+    expect(contains("Ada Lovelace", "text", "love")).toBe(true)
+    expect(contains("A biography long enough to be prose.", "longText", "PROSE")).toBe(true)
+    expect(contains("Ada Lovelace", "text", "byron")).toBe(false)
+  })
+
+  it("a number, by its digits or the way it is grouped on screen", () => {
+    expect(contains(1_234_567.5, "number", "1234567")).toBe(true)
+    expect(contains(1_234_567.5, "number", "1,234")).toBe(true)
+    expect(contains(1_234_567.5, "number", "999")).toBe(false)
+    // Stored as text, as numbers out of a CSV import usually are.
+    expect(contains("42", "number", "42")).toBe(true)
+  })
+
+  it("money, by the amount or the formatted figure", () => {
+    expect(contains(1240.5, "currency", "$1,240.50")).toBe(true)
+    expect(contains(1240.5, "currency", "1,240")).toBe(true)
+    expect(contains(1240.5, "currency", "1240.5")).toBe(true)
+    expect(contains(1240.5, "currency", "€")).toBe(false)
+  })
+
+  it("money held in minor units, by what it is shown as", () => {
+    const cents = { currencyInMinorUnits: true }
+    expect(contains(124_050, "currency", "$1,240.50", cents)).toBe(true)
+    expect(contains(124_050, "currency", "124050", cents)).toBe(true)
+  })
+
+  it("money in a locale that groups with a space nobody can type", () => {
+    // French writes this as "1 240,50 €" with a narrow no-break space and a
+    // no-break one. A person types ordinary spaces.
+    const french = { locale: "fr", currency: "EUR" }
+    expect(contains(1240.5, "currency", "1 240,50 €", french)).toBe(true)
+    expect(contains(1240.5, "currency", "240,50", french)).toBe(true)
+  })
+
+  it("a percentage, sign and all", () => {
+    expect(contains(12.5, "percent", "12.5%")).toBe(true)
+    expect(contains(12.5, "percent", "%")).toBe(true)
+    expect(contains(12.5, "percent", "13")).toBe(false)
+  })
+
+  it("a checkbox, by the word it is read as", () => {
+    expect(contains(true, "boolean", "yes")).toBe(true)
+    expect(contains(false, "boolean", "no")).toBe(true)
+    expect(contains(true, "boolean", "no")).toBe(false)
+    // And by the stored value, for anyone who thinks in those.
+    expect(contains(false, "boolean", "false")).toBe(true)
+  })
+
+  it("a date, by the month it shows or the ISO day underneath", () => {
+    expect(contains("2026-08-13", "date", "aug")).toBe(true)
+    expect(contains("2026-08-13", "date", "Aug 13, 2026")).toBe(true)
+    expect(contains("2026-08-13", "date", "2026-08")).toBe(true)
+    expect(contains("2026-08-13", "date", "sep")).toBe(false)
+  })
+
+  it("a date and time, by the time of day", () => {
+    expect(contains("2026-08-13T09:30:00.000Z", "datetime", "9:30")).toBe(true)
+    expect(contains("2026-08-13T09:30:00.000Z", "datetime", "aug 13")).toBe(true)
+    // In the column's own zone, because that is the time on the screen.
+    expect(contains("2026-08-13T09:30:00.000Z", "datetime", "7:30", { timeZone: "Australia/Sydney" })).toBe(true)
+  })
+
+  it("a date held as a Date, by what it shows and never by how the runtime prints it", () => {
+    const instant = new Date("2026-08-13T09:30:00.000Z")
+    expect(contains(instant, "datetime", "aug 13")).toBe(true)
+    expect(contains(instant, "datetime", "GMT")).toBe(false)
+    expect(contains(instant, "datetime", "Thu")).toBe(false)
+  })
+
+  it("a date held as epoch milliseconds or seconds", () => {
+    expect(contains(Date.parse("2026-08-13T09:30:00.000Z"), "datetime", "aug 13")).toBe(true)
+    expect(contains(Date.parse("2026-08-13T09:30:00.000Z") / 1000, "datetime", "aug 13")).toBe(true)
+  })
+
+  it("a time of day, as the clock shows it", () => {
+    expect(contains("14:05", "time", "2:05 pm")).toBe(true)
+    expect(contains("14:05", "time", "14:05")).toBe(true)
+    expect(contains("14:05", "time", "3:05")).toBe(false)
+  })
+
+  it("a relative time, by its wording", () => {
+    expect(contains("2026-08-10T12:00:00.000Z", "relativeTime", "3 days ago")).toBe(true)
+    expect(contains("2026-08-10T12:00:00.000Z", "relativeTime", "ago")).toBe(true)
+    expect(contains("2026-08-10T12:00:00.000Z", "relativeTime", "in 3 days")).toBe(false)
+  })
+
+  it("a choice, by its label or the key stored for it", () => {
+    const options = { options: [{ value: "pro", label: "Professional" }] }
+    expect(contains("pro", "select", "fession", options)).toBe(true)
+    expect(contains("pro", "select", "pro", options)).toBe(true)
+    expect(contains("pro", "badge", "PROFESSIONAL", options)).toBe(true)
+    expect(contains("pro", "select", "team", options)).toBe(false)
+  })
+
+  it("tags, by any one of them, and by a label that differs from its key", () => {
+    expect(contains(["urgent", "new"], "tags", "urg")).toBe(true)
+    expect(contains(["urgent", "new"], "tags", "vip")).toBe(false)
+
+    const options = { options: [{ value: "p1", label: "Urgent" }] }
+    expect(contains(["p1"], "tags", "urgent", options)).toBe(true)
+    expect(contains(["p1"], "tags", "p1", options)).toBe(true)
+  })
+
+  it("an email address, a link and a phone number", () => {
+    expect(contains("ada@example.com", "email", "@example")).toBe(true)
+    expect(contains("https://example.com/docs", "url", "example.com/d")).toBe(true)
+    expect(contains("+61 400 123 456", "phone", "400 123")).toBe(true)
+  })
+
+  it("an identifier and a snippet of code", () => {
+    expect(contains("row_00042", "id", "0042")).toBe(true)
+    expect(contains("const value = 1", "code", "value =")).toBe(true)
+  })
+
+  it("an address, by any line of it and never by its shape", () => {
+    const home = { line1: "12 Test Street", city: "Sydney", postcode: "2000" }
+    expect(contains(home, "address", "sydney")).toBe(true)
+    expect(contains(home, "address", "2000")).toBe(true)
+    expect(contains(home, "address", "object")).toBe(false)
+  })
+
+  it("a file, by its name", () => {
+    expect(contains({ name: "report-2026.pdf", size: 1024 }, "file", "report")).toBe(true)
+    expect(contains("uploads/2026/report.pdf", "file", "report.pdf")).toBe(true)
+    expect(contains({ name: "report-2026.pdf", size: 1024 }, "file", "1024")).toBe(false)
+  })
+
+  it("a picture, by its address, since it shows no text at all", () => {
+    expect(contains("https://example.com/avatar/7.png", "image", "avatar/7")).toBe(true)
+  })
+
+  it("never by the contents of a column that shows none of them", () => {
+    expect(contains({ secret: "hunter2" }, "json", "hunter2")).toBe(false)
+    expect(contains({ secret: "hunter2" }, "json", "object")).toBe(false)
+  })
+
+  it("does not contain is the same question turned over", () => {
+    const notContains = (value: unknown, typeName: string, query: string) =>
+      matchesFilter(value, { key: "c", operator: "notContains", value: query }, type(typeName), context)
+
+    expect(notContains("2026-08-13", "date", "aug")).toBe(false)
+    expect(notContains("2026-08-13", "date", "sep")).toBe(true)
+    expect(notContains(1240.5, "currency", "$1,240")).toBe(false)
+    // An empty cell says nothing, so it satisfies neither side.
+    expect(notContains(null, "date", "aug")).toBe(false)
+    expect(contains(null, "date", "aug")).toBe(false)
+  })
+
+  it("starts with and ends with look at the same text", () => {
+    const starts = (value: unknown, typeName: string, query: string) =>
+      matchesFilter(value, { key: "c", operator: "startsWith", value: query }, type(typeName), context)
+    const ends = (value: unknown, typeName: string, query: string) =>
+      matchesFilter(value, { key: "c", operator: "endsWith", value: query }, type(typeName), context)
+
+    expect(starts(1240.5, "currency", "$1")).toBe(true)
+    expect(starts(1240.5, "currency", "12")).toBe(true)
+    expect(starts(1240.5, "currency", "40")).toBe(false)
+    expect(ends("14:05", "time", "pm")).toBe(true)
+    expect(ends("2026-08-13", "date", "2026")).toBe(true)
+    expect(starts(["urgent", "new"], "tags", "ne")).toBe(true)
+  })
+
+  it("a custom type is asked through its own formatter", () => {
+    const stars = { name: "rating", format: (value: unknown) => "★".repeat(Number(value) || 0) }
+    const check = (query: string) =>
+      matchesFilter(3, { key: "c", operator: "contains", value: query }, stars, context)
+
+    expect(check("★★★")).toBe(true)
+    expect(check("★★★★")).toBe(false)
+    expect(check("3")).toBe(true)
+  })
+})
+
 describe("presence", () => {
   it("treats null, empty string and empty array as empty, but never zero or false", () => {
     expect(check(null, { key: "n", operator: "empty" })).toBe(true)

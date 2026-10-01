@@ -127,6 +127,25 @@ export function createTextMatcher(query: string): (text: string) => boolean {
   }
 }
 
+/**
+ * The same thing for the three ways text is compared against a query: found
+ * anywhere in it, at its start, or at its end.
+ *
+ * A filter is applied to every row, so the query is folded here, once, rather
+ * than once per cell.
+ */
+export function createTextTest(
+  mode: "includes" | "startsWith" | "endsWith",
+  query: string,
+): (text: string) => boolean {
+  if (mode === "includes") return createTextMatcher(query)
+
+  const folded = fold(query)
+  return mode === "startsWith"
+    ? (text: string) => fold(text).startsWith(folded)
+    : (text: string) => fold(text).endsWith(folded)
+}
+
 const NON_ASCII = /[^\u0000-\u007f]/
 
 function isAscii(value: string): boolean {
@@ -146,14 +165,22 @@ export function textEndsWith(haystack: string, needle: string): boolean {
 }
 
 /**
- * Normalises text for comparison: lower case, and accents stripped.
+ * Normalises text for comparison: lower case, accents stripped, and every
+ * kind of space made the ordinary one.
  *
  * Searching "jose" must find "José". `normalize("NFD")` splits a letter from its
  * accent so the accent can be removed on its own.
+ *
+ * The spaces matter because of `Intl`: French groups thousands with a narrow
+ * no-break space and puts a no-break one before the currency sign, so the
+ * amount on screen reads "1 240,50 €" and contains nothing a space bar can
+ * type. Nobody can see the difference, so it must not make one.
  */
 function fold(value: string): string {
-  return value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase()
+  return value.normalize("NFD").replace(/\p{M}/gu, "").replace(UNUSUAL_SPACE, " ").toLowerCase()
 }
+
+const UNUSUAL_SPACE = /[   -   　]/g
 
 /** Clamps a number into a range. */
 /**

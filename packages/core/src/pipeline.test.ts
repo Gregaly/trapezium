@@ -67,6 +67,81 @@ describe("sortRows", () => {
     ])
   })
 
+  it("orders by three levels, each in its own direction", () => {
+    const staff = [
+      { id: "1", team: "Eng", level: 2, name: "Ada" },
+      { id: "2", team: "Ops", level: 1, name: "Bea" },
+      { id: "3", team: "Eng", level: 3, name: "Cy" },
+      { id: "4", team: "Eng", level: 2, name: "Dee" },
+      { id: "5", team: "Ops", level: 1, name: "Abe" },
+      { id: "6", team: "Eng", level: 3, name: "Bo" },
+    ]
+    const state = createState({
+      sort: [
+        { key: "team", direction: "asc" },
+        { key: "level", direction: "desc" },
+        { key: "name", direction: "asc" },
+      ],
+    })
+    const { visible } = resolveColumns({ rows: staff, state, types: defaultTypeRegistry })
+
+    expect(sortRows(staff, visible, state, defaultTypeRegistry, DEFAULT_FORMAT).map((row) => row.name)).toEqual([
+      "Bo",
+      "Cy",
+      "Ada",
+      "Dee",
+      "Abe",
+      "Bea",
+    ])
+  })
+
+  it("keeps blanks last at each level, and still orders them by the levels after", () => {
+    const staff = [
+      { id: "1", team: null, name: "Zed" },
+      { id: "2", team: "Ops", name: "Bea" },
+      { id: "3", team: null, name: "Ada" },
+      { id: "4", team: "Eng", name: "Cy" },
+    ]
+    const { visible } = resolveColumns({
+      columns: ["team", "name"],
+      rows: staff,
+      state: createState(),
+      types: defaultTypeRegistry,
+    })
+
+    for (const direction of ["asc", "desc"] as const) {
+      const state = createState({
+        sort: [
+          { key: "team", direction },
+          { key: "name", direction: "asc" },
+        ],
+      })
+      const names = sortRows(staff, visible, state, defaultTypeRegistry, DEFAULT_FORMAT).map((row) => row.name)
+
+      // The two with no team are at the end either way, and in name order
+      // between themselves because the second level still has its say.
+      expect(names.slice(2)).toEqual(["Ada", "Zed"])
+      expect(names.slice(0, 2)).toEqual(direction === "asc" ? ["Cy", "Bea"] : ["Bea", "Cy"])
+    }
+  })
+
+  it("skips a level that cannot be sorted and carries on with the next", () => {
+    const { state, columns } = setup(
+      {
+        sort: [
+          { key: "missing", direction: "asc" },
+          { key: "active", direction: "asc" },
+          { key: "age", direction: "desc" },
+        ],
+      },
+      [{ key: "name" }, { key: "active", sortable: false }, { key: "age" }],
+    )
+
+    expect(sortRows(people, columns, state, defaultTypeRegistry, DEFAULT_FORMAT).map((p) => p.age)).toEqual([
+      44, 36, 31, 28,
+    ])
+  })
+
   it("never mutates the rows it was given", () => {
     const { state, columns } = setup({ sort: [{ key: "age", direction: "asc" }] })
     const original = [...people]

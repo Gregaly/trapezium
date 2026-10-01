@@ -3,8 +3,9 @@ import { describe, expect, it } from "vitest"
 import { resolveColumns } from "./columns.js"
 import { rowsToExport, toCsv, toDelimitedText } from "./csv.js"
 import { DEFAULT_FORMAT } from "./format.js"
+import { getRows } from "./pipeline.js"
 import { createTypeRegistry, defaultTypeRegistry } from "./registry.js"
-import { createState } from "./state.js"
+import { createState, setColumnSearch } from "./state.js"
 import type { AnyRow, ColumnDef } from "./types.js"
 
 /**
@@ -146,6 +147,179 @@ describe("the shape of the file", () => {
 
     expect(toCsv(rows, { columns: visible, types, format }).startsWith("﻿")).toBe(true)
     expect(toCsv(rows, { columns: visible, types, format, bom: false }).startsWith("﻿")).toBe(false)
+  })
+})
+
+/**
+ * An export is the view, written down.
+ *
+ * Whatever the table is showing — the levels of its sort, a search typed into
+ * a column header, the columns moved and hidden, a handful of rows ticked — is
+ * what the file has to hold, and in the same order. Each of those is tried on
+ * its own and then all at once, because the combinations are where an export
+ * quietly returns something other than what was on screen.
+ */
+describe("an export follows the view", () => {
+  type Person = { id: string; name: string; team: string; salary: number | null; joined: string }
+
+  const staff: Person[] = [
+    { id: "1", name: "Ada", team: "Eng", salary: 120_000, joined: "2024-03-01" },
+    { id: "2", name: "Tom", team: "Sales", salary: 80_000, joined: "2023-06-15" },
+    { id: "3", name: "Zoë", team: "Eng", salary: 120_000, joined: "2022-01-10" },
+    { id: "4", name: "Bea", team: "Eng", salary: 95_000, joined: "2024-03-01" },
+    { id: "5", name: "Cy", team: "Sales", salary: 80_000, joined: "2025-02-20" },
+    { id: "6", name: "Dee", team: "Ops", salary: null, joined: "2021-11-05" },
+  ]
+
+  const definitions: ColumnDef<Person>[] = [
+    { key: "name" },
+    { key: "team" },
+    { key: "salary", type: "currency" },
+    { key: "joined", type: "date" },
+  ]
+
+  /** The file a table in this state would write, line by line. */
+  function exported(
+    partial: Parameters<typeof createState>[0],
+    options: { scope?: "matching" | "page"; delimiter?: string; columns?: ColumnDef<Person>[] } = {},
+  ): string[] {
+    const state = createState(partial)
+    const { visible } = resolveColumns<Person, unknown>({
+      columns: options.columns ?? definitions,
+      rows: staff,
+      state,
+      types,
+      headerSearch: true,
+    })
+    const view = getRows<Person, unknown>({ rows: staff, columns: visible, state, types, format })
+    const { rows } = rowsToExport(options.scope === "page" ? view.rows : view.matched, state.selection)
+
+    return toDelimitedText(rows, { columns: visible, types, format, delimiter: options.delimiter }).split("\r\n")
+  }
+
+  const threeLevels = [
+    { key: "team", direction: "asc" },
+    { key: "salary", direction: "desc" },
+    { key: "name", direction: "asc" },
+  ] as const
+
+  it("writes rows in the order of a sort with several levels", () => {
+    expect(exported({ sort: [...threeLevels] })).toEqual([
+      "Name,Team,Salary,Joined",
+      "Ada,Eng,120000,2024-03-01",
+      "Zoë,Eng,120000,2022-01-10",
+      "Bea,Eng,95000,2024-03-01",
+      "Dee,Ops,,2021-11-05",
+      "Cy,Sales,80000,2025-02-20",
+      "Tom,Sales,80000,2023-06-15",
+    ])
+  })
+
+  it("turns one level over without disturbing the others", () => {
+    const sort = [{ key: "team", direction: "desc" }, threeLevels[1], threeLevels[2]] as const
+    expect(exported({ sort: [...sort] }).slice(1).map((line) => line.split(",")[0])).toEqual([
+      "Cy",
+      "Tom",
+      "Dee",
+      "Ada",
+      "Zoë",
+      "Bea",
+    ])
+  })
+
+  it("holds only what a search in a column header leaves", () => {
+    const state = setColumnSearch(createState(), "team", "s")
+    // "Sales" and "Ops" both say "s"; "Eng" does not.
+    expect(exported(state).slice(1).map((line) => line.split(",")[0])).toEqual(["Tom", "Cy", "Dee"])
+  })
+
+  it("finds money by the figure on screen, and writes it as a number", () => {
+    const state = setColumnSearch(createState(), "salary", "$80,000")
+    expect(exported(state).slice(1)).toEqual(["Tom,Sales,80000,2023-06-15", "Cy,Sales,80000,2025-02-20"])
+  })
+
+  it("finds a date by its month, and writes it as ISO", () => {
+    const state = setColumnSearch(createState(), "joined", "mar")
+    expect(exported(state).slice(1)).toEqual(["Ada,Eng,120000,2024-03-01", "Bea,Eng,95000,2024-03-01"])
+  })
+
+  it("applies searches in two columns together", () => {
+    let state = setColumnSearch(createState(), "team", "eng")
+    state = setColumnSearch(state, "joined", "2024")
+    expect(exported(state).slice(1).map((line) => line.split(",")[0])).toEqual(["Ada", "Bea"])
+  })
+
+  it("follows the column order and leaves out what is hidden", () => {
+    expect(exported({ order: ["joined", "name"], hidden: ["salary"] })[0]).toBe("Joined,Name,Team")
+    expect(exported({ order: ["joined", "name"], hidden: ["salary"] })[1]).toBe("2024-03-01,Ada,Eng")
+  })
+
+  it("puts a pinned column where the table shows it", () => {
+    expect(exported({ pinned: { team: "start", name: "end" } })[0]).toBe("Team,Salary,Joined,Name")
+  })
+
+  it("leaves out a column marked as not for export, wherever it sits", () => {
+    const columns: ColumnDef<Person>[] = [{ key: "name" }, { key: "team", exportable: false }, { key: "salary", type: "currency" }]
+    expect(exported({ order: ["team"] }, { columns })[0]).toBe("Name,Salary")
+  })
+
+  it("holds the selection alone, in the order of the view rather than of the ticking", () => {
+    expect(
+      exported({ sort: [...threeLevels], selection: ["2", "3", "5"] }).slice(1).map((line) => line.split(",")[0]),
+    ).toEqual(["Zoë", "Cy", "Tom"])
+  })
+
+  it("drops a selected row the filters no longer show", () => {
+    const state = { ...setColumnSearch(createState(), "team", "eng"), selection: ["1", "2"] }
+    // Tom is ticked but in Sales, and the view is Eng.
+    expect(exported(state).slice(1).map((line) => line.split(",")[0])).toEqual(["Ada"])
+  })
+
+  it("holds one page or every page, as asked", () => {
+    const paged = { sort: [...threeLevels], pageSize: 2, page: 2 }
+    expect(exported(paged, { scope: "page" }).slice(1).map((line) => line.split(",")[0])).toEqual(["Bea", "Dee"])
+    expect(exported(paged, { scope: "matching" })).toHaveLength(7)
+  })
+
+  it("keeps a selection that is on another page, because the matching rows are all on hand", () => {
+    const paged = { sort: [...threeLevels], pageSize: 2, page: 1, selection: ["5"] }
+    expect(exported(paged).slice(1).map((line) => line.split(",")[0])).toEqual(["Cy"])
+    // Asked for the page alone, a row that is not on it is not in the file.
+    expect(exported(paged, { scope: "page" }).slice(1)).toEqual([])
+  })
+
+  it("does all of it at once", () => {
+    let state = createState({
+      sort: [
+        { key: "salary", direction: "desc" },
+        { key: "name", direction: "desc" },
+      ],
+      order: ["team", "name"],
+      hidden: ["joined"],
+      selection: ["4", "3", "6", "1"],
+      match: "all",
+      search: "e",
+    })
+    state = setColumnSearch(state, "team", "eng")
+    state = setColumnSearch(state, "salary", "$1")
+
+    // Eng only, salaries reading "$1…" only (so not Bea's $95,000.00), the
+    // global search leaves names and teams with an "e" in them, the ticked
+    // rows among those, highest paid first and names backwards within a tie.
+    expect(exported(state)).toEqual(["Team,Name,Salary", "Eng,Zoë,120000", "Eng,Ada,120000"])
+  })
+
+  it("writes the same rows for the clipboard, tab-separated", () => {
+    const state = setColumnSearch(createState({ sort: [...threeLevels] }), "team", "sales")
+    expect(exported(state, { delimiter: "\t" })).toEqual([
+      "Name\tTeam\tSalary\tJoined",
+      "Cy\tSales\t80000\t2025-02-20",
+      "Tom\tSales\t80000\t2023-06-15",
+    ])
+  })
+
+  it("exports nothing but the heading when the view is empty", () => {
+    expect(exported(setColumnSearch(createState(), "name", "nobody"))).toEqual(["Name,Team,Salary,Joined"])
   })
 })
 
