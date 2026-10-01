@@ -33,6 +33,8 @@ function Playground() {
   const [cards, setCards] = useState(false)
   const [sticky, setSticky] = useState(true)
   const [rowHeight, setRowHeight] = useState<RowHeight>("fixed")
+  const [headerSearch, setHeaderSearch] = useState(true)
+  const [multiSort, setMultiSort] = useState(true)
 
   const columns: Column<Invoice>[] = [
     { key: "reference", header: "Invoice", pin: "start", type: "id" },
@@ -99,8 +101,9 @@ function Playground() {
       <section>
         <h2>Everything switched on</h2>
         <p className="note">
-          Drag a column header sideways to move it, or out of the table to remove it. The switches
-          change the props live.
+          Drag a column header sideways to move it, or out of the table to remove it. Shift-click a
+          second header to sort by both, and hover a header for the magnifier that searches that
+          column alone. The switches change the props live.
         </p>
 
         <Controls>
@@ -151,6 +154,8 @@ function Playground() {
           <Switch label="Selection" checked={selection} onChange={setSelection} />
           <Switch label="Card layout" checked={cards} onChange={setCards} />
           <Switch label="Sticky header" checked={sticky} onChange={setSticky} />
+          <Switch label="Header search" checked={headerSearch} onChange={setHeaderSearch} />
+          <Switch label="Multi-column sort" checked={multiSort} onChange={setMultiSort} />
         </Controls>
 
         <Table
@@ -164,6 +169,10 @@ function Playground() {
           selection={selection ? { isSelectable: (invoice) => !invoice.paid } : false}
           onSelectionChange={setSelected}
           export
+          // A magnifier in each header, on hover, that turns the header into a
+          // search box for that column alone.
+          headerSearch={headerSearch}
+          sortable={{ multiple: multiSort }}
           densityControl
           density={density}
           responsive={cards ? "cards" : "scroll"}
