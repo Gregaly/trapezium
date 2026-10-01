@@ -161,12 +161,13 @@ Two things it does not do. A column's own `format` function is not consulted —
 **With the data on a server**, the table sends the filter and your query answers it, like every other filter. `contains` on a text column is an `ilike`. On a date or an amount it means "the text the cell shows contains this", which a database does not know — so either answer it where the formatting is, with the same function the table uses, or switch the search on only for the columns your query can treat as text:
 
 ```ts
-import { BUILT_IN_TYPES, DEFAULT_FORMAT, matchesFilter } from "@trapezium/core"
+import { DEFAULT_FORMAT, defaultTypeRegistry, matchesFilter } from "@trapezium/core"
 
 // The same formatting the table was given, so "20 Jan" means the same thing on both sides.
 const format = { ...DEFAULT_FORMAT, locale: "en-AU", timeZone: "Australia/Sydney", currency: "AUD" }
+const datetime = defaultTypeRegistry.get("datetime")
 
-const wanted = rows.filter((row) => matchesFilter(row.issued_at, filter, BUILT_IN_TYPES.datetime, format))
+const wanted = rows.filter((row) => matchesFilter(row.issued_at, filter, datetime, format))
 ```
 
 The box is opened by a click, so — like the column menus — it needs the table's script. A search already in the URL is rendered by the server like any other filter, magnifier lit and rows narrowed.

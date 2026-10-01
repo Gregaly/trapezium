@@ -158,8 +158,8 @@ image and json columns get none unless the column sets headerSearch:true. `filte
 off too. A column's own `format` function is not consulted, only its type's formatting.
 In code: setColumnSearch(state, key, text) ("" removes it) · columnSearchText(state, key).
 In server mode the filter is sent like any other; answer `contains` on a formatted column with
-matchesFilter(value, filter, BUILT_IN_TYPES[type], format) using the table's own format, or enable
-headerSearch only on text columns.
+matchesFilter(value, filter, defaultTypeRegistry.get(type), format) using the table's own format, or
+enable headerSearch only on text columns.
 
 ## Columns: moving and removing
 
