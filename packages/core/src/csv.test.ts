@@ -6,6 +6,7 @@ import { DEFAULT_FORMAT } from "./format.js"
 import { getRows } from "./pipeline.js"
 import { createTypeRegistry, defaultTypeRegistry } from "./registry.js"
 import { createState, setColumnSearch } from "./state.js"
+import { EXPORT_COLUMNS, EXPORT_ROWS, exportScenarios, type ExportRow } from "./testing/export-matrix.js"
 import type { AnyRow, ColumnDef } from "./types.js"
 
 /**
@@ -320,6 +321,63 @@ describe("an export follows the view", () => {
 
   it("exports nothing but the heading when the view is empty", () => {
     expect(exported(setColumnSearch(createState(), "name", "nobody"))).toEqual(["Name,Team,Salary,Joined"])
+  })
+})
+
+/**
+ * And then all of it multiplied out: every sort against every filter against
+ * every arrangement, selection, scope and destination, each checked against a
+ * reference that shares no code with the pipeline. The adapters run the same
+ * scenarios through their own export buttons.
+ */
+describe("every combination of view and export", () => {
+  const scenarios = exportScenarios()
+
+  it("is all of them", () => {
+    expect(scenarios).toHaveLength(3 * 4 * 2 * 2 * 2 * 2 * 2)
+    expect(new Set(scenarios.map((scenario) => scenario.name)).size).toBe(scenarios.length)
+  })
+
+  it("is not vacuous: the combinations really do export different things", () => {
+    const distinct = new Set(scenarios.map((scenario) => scenario.expected))
+    expect(distinct.size).toBeGreaterThan(100)
+
+    // Some export everything, a few export nothing but the heading — a
+    // selection the filters have removed — and most are somewhere in between.
+    const lengths = scenarios.map((scenario) => scenario.expected.split("\r\n").length - 1)
+    expect(Math.max(...lengths)).toBe(EXPORT_ROWS.length)
+    expect(lengths.filter((length) => length === 0).length).toBeLessThan(scenarios.length / 4)
+    expect(lengths.filter((length) => length > 0 && length < EXPORT_ROWS.length).length).toBeGreaterThan(
+      scenarios.length / 2,
+    )
+  })
+
+  it("matches the reference", () => {
+    const disagreements: string[] = []
+
+    for (const scenario of scenarios) {
+      const state = createState(scenario.state)
+      const { visible } = resolveColumns<ExportRow, unknown>({
+        columns: EXPORT_COLUMNS,
+        rows: EXPORT_ROWS,
+        state,
+        types,
+        headerSearch: true,
+      })
+      const view = getRows<ExportRow, unknown>({ rows: EXPORT_ROWS, columns: visible, state, types, format })
+      const { rows } = rowsToExport(scenario.scope === "page" ? view.rows : view.matched, state.selection)
+
+      const text =
+        scenario.action === "download"
+          ? toCsv(rows, { columns: visible, types, format })
+          : toDelimitedText(rows, { columns: visible, types, format, delimiter: "\t" })
+
+      if (text !== scenario.expected) {
+        disagreements.push(`${scenario.name}\n  library:   ${JSON.stringify(text)}\n  reference: ${JSON.stringify(scenario.expected)}`)
+      }
+    }
+
+    expect(disagreements.slice(0, 3)).toEqual([])
   })
 })
 

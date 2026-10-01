@@ -203,6 +203,126 @@ describe("the two renderers agree", () => {
     expect(fromVanilla).toContain("Blocker")
   })
 
+  /*
+    The header's controls, element for element. One stylesheet reaches the
+    order numeral, the magnifier and the search box in all four adapters only
+    if both renderers nest the same elements, with the same classes and the
+    same attributes saying the same things.
+  */
+  describe("on the header's controls", () => {
+    /** An element reduced to what a stylesheet or a screen reader could tell apart. */
+    function outline(node: Element): unknown {
+      const attributes: Record<string, string> = {}
+      for (const { name, value } of [...node.attributes]) {
+        const told =
+          name === "class" ||
+          name === "role" ||
+          name === "type" ||
+          name === "href" ||
+          name === "title" ||
+          name === "placeholder" ||
+          name === "scope" ||
+          name.startsWith("aria-") ||
+          name.startsWith("data-")
+        // React says which menu a trigger controls and whether it is open; the
+        // DOM renderer builds its menus on demand and has nothing to point at.
+        if (told && name !== "aria-expanded" && name !== "aria-controls") attributes[name] = value
+      }
+
+      // An icon is an icon: its path is the core's, checked where icons are drawn.
+      if (node.tagName.toLowerCase() === "svg") return { tag: "svg", class: attributes["class"] ?? null }
+
+      return {
+        tag: node.tagName.toLowerCase(),
+        attributes,
+        text: [...node.childNodes].filter((child) => child.nodeType === 3).map((child) => child.textContent).join(""),
+        children: [...node.children].map(outline),
+      }
+    }
+
+    const headerOutline = (root: HTMLElement) => [...root.querySelectorAll("thead th")].map(outline)
+
+    const toolbarLead = (root: HTMLElement) => {
+      const groups = root.querySelectorAll(".tpz-toolbar-group")
+      const first = groups[groups.length - 1]?.firstElementChild
+      return first ? outline(first) : null
+    }
+
+    const searched = {
+      sort: [
+        { key: "plan", direction: "asc" as const },
+        { key: "name", direction: "desc" as const },
+        { key: "count", direction: "asc" as const },
+      ],
+      filters: [{ key: "email", operator: "contains" as const, value: "example" }],
+    }
+
+    function pair(extra: Record<string, unknown>, state: Record<string, unknown>) {
+      const { container } = render(<Table {...options} {...extra} defaultState={state} aria-label="Parity" />)
+      const react = container.querySelector<HTMLElement>(".tpz")!
+
+      const host = document.createElement("div")
+      document.body.append(host)
+      createTable(host, { ...options, ...extra, columns: vanillaColumns, state, ariaLabel: "Parity" })
+      const vanilla = host.querySelector<HTMLElement>(".tpz")!
+
+      return { react, vanilla }
+    }
+
+    it("with several sort levels and a search in a column header", () => {
+      const { react, vanilla } = pair({ headerSearch: true }, searched)
+
+      expect(headerOutline(vanilla)).toEqual(headerOutline(react))
+      // The numerals are there to be compared at all.
+      expect(react.querySelectorAll(".tpz-th-order")).toHaveLength(3)
+      expect(react.querySelectorAll('.tpz-th-search[data-active="true"]')).toHaveLength(1)
+    })
+
+    it("when every control is a link", () => {
+      const buildHref = (state: { sort: Array<{ key: string; direction: string }>; page: number }) =>
+        `/rows?sort=${state.sort.map((level) => `${level.key}.${level.direction}`).join("-")}&page=${String(state.page)}`
+
+      const { react, vanilla } = pair({ headerSearch: true, buildHref }, searched)
+
+      expect(headerOutline(vanilla)).toEqual(headerOutline(react))
+      expect(react.querySelector("thead a.tpz-th-button")).not.toBeNull()
+    })
+
+    it("on the reset that leads the toolbar, as a button and as a link", () => {
+      const asButton = pair({}, searched)
+      expect(toolbarLead(asButton.vanilla)).toEqual(toolbarLead(asButton.react))
+      expect(asButton.react.querySelector("button.tpz-sort-reset")).not.toBeNull()
+
+      const asLink = pair({ buildHref: () => "/rows" }, searched)
+      expect(toolbarLead(asLink.vanilla)).toEqual(toolbarLead(asLink.react))
+      expect(asLink.react.querySelector("a.tpz-sort-reset")).not.toBeNull()
+    })
+
+    it("with no reset when the table is in its resting order", () => {
+      const { react, vanilla } = pair({}, {})
+      expect(vanilla.querySelector(".tpz-sort-reset")).toBeNull()
+      expect(react.querySelector(".tpz-sort-reset")).toBeNull()
+    })
+
+    it("on the search box, once it is open", () => {
+      const { react, vanilla } = pair({ headerSearch: true }, searched)
+
+      const open = (root: HTMLElement) => {
+        const trigger = root.querySelector<HTMLElement>('thead th[data-key="email"] .tpz-th-search')!
+        act(() => trigger.click())
+        return outline(root.querySelector('thead th[data-key="email"]')!)
+      }
+
+      const fromVanilla = open(vanilla)
+      const fromReact = open(react)
+
+      expect(fromVanilla).toEqual(fromReact)
+      expect(react.querySelector(".tpz-th-searchbox .tpz-th-search-input")).not.toBeNull()
+      expect(react.querySelector<HTMLInputElement>(".tpz-th-search-input")?.value).toBe("example")
+      expect(vanilla.querySelector<HTMLInputElement>(".tpz-th-search-input")?.value).toBe("example")
+    })
+  })
+
   it("on the empty state", () => {
     const empty = { ...options, data: [] as Row[] }
 

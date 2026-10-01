@@ -5,8 +5,16 @@
  * produces, so these tests assert the structure as well as the behaviour.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  EXPORT_COLUMNS,
+  EXPORT_PAGE_SIZE,
+  EXPORT_ROWS,
+  exportScenarios,
+  type ExportRow,
+  type ExportScenario,
+} from "@trapezium/core/testing"
 
-import { createTable, pageWindow } from "./table.js"
+import { createTable, pageWindow, type VanillaColumn } from "./table.js"
 
 type Person = { id: string; name: string; age: number; plan: string; active: boolean; joined: string }
 
@@ -918,6 +926,97 @@ describe("what an export contains", () => {
     await vi.waitFor(() => expect(downloaded).toContain("Person 115"))
     expect((downloaded ?? "").trim().split("\r\n").slice(1)).toHaveLength(2)
   })
+})
+
+/**
+ * Every combination, through the real buttons.
+ *
+ * Three sorts, four filters — two of them searches typed into column headers —
+ * the toolbar's search, two arrangements of the columns, a selection or none,
+ * the page or every page, the file or the clipboard: 384 tables, each put in
+ * its state, each asked to export, each compared byte for byte with a
+ * reference that shares no code with the table. Vue and Svelte export through
+ * this renderer, so this is their proof too.
+ */
+describe("every combination of view and export", () => {
+  let downloaded: string | undefined
+  let copied: string | undefined
+
+  beforeEach(() => {
+    vi.stubGlobal(
+      "Blob",
+      class {
+        constructor(parts: string[]) {
+          downloaded = parts.join("")
+        }
+      },
+    )
+    vi.stubGlobal("URL", { createObjectURL: () => "blob:test", revokeObjectURL: () => {} })
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: (text: string) => {
+          copied = text
+          return Promise.resolve()
+        },
+      },
+    })
+  })
+
+  afterEach(() => vi.unstubAllGlobals())
+
+  const scenarios = exportScenarios()
+
+  // Kept in a handful of tests rather than 384, so a failure names a group and
+  // the first few combinations in it rather than scrolling off the screen.
+  const groups = new Map<string, ExportScenario[]>()
+  for (const scenario of scenarios) {
+    const group = `${scenario.action === "download" ? "the file" : "the clipboard"}, ${scenario.scope === "page" ? "one page" : "every page"}`
+    groups.set(group, [...(groups.get(group) ?? []), scenario])
+  }
+
+  for (const [group, members] of groups) {
+    it(`${group} (${String(members.length)} combinations)`, async () => {
+      const disagreements: string[] = []
+
+      for (const scenario of members) {
+        downloaded = undefined
+        copied = undefined
+
+        const table = createTable(host, {
+          data: EXPORT_ROWS,
+          columns: EXPORT_COLUMNS as VanillaColumn<ExportRow>[],
+          getRowId: (row) => row.id,
+          pagination: { pageSize: EXPORT_PAGE_SIZE },
+          selection: true,
+          search: true,
+          headerSearch: true,
+          export: { scope: scenario.scope },
+          state: scenario.state,
+        })
+
+        host.querySelector<HTMLButtonElement>('[aria-label="Export"]')?.click()
+        const wanted = scenario.action === "download" ? "Download" : "Copy"
+        ;[...document.querySelectorAll<HTMLElement>(".tpz-portal [data-menu-item]")]
+          .find((node) => node.textContent?.includes(wanted))
+          ?.click()
+
+        const read = () => (scenario.action === "download" ? downloaded : copied)
+        await vi.waitFor(() => expect(read()).toBeDefined())
+
+        if (read() !== scenario.expected) {
+          disagreements.push(
+            `${scenario.name}\n  table:     ${JSON.stringify(read())}\n  reference: ${JSON.stringify(scenario.expected)}`,
+          )
+        }
+
+        table.destroy()
+        document.querySelectorAll(".tpz-portal").forEach((node) => node.remove())
+      }
+
+      expect(disagreements.slice(0, 3)).toEqual([])
+    })
+  }
 })
 
 describe("server-side data, made whole", () => {

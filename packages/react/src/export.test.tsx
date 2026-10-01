@@ -1,8 +1,17 @@
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import {
+  EXPORT_COLUMNS,
+  EXPORT_PAGE_SIZE,
+  EXPORT_ROWS,
+  exportScenarios,
+  type ExportRow,
+  type ExportScenario,
+} from "@trapezium/core/testing"
 
 import { Table } from "./table.js"
+import type { Column } from "./types.js"
 
 /**
  * What ends up in the file.
@@ -207,6 +216,114 @@ describe("copying to the clipboard", () => {
     expect(lines(copied)).toHaveLength(2)
     expect(copied).toContain("Person 003")
     expect(copied).toContain("Person 007")
+  })
+})
+
+/**
+ * Every combination, through the real buttons.
+ *
+ * Three sorts, four filters — two of them searches typed into column headers —
+ * the toolbar's search, two arrangements of the columns, a selection or none,
+ * the page or every page, the file or the clipboard: 384 tables, each put in
+ * its state, each asked to export, each compared byte for byte with a
+ * reference that shares no code with the table.
+ */
+describe("every combination of view and export", () => {
+  const scenarios = exportScenarios()
+
+  // Kept in a handful of tests rather than 384, so a failure names a group and
+  // the first few combinations in it rather than scrolling off the screen.
+  const groups = new Map<string, ExportScenario[]>()
+  for (const scenario of scenarios) {
+    const group = `${scenario.action === "download" ? "the file" : "the clipboard"}, ${scenario.scope === "page" ? "one page" : "every page"}`
+    groups.set(group, [...(groups.get(group) ?? []), scenario])
+  }
+
+  for (const [group, members] of groups) {
+    it(`${group} (${String(members.length)} combinations)`, async () => {
+      const disagreements: string[] = []
+
+      for (const scenario of members) {
+        downloaded = undefined
+        copied = undefined
+        catchClipboard()
+
+        const { container, unmount } = render(
+          <Table
+            data={EXPORT_ROWS}
+            columns={EXPORT_COLUMNS as Column<ExportRow>[]}
+            getRowId={(row) => row.id}
+            pagination={{ pageSize: EXPORT_PAGE_SIZE }}
+            selection
+            search
+            headerSearch
+            export={{ scope: scenario.scope }}
+            defaultState={scenario.state}
+            aria-label="People"
+          />,
+        )
+
+        fireEvent.click(within(container).getByRole("button", { name: "Export" }))
+        fireEvent.click(
+          within(screen.getByRole("group", { name: "Export" })).getByRole("button", {
+            name: scenario.action === "download" ? /Download CSV/i : /Copy to clipboard/i,
+          }),
+        )
+
+        const read = () => (scenario.action === "download" ? downloaded : copied)
+        await vi.waitFor(() => expect(read()).toBeDefined())
+
+        if (read() !== scenario.expected) {
+          disagreements.push(
+            `${scenario.name}\n  table:     ${JSON.stringify(read())}\n  reference: ${JSON.stringify(scenario.expected)}`,
+          )
+        }
+
+        unmount()
+      }
+
+      expect(disagreements.slice(0, 3)).toEqual([])
+    })
+  }
+})
+
+describe("an export of what was just sorted and searched by hand", () => {
+  it("holds the rows a header search left, in the order a shift-click sorted them", async () => {
+    const user = userEvent.setup()
+    const { container } = render(
+      <Table
+        data={EXPORT_ROWS}
+        columns={EXPORT_COLUMNS as Column<ExportRow>[]}
+        getRowId={(row) => row.id}
+        pagination={{ pageSize: EXPORT_PAGE_SIZE }}
+        headerSearch={{ debounce: 0 }}
+        export
+        aria-label="People"
+      />,
+    )
+
+    // Team, then salary within a team — the second with shift held.
+    await user.click(within(container).getByRole("button", { name: "Team" }))
+    await user.keyboard("{Shift>}")
+    await user.click(within(container).getByRole("button", { name: "Salary" }))
+    await user.keyboard("{/Shift}")
+
+    // Then only the salaries that read "$1…".
+    await user.click(within(container).getByRole("button", { name: "Search Salary" }))
+    await user.type(within(container).getByRole("searchbox", { name: "Search Salary" }), "$1{Enter}")
+
+    await user.click(within(container).getByRole("button", { name: "Export" }))
+    await user.click(within(screen.getByRole("group", { name: "Export" })).getByRole("button", { name: /Download CSV/i }))
+
+    expect(lines(downloaded).map((line) => line.split(",").slice(0, 3).join(","))).toEqual([
+      "Ida,Eng,18000",
+      "Ada,Eng,120000",
+      "Zoë,Eng,120000",
+      "Fay,Eng,135250",
+      "Eli,Ops,101500",
+      "Hal,Ops,101500",
+      "Jo,Sales,112000",
+    ])
   })
 })
 

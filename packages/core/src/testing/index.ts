@@ -12,6 +12,15 @@
  */
 
 export {
+  EXPORT_COLUMNS,
+  EXPORT_PAGE_SIZE,
+  EXPORT_ROWS,
+  exportScenarios,
+  type ExportRow,
+  type ExportScenario,
+} from "./export-matrix.js"
+
+export {
   columns,
   compareSeats,
   customTypes,
