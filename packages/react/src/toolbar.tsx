@@ -16,9 +16,10 @@ import {
   type TableState,
 } from "@trapezium/core"
 
+import { routeClick } from "./header-cell.js"
 import { Icon } from "./icon.js"
 import { Menu, MenuItem, MenuLabel, MenuSeparator } from "./menu.js"
-import type { SearchOptions, TableColumn } from "./types.js"
+import type { LinkComponent, SearchOptions, TableColumn } from "./types.js"
 
 /**
  * Everything above the table: what is selected, what is filtered, and the
@@ -39,6 +40,9 @@ export function Toolbar<TRow extends AnyRow>({
   columnControl,
   densityControl,
   exportControl,
+  sortReset,
+  linkComponent,
+  onNavigate,
   extra,
   className,
   searchClassName = "tpz-search",
@@ -53,6 +57,16 @@ export function Toolbar<TRow extends AnyRow>({
   columnControl: boolean
   densityControl: boolean
   exportControl: { onDownload: () => void; onCopy?: () => void } | undefined
+  /**
+   * Puts the sort back to the one the table rests in. Given only while the
+   * sort is somewhere else, and with an `href` when the table's controls are
+   * links.
+   */
+  sortReset?: { onReset: () => void; href?: string }
+  /** The caller's link component, for the controls that are links. */
+  linkComponent?: LinkComponent
+  /** Takes a plain click on one of those links, when there is no link component. */
+  onNavigate?: (href: string, event: React.MouseEvent) => void
   extra?: React.ReactNode
   className: string
   /** The resolved `search` slot class. */
@@ -74,6 +88,19 @@ export function Toolbar<TRow extends AnyRow>({
       </div>
 
       <div className="tpz-toolbar-group">
+        {/*
+          First in the group, which is aligned to the far edge: arriving here
+          it moves nothing, where arriving at the end would push the search box
+          and every button along by its own width each time a column is sorted.
+
+          Only in a toolbar that is there anyway. Conjuring one up for this
+          alone would shove the header down from under the pointer on the very
+          click that sorted it.
+        */}
+        {anything && sortReset && (
+          <SortReset reset={sortReset} linkComponent={linkComponent} onNavigate={onNavigate} />
+        )}
+
         {extra}
 
         {search && <SearchBox state={state} update={update} options={search} className={searchClassName} />}
@@ -123,6 +150,33 @@ export function Toolbar<TRow extends AnyRow>({
       </div>
     </div>
   )
+}
+
+/**
+ * The way back from a sort.
+ *
+ * A link when the table's controls are links, so a server-rendered table can
+ * be put back in order before its JavaScript has arrived.
+ */
+function SortReset({
+  reset,
+  linkComponent: Link,
+  onNavigate,
+}: {
+  reset: { onReset: () => void; href?: string }
+  linkComponent?: LinkComponent
+  onNavigate?: (href: string, event: React.MouseEvent) => void
+}) {
+  const props = {
+    className: "tpz-btn tpz-btn-icon tpz-sort-reset",
+    "aria-label": "Reset sort",
+    title: "Reset sort",
+    children: <Icon name="reset" />,
+  }
+
+  if (!reset.href) return <button type="button" {...props} onClick={reset.onReset} />
+  if (Link) return <Link href={reset.href} {...props} />
+  return <a href={reset.href} {...props} onClick={routeClick(reset.href, onNavigate)} />
 }
 
 /**

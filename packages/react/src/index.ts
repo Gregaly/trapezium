@@ -25,6 +25,7 @@ export { Pagination, pageNumbers } from "./pagination.js"
 export { Toolbar } from "./toolbar.js"
 export { FilterControl } from "./filter-control.js"
 export { HeaderCell } from "./header-cell.js"
+export { HeaderSearchBox, HeaderSearchTrigger } from "./header-search.js"
 export { cellText, renderCell } from "./cell.js"
 export { createClasses, cx } from "./classes.js"
 export type { ClassResolver } from "./classes.js"
@@ -53,7 +54,10 @@ export {
   DEFAULT_FORMAT,
   DEFAULT_STATE,
   DEFAULT_URL_KEYS,
+  addSort,
   applyStateToUrl,
+  clearSort,
+  columnSearchText,
   createState,
   createTypeRegistry,
   defineType,
@@ -62,11 +66,15 @@ export {
   inferColumns,
   inferType,
   pickUrlState,
+  removeSort,
+  resetSort,
+  setColumnSearch,
   stateFromSearchParams,
   stateFromUrl,
   stateToQueryString,
   stateToSearchParams,
   toCsv,
+  toggleSort,
   copyText,
   downloadText,
 } from "@trapezium/core"
@@ -83,6 +91,7 @@ export type {
   FormatContext,
   FormatOptions,
   GetRowId,
+  HeaderSearchOptions,
   PaginationOptions,
   PartialTableState,
   RowHeight,
@@ -92,6 +101,7 @@ export type {
   SelectionOptions,
   Sort,
   SortDirection,
+  SortOptions,
   TableState,
   TypeDef,
   TypeRegistry,

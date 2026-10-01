@@ -3,6 +3,7 @@ import {
   OPERATOR_LABELS,
   distinctValues,
   isListOperator,
+  isTextOperator,
   needsValue,
   toSelectOptions,
   type AnyRow,
@@ -88,7 +89,25 @@ function ValueFilter<TRow extends AnyRow>({
   const [value, setValue] = useState(() => firstValue(filter))
   const [second, setSecond] = useState(() => secondValue(filter))
 
-  const inputType = column.filterKind === "date" ? "date" : column.filterKind === "range" ? "number" : "text"
+  /*
+    The filter on the column may be one its type does not list — a link somebody
+    edited, or a `contains` that a header search made before the column's
+    configuration changed. It is offered here anyway: a panel that silently
+    showed a different operator from the one in force would be describing a
+    filter that is not the one applied.
+  */
+  const operators =
+    filter && !column.operators.includes(filter.operator) ? [...column.operators, filter.operator] : column.operators
+
+  // A date picker cannot hold "Aug" and a number box cannot hold "1,2": the
+  // text operators ask about what the cell says, so they are typed as text.
+  const inputType = isTextOperator(operator)
+    ? "text"
+    : column.filterKind === "date"
+      ? "date"
+      : column.filterKind === "range"
+        ? "number"
+        : "text"
   const wantsValue = needsValue(operator)
   const isBetween = operator === "between"
   const isList = isListOperator(operator)
@@ -122,7 +141,7 @@ function ValueFilter<TRow extends AnyRow>({
         value={operator}
         onChange={(event) => setOperator(event.target.value as FilterOperator)}
       >
-        {column.operators.map((entry) => (
+        {operators.map((entry) => (
           <option key={entry} value={entry}>
             {OPERATOR_LABELS[entry]}
           </option>
@@ -216,9 +235,14 @@ function SetFilter<TRow extends AnyRow>({
     }))
   }, [column, rows, label, fetched.options])
 
-  const selected = new Set(
-    filter && Array.isArray(filter.value) ? filter.value.map(String) : filter?.value !== undefined ? [String(filter.value)] : [],
-  )
+  /*
+    Only a filter this panel could have made is read back as ticks. A column
+    searched from its header carries `contains "act"`, and reading that as a
+    choice called "act" would tick nothing — and then fold the stray word into
+    the list the moment a real box was ticked.
+  */
+  const chosen = filter && (filter.operator === "eq" || filter.operator === "in") ? filter.value : undefined
+  const selected = new Set(Array.isArray(chosen) ? chosen.map(String) : chosen !== undefined ? [String(chosen)] : [])
 
   const toggle = (value: string) => {
     const next = new Set(selected)
@@ -314,7 +338,9 @@ function BooleanFilter<TRow extends AnyRow>({
   onApply: (filter: ColumnFilter) => void
   onClear: () => void
 }) {
-  const current = filter?.value === undefined ? "" : String(filter.value)
+  // "Any" unless the filter is one this control makes: a search typed into
+  // the header is not a yes or a no.
+  const current = filter?.operator === "eq" && filter.value !== undefined ? String(filter.value) : ""
 
   return (
     <div className="tpz-filter">

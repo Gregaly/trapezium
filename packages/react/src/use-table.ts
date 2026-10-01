@@ -7,6 +7,7 @@ import {
   getRows,
   COLUMN_SAMPLE_SIZE,
   resolveColumns,
+  resolveHeaderSearch,
   resolveRowId,
   type FormatContext,
   type PaginationOptions,
@@ -107,6 +108,10 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
     [customTypes],
   )
 
+  // Both halves are primitives, so an options object written inline at the
+  // call site does not resolve the columns again on every render.
+  const headerSearch = resolveHeaderSearch(props.headerSearch)
+
   const format: FormatContext = useMemo(
     () => ({ ...DEFAULT_FORMAT, ...formatOverrides }),
     [formatOverrides],
@@ -146,6 +151,7 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
         types,
         resizable: props.resizable,
         reorderable: props.reorderable,
+        headerSearch: headerSearch.enabled,
       }),
     [
       columnInput,
@@ -157,6 +163,7 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
       types,
       props.resizable,
       props.reorderable,
+      headerSearch.enabled,
     ],
   )
 
@@ -214,6 +221,8 @@ export function useTable<TRow extends AnyRow>(props: TableProps<TRow>) {
     format,
     pagination,
     selection,
+    /** How long a header search waits after a keystroke, in milliseconds. */
+    headerSearchDebounce: headerSearch.debounce,
     server: Boolean(server),
     /** Where the answers a server-side table cannot work out come from. */
     serverSource: typeof server === "object" ? server : undefined,

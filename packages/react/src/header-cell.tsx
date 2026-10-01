@@ -1,16 +1,22 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
+  HEADER_SEARCH_DEBOUNCE,
+  addSort,
+  columnSearchText,
   hideColumn as hideColumnState,
   isPlainLinkClick,
   moveColumn,
   poof,
   reorderColumnTo,
+  setColumnSearch,
   setFilter as setFilterState,
   setOrder,
   setPin,
   setWidth,
+  sortPriority,
   toggleSort,
   removeFilter,
+  removeSort,
   type AnyRow,
   type ColumnFilter,
   type SelectOption,
@@ -18,6 +24,7 @@ import {
 } from "@trapezium/core"
 
 import { FilterControl } from "./filter-control.js"
+import { HeaderSearchBox, HeaderSearchTrigger } from "./header-search.js"
 import { Icon } from "./icon.js"
 import { Menu, MenuItem, MenuSeparator } from "./menu.js"
 import type { LinkComponent, TableColumn } from "./types.js"
@@ -50,6 +57,7 @@ export function HeaderCell<TRow extends AnyRow>({
   onDragStateChange,
   formatValue,
   fetchOptions,
+  searchDebounce = HEADER_SEARCH_DEBOUNCE,
   className = "tpz-th",
 }: {
   column: TableColumn<TRow>
@@ -64,6 +72,8 @@ export function HeaderCell<TRow extends AnyRow>({
     menu: boolean
     resizable: boolean
     reorderable: boolean
+    /** Whether a shift-click adds a level to the sort. Defaults to false. */
+    multiSort?: boolean
   }
   buildHref?: (state: TableState) => string
   linkComponent?: LinkComponent
@@ -79,6 +89,8 @@ export function HeaderCell<TRow extends AnyRow>({
   formatValue: (value: unknown) => string
   /** Asks the server what values this column has, when the table knows how. */
   fetchOptions?: () => Promise<SelectOption[]>
+  /** Milliseconds a header search waits after a keystroke. Defaults to 150. */
+  searchDebounce?: number
   /** The resolved slot class, with the column's own `headerClassName` already added. */
   className?: string
 }) {
@@ -89,8 +101,32 @@ export function HeaderCell<TRow extends AnyRow>({
   const sort = state.sort.find((entry) => entry.key === column.key)
   const filter = state.filters.find((entry) => entry.key === column.key)
   const sortable = features.sortable && column.sortable
+  const multiSort = sortable && features.multiSort === true
+  const priority = sortPriority(state.sort, column.key)
+  // A level can only be added to a sort that already has another column in it.
+  const sortedElsewhere = state.sort.some((entry) => entry.key !== column.key)
   const filterable = features.filters && column.filterKind !== "none"
   const reorderable = features.reorderable && column.reorderable !== false && !column.pin
+
+  /*
+    A header search is a filter, so the table's `filters` switch governs it
+    too. Whether the box is open is this header's own business — nothing else
+    in the table needs to know — and it is never open on a server, so the
+    markup both sides render is the closed one.
+  */
+  const searchable = features.filters && column.headerSearch
+  const [searching, setSearching] = useState(false)
+  const searchText = searchable ? columnSearchText(state, column.key) : ""
+  const searchTrigger = useRef<HTMLButtonElement | null>(null)
+  const returnFocus = useRef(false)
+
+  // Back to the magnifier once the box has gone, when the keyboard closed it:
+  // the button can only be focused again after the render that shows it.
+  useEffect(() => {
+    if (searching || !returnFocus.current) return
+    returnFocus.current = false
+    searchTrigger.current?.focus()
+  }, [searching])
 
   const href = (next: (current: TableState) => TableState) =>
     buildHref ? buildHref(next(state)) : undefined
@@ -142,6 +178,14 @@ export function HeaderCell<TRow extends AnyRow>({
           className="tpz-th-marker"
         />
       )}
+      {priority !== undefined && (
+        <>
+          <span className="tpz-th-order" aria-hidden="true">
+            {priority}
+          </span>
+          <span className="tpz-sr">{`, sort level ${String(priority)}`}</span>
+        </>
+      )}
     </>
   )
 
@@ -160,13 +204,46 @@ export function HeaderCell<TRow extends AnyRow>({
       data-draggable={reorderable ? "true" : undefined}
       data-dragging={dragging ? "true" : undefined}
       data-drop={dropEdge}
-      draggable={reorderable}
+      data-searching={searching && searchable ? "true" : undefined}
+      // A draggable ancestor takes the mouse away from a text box: dragging to
+      // select what was typed would pick the column up instead.
+      draggable={reorderable && !searching}
       aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
       style={{
         ...style,
         ...(column.pin === "start" ? { left: pinOffset } : {}),
         ...(column.pin === "end" ? { right: pinOffset } : {}),
       }}
+      /*
+        A shift-click on a header that is a link. The browser's answer to that
+        is a new window, and a link component leaves modified clicks to the
+        browser — so it is caught here, on the way down, and turned into the
+        change of state it means. The caller's `onStateChange` is what turns a
+        change of state into a URL, as it does for every control that is not a
+        link.
+      */
+      onClickCapture={
+        multiSort && buildHref
+          ? (event) => {
+              if (!event.shiftKey || event.button !== 0 || event.metaKey || event.ctrlKey || event.altKey) return
+              if (!(event.target instanceof Element) || !event.target.closest("a.tpz-th-button")) return
+              event.preventDefault()
+              event.stopPropagation()
+              apply((current) => toggleSort(current, column.key, true))
+            }
+          : undefined
+      }
+      // A shift-click also stretches the page's text selection to wherever
+      // was clicked, which paints half the table blue for a gesture that
+      // meant "sort by this as well".
+      onMouseDownCapture={
+        multiSort
+          ? (event) => {
+              if (!event.shiftKey) return
+              if (event.target instanceof Element && event.target.closest(".tpz-th-button")) event.preventDefault()
+            }
+          : undefined
+      }
       onDragStart={
         reorderable
           ? (event) => {
@@ -244,13 +321,23 @@ export function HeaderCell<TRow extends AnyRow>({
             href={href((current) => toggleSort(current, column.key))}
             Link={Link}
             onNavigate={onNavigate}
-            onSelect={() => apply((current) => toggleSort(current, column.key))}
+            onSelect={(additive) => apply((current) => toggleSort(current, column.key, additive && multiSort))}
             columnHeader={column.header}
+            priority={priority}
           >
             {label}
           </SortButton>
         ) : (
           <span className="tpz-th-button">{label}</span>
+        )}
+
+        {searchable && (
+          <HeaderSearchTrigger
+            header={column.header}
+            text={searchText}
+            buttonRef={searchTrigger}
+            onOpen={() => setSearching(true)}
+          />
         )}
 
         {features.menu && (
@@ -312,14 +399,50 @@ export function HeaderCell<TRow extends AnyRow>({
                     >
                       Sort descending
                     </Action>
+                    {/*
+                      Adding a level without a shift key: the keyboard's way to
+                      a sort of several columns, and the way anybody finds out
+                      there is one. Offered once some other column is sorted,
+                      because until then "then" has nothing to follow.
+                    */}
+                    {multiSort && sortedElsewhere && (
+                      <>
+                        <Action
+                          icon={<Icon name="sortAscending" />}
+                          href={href((current) => addSort(current, column.key, "asc"))}
+                          Link={Link}
+                          onNavigate={onNavigate}
+                          onSelect={() => {
+                            apply((current) => addSort(current, column.key, "asc"))
+                            close()
+                          }}
+                        >
+                          Then sort ascending
+                        </Action>
+                        <Action
+                          icon={<Icon name="sortDescending" />}
+                          href={href((current) => addSort(current, column.key, "desc"))}
+                          Link={Link}
+                          onNavigate={onNavigate}
+                          onSelect={() => {
+                            apply((current) => addSort(current, column.key, "desc"))
+                            close()
+                          }}
+                        >
+                          Then sort descending
+                        </Action>
+                      </>
+                    )}
                     {sort && (
                       <Action
                         icon={<Icon name="close" />}
-                        href={href((current) => ({ ...current, sort: [] }))}
+                        // This column's level only: the others are somebody's
+                        // deliberate choice, and the reset is there for all of them.
+                        href={href((current) => removeSort(current, column.key))}
                         Link={Link}
                         onNavigate={onNavigate}
                         onSelect={() => {
-                          apply((current) => ({ ...current, sort: [] }))
+                          apply((current) => removeSort(current, column.key))
                           close()
                         }}
                       >
@@ -429,6 +552,19 @@ export function HeaderCell<TRow extends AnyRow>({
           />
         )}
       </div>
+
+      {searching && searchable && (
+        <HeaderSearchBox
+          header={column.header}
+          text={searchText}
+          debounce={searchDebounce}
+          onSearch={(text) => apply((current) => setColumnSearch(current, column.key, text))}
+          onClose={(focusTrigger) => {
+            if (focusTrigger) returnFocus.current = true
+            setSearching(false)
+          }}
+        />
+      )}
     </th>
   )
 }
@@ -501,13 +637,17 @@ function SortButton({
   onNavigate,
   onSelect,
   columnHeader,
+  priority,
 }: {
   children: React.ReactNode
   href?: string
   Link?: LinkComponent
   onNavigate?: (href: string, event: React.MouseEvent) => void
-  onSelect: () => void
+  /** Called with whether the shift key was held, which asks for a level to be added. */
+  onSelect: (additive: boolean) => void
   columnHeader: string
+  /** The column's place in a sort of several levels, if it has one. */
+  priority?: number
 }) {
   if (href) {
     // The class goes on the anchor itself rather than on a span inside it, or
@@ -524,7 +664,9 @@ function SortButton({
     const props = {
       href,
       className: "tpz-th-button",
-      "aria-label": `Sort by ${columnHeader}`,
+      // Replaces the link's own text as its name, so the level has to be said here.
+      "aria-label":
+        priority === undefined ? `Sort by ${columnHeader}` : `Sort by ${columnHeader}, sort level ${String(priority)}`,
       draggable: false as const,
       children,
     }
@@ -532,7 +674,7 @@ function SortButton({
   }
 
   return (
-    <button type="button" className="tpz-th-button" onClick={onSelect}>
+    <button type="button" className="tpz-th-button" onClick={(event) => onSelect(event.shiftKey)}>
       {children}
     </button>
   )

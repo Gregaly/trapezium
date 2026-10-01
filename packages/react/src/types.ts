@@ -7,12 +7,14 @@ import type {
   FormatContext,
   GetRowId,
   HeaderContext,
+  HeaderSearchOptions,
   PaginationOptions,
   PartialTableState,
   ResolvedColumn,
   RowHeight,
   SelectionOptions,
   ServerSource,
+  SortOptions,
   TableSlots,
   TableState,
   TypeDef,
@@ -167,8 +169,28 @@ export type TableProps<TRow extends AnyRow = AnyRow> = {
   search?: boolean | SearchOptions
   /** Per-column filters. Defaults to true. */
   filters?: boolean
-  /** Column sorting. Defaults to true. */
-  sortable?: boolean
+  /**
+   * Search each column from its header, without opening its menu.
+   *
+   * A magnifier appears in a header on hover and turns it into a text box;
+   * what is typed filters that column as "contains", against the text its
+   * cells show. `true` switches it on for every column that can be filtered,
+   * and the object form sets how long it waits after a keystroke. Off by
+   * default — and a single column can opt in or out with its own
+   * `headerSearch`, whatever is said here.
+   */
+  headerSearch?: boolean | HeaderSearchOptions
+  /**
+   * Column sorting. Defaults to true.
+   *
+   * A shift-click on a header adds a level to the sort rather than replacing
+   * it, and a reset control appears in the toolbar while a sort is applied.
+   * Pass an object to change either: `{ multiple: false }` for a backend
+   * that orders by one column only, `{ reset: false }` to leave the control
+   * out, or `{ reset: [{ key, direction }] }` to name the order the table
+   * rests in.
+   */
+  sortable?: boolean | SortOptions
   /** Drag column edges to resize. Defaults to true. */
   resizable?: boolean
   /** Drag headers to reorder. Defaults to true. */

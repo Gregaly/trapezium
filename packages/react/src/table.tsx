@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import {
+  canResetSort,
   formatWithType,
   copyText,
   downloadText,
+  resetSort,
   resolveSelection,
+  resolveSorting,
   rowsToExport,
   selectRange,
   selectableIds as selectableIdsOf,
@@ -72,8 +75,21 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
   } = props
 
   const table = useTable(props)
-  const { rows, matchedRows, rowIds, columns, hiddenColumns, state, update, types, format, pagination, total, serverSource } =
-    table
+  const {
+    rows,
+    matchedRows,
+    rowIds,
+    columns,
+    hiddenColumns,
+    state,
+    update,
+    types,
+    format,
+    pagination,
+    total,
+    serverSource,
+    headerSearchDebounce,
+  } = table
 
   const classes = useMemo(() => createClasses(classNames, unstyled), [classNames, unstyled])
 
@@ -89,16 +105,50 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
 
   const search = useMemo(() => normaliseSearch(props.search), [props.search])
 
+  /*
+    Reduced to what it decides before it is memoised on, so that
+    `sortable={{ multiple: false }}` written inline — a new object every
+    render — does not hand every header a new `features` and re-render them all.
+  */
+  const sortOption = props.sortable
+  const sortOptions = typeof sortOption === "object" ? sortOption : undefined
+  const sortEnabled = sortOption !== false
+  const sortMultiple = sortOptions?.multiple
+  const sortReset = sortOptions?.reset
+  // A resting sort is an array, and compared by what it says rather than by
+  // which array it is, for the same reason.
+  const sortResetKey = typeof sortReset === "object" ? JSON.stringify(sortReset) : String(sortReset)
+
+  const sorting = useMemo(
+    () => resolveSorting(sortEnabled ? { multiple: sortMultiple, reset: sortReset } : false),
+    // `sortResetKey` stands in for `sortReset`, which is read above.
+    [sortEnabled, sortMultiple, sortResetKey],
+  )
+
   const features = useMemo(
     () => ({
-      sortable: props.sortable !== false,
+      sortable: sorting !== undefined,
+      multiSort: sorting?.multiple === true,
       filters: props.filters !== false,
       menu: props.columnMenu !== false,
       resizable: props.resizable !== false,
       reorderable: props.reorderable !== false,
     }),
-    [props.sortable, props.filters, props.columnMenu, props.resizable, props.reorderable],
+    [sorting, props.filters, props.columnMenu, props.resizable, props.reorderable],
   )
+
+  /*
+    Offered only while the sort is somewhere other than where the table rests,
+    so it appears when there is something to undo and is gone once it has been.
+  */
+  const resetControl = useMemo(() => {
+    const resting = sorting?.reset
+    if (!resting || !canResetSort(state.sort, sorting)) return undefined
+    return {
+      onReset: () => update((current) => resetSort(current, resting)),
+      href: buildHref ? buildHref(resetSort(state, resting)) : undefined,
+    }
+  }, [sorting, state, update, buildHref])
 
   const visibleKeys = useMemo(() => columns.map((column) => column.key), [columns])
 
@@ -387,6 +437,9 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
           columnControl={props.columnControl !== false}
           densityControl={props.densityControl === true}
           exportControl={exportControl}
+          sortReset={resetControl}
+          linkComponent={Link}
+          onNavigate={onNavigate}
           extra={toolbar}
           className={classes("toolbar")}
           searchClassName={classes("search")}
@@ -441,6 +494,7 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
                     onDragStateChange={setDraggingColumn}
                     formatValue={formatValue(column)}
                     fetchOptions={column.filterOptions ? undefined : distinctFor?.(column.key)}
+                    searchDebounce={headerSearchDebounce}
                     className={classes("headerCell", column.headerClassName)}
                     style={{ width: column.width, minWidth: column.minWidth, maxWidth: column.maxWidth }}
                   />
