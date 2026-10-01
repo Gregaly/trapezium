@@ -1356,9 +1356,17 @@ export function createTable<TRow extends AnyRow>(
    * Everything about a header cell that is decided when it is built.
    *
    * If this is unchanged the cell on screen is still the right cell, and only
-   * what `syncHeaderCell` writes can have moved. Like `shapeOf`, it errs
-   * towards rebuilding: a field missing here is a header that quietly stops
-   * following its column.
+   * what `syncHeaderCell` writes can have moved. A field missing here is a
+   * header that quietly stops following its column, so it names everything
+   * the cell is built from.
+   *
+   * It does not include `generation`, which `shapeOf` uses to rebuild the rows
+   * whenever an option changes identity. A row may depend on any function the
+   * caller passes; a header depends on none of them — its handlers read the
+   * settings when they run, not when they were made. That matters most to the
+   * wrappers: a Vue template writes `:get-row-id="(row) => row.id"` inline,
+   * which is a new function on every render of the parent, and if that rebuilt
+   * the header then every sort would drop the focus of the header just sorted.
    */
   function headerSignature(
     column: ResolvedColumn<TRow, Node | string>,
@@ -1368,7 +1376,6 @@ export function createTable<TRow extends AnyRow>(
     const sorting = resolveSorting(settings.sortable)
 
     return JSON.stringify([
-      generation,
       cls("headerCell", column.headerClassName),
       column.header,
       column.icon,

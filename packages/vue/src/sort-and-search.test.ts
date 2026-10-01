@@ -157,6 +157,48 @@ describe("sorting by several columns", () => {
     expect(host.querySelector(".tpz-sort-reset")).toBeNull()
   })
 
+  it("keeps a header's focus across a sort, though the template hands over new functions every render", async () => {
+    const state = ref<PartialTableState>({})
+
+    const host = mount(
+      defineComponent(() => () =>
+        h(Table, {
+          data: staff,
+          columns,
+          // All written inline, as a template writes them: new on every render.
+          getRowId: (row: { id?: unknown }) => String(row.id),
+          selection: { isSelectable: () => true },
+          format: { locale: "en" },
+          pagination: { pageSize: 10 },
+          state: state.value,
+          "onUpdate:state": (next: TableState) => {
+            state.value = next
+          },
+        }),
+      ),
+    )
+    await nextTick()
+
+    const control = sortControl(host, "name")
+    control.focus()
+
+    click(control)
+    await nextTick()
+    await nextTick()
+
+    // The rows were rebuilt, as they must be; the header was not.
+    const sorted = [...host.querySelectorAll('tbody td[data-key="name"]')].map((cell) => cell.textContent)
+    expect(sorted).toEqual(["Abe", "Ada", "Bea", "Cy"])
+    expect(sortControl(host, "name")).toBe(control)
+    expect(document.activeElement).toBe(control)
+
+    click(control)
+    await nextTick()
+    await nextTick()
+    expect(header(host, "name").getAttribute("aria-sort")).toBe("descending")
+    expect(document.activeElement).toBe(control)
+  })
+
   it("follows a resting sort given as a prop", async () => {
     const host = mount(
       defineComponent(() => () =>
