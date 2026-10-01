@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Table, applyStateToUrl, pickUrlState, type Column, type TableState } from "@trapezium/react"
 
 import { allMatching, distinctValues } from "../actions"
-import { STATUS_OPTIONS, type Invoice } from "../invoices"
+import { INVOICE_FORMAT, STATUS_OPTIONS, type Invoice } from "../invoices"
 
 /**
  * The client half.
@@ -171,13 +171,20 @@ export function InvoiceTable({
         getRowId={(invoice) => invoice.id}
         columns={columns}
         search={{ placeholder: "Search invoices", debounce: 300 }}
+        /*
+          A magnifier in each header that searches that column alone. What is
+          typed arrives on the server as a `contains` filter, and the query
+          answers it with the same function this table would have used — so
+          "Jan" finds a date and "$1,2" finds an amount, as they read here.
+        */
+        headerSearch={{ debounce: 300 }}
         // A paid invoice has nothing left to do to it, so it cannot be picked
         // for a bulk action: its checkbox is disabled and "select all" skips it.
         selection={{ isSelectable: (invoice) => !invoice.paid }}
         export
         pagination={{ mode: view.mode, pageSize: 25, pageSizeOptions: [10, 25, 50, 100] }}
         responsive={view.cards ? "cards" : "scroll"}
-        format={{ currency: "AUD", locale: "en-AU", timeZone: "Australia/Sydney" }}
+        format={INVOICE_FORMAT}
         maxHeight={560}
         aria-label="Invoices"
       />

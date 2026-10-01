@@ -42,7 +42,9 @@ for (const example of EXAMPLES) {
       const table = configured(page)
 
       const before = await table.column("Name")
-      await table.header("Name").getByRole("button", { name: /Name/ }).first().click()
+      // By its exact name: a header may also hold a "Search Name" and a
+      // "Name column options".
+      await table.header("Name").getByRole("button", { name: "Name", exact: true }).click()
 
       const after = await table.column("Name")
       expect(after).not.toEqual(before)

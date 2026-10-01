@@ -122,6 +122,9 @@
         columns,
         getRowId: (person) => person.id,
         search: { placeholder: "Search people" },
+        // A magnifier in each header, on hover, that turns the header into a
+        // search box for that column alone.
+        headerSearch: true,
         // Sales is looked after elsewhere, so those rows cannot be selected:
         // their box is disabled and "select all" skips them.
         selection: { isSelectable: (person) => person.team !== "Sales" },

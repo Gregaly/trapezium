@@ -106,6 +106,7 @@ function onSwitch(label: string, value: boolean) {
         :columns="columns"
         :get-row-id="(person) => person.id"
         :search="{ placeholder: 'Search people' }"
+        header-search
         :selection="selection ? { isSelectable: (person) => person.team !== 'Sales' } : false"
         :responsive="cards ? 'cards' : 'scroll'"
         export

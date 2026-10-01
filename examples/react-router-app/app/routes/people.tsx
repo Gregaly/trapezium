@@ -73,6 +73,7 @@ export default function People() {
         buildHref={href}
         onNavigate={(url) => void navigate(url)}
         search={{ placeholder: "Search people" }}
+        headerSearch
         selection={{ isSelectable: (person) => person.team !== "Sales" }}
         export
         pagination={{ mode: "pages", pageSize: 15, pageSizeOptions: [15, 30, 60] }}

@@ -76,6 +76,7 @@ const onStateChange = (next: TableState) => {
       :state="controlled"
       :build-href="href"
       :search="{ placeholder: 'Search people' }"
+      header-search
       :selection="{ isSelectable: (person) => person.team !== 'Sales' }"
       export
       :pagination="{ mode: 'pages', pageSize: 15, pageSizeOptions: [15, 30, 60] }"

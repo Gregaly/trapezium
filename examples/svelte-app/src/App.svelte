@@ -101,6 +101,7 @@
       {columns}
       getRowId={(person) => person.id}
       search={{ placeholder: "Search people" }}
+      headerSearch={true}
       selection={selection ? { isSelectable: (person) => person.team !== "Sales" } : false}
       responsive={cards ? "cards" : "scroll"}
       export={true}

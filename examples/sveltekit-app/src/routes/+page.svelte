@@ -57,6 +57,7 @@
     {onStateChange}
     buildHref={href}
     search={{ placeholder: "Search people" }}
+    headerSearch={true}
     selection={{ isSelectable: (person) => person.team !== "Sales" }}
     export={true}
     pagination={{ mode: "pages", pageSize: 15, pageSizeOptions: [15, 30, 60] }}

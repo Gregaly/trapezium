@@ -1,5 +1,5 @@
 import type { TableState } from "@trapezium/core"
-import { matchesFilter, isFilterUsable, BUILT_IN_TYPES } from "@trapezium/core"
+import { DEFAULT_FORMAT, matchesFilter, isFilterUsable, BUILT_IN_TYPES } from "@trapezium/core"
 
 /**
  * Stands in for a database.
@@ -28,6 +28,15 @@ export const STATUS_OPTIONS = [
   { value: "overdue", label: "Overdue", colour: "#97362b" },
   { value: "draft", label: "Draft", colour: "#9a8f80" },
 ]
+
+/**
+ * How the table formats what it shows.
+ *
+ * Shared with the query, because a search typed into a column header is
+ * answered against the text on screen: "20 Jan" only finds an invoice if the
+ * server writes its dates the way the table does.
+ */
+export const INVOICE_FORMAT = { currency: "AUD", locale: "en-AU", timeZone: "Australia/Sydney" }
 
 const NAMES = [
   "Ada Lovelace", "Tom Kerrigan", "Zoe Marchetti", "Bea Whitlock", "Idris Nasser",
@@ -118,7 +127,12 @@ export async function getInvoices(
     const passes = conditions.map((filter) => {
       const value = invoice[filter.key as keyof Invoice]
       const type = BUILT_IN_TYPES[typeOf(filter.key)] ?? BUILT_IN_TYPES["text"]!
-      return matchesFilter(value, filter, type, { locale: "en", timeZone: "UTC", currency: "AUD", currencyInMinorUnits: false, emptyText: "—" })
+      return matchesFilter(value, filter, type, {
+        ...DEFAULT_FORMAT,
+        ...INVOICE_FORMAT,
+        // The labels a status is shown by, so "Overdue" finds what is stored as "overdue".
+        ...(filter.key === "status" ? { options: STATUS_OPTIONS } : {}),
+      })
     })
 
     const filtered = state.match === "any" ? passes.some(Boolean) : passes.every(Boolean)
@@ -156,8 +170,10 @@ export async function getInvoices(
   return { rows: sorted.slice(from, state.page * state.pageSize), total: sorted.length }
 }
 
+/** The same types the table's columns have, so a filter means the same thing on both sides. */
 function typeOf(key: string): string {
-  if (key === "amount") return "number"
+  if (key === "amount") return "currency"
+  if (key === "status") return "badge"
   if (key === "issued_at") return "datetime"
   if (key === "due_date") return "date"
   if (key === "paid") return "boolean"
