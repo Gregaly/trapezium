@@ -177,6 +177,10 @@ export function textEndsWith(haystack: string, needle: string): boolean {
  * type. Nobody can see the difference, so it must not make one.
  */
 function fold(value: string): string {
+  // Plain ASCII has no accents to strip and no unusual spaces, so folding it
+  // *is* lower-casing it — and nearly every value a table holds is plain ASCII.
+  // An equality filter folds four strings a row, so this is most of its cost.
+  if (isAscii(value)) return value.toLowerCase()
   return value.normalize("NFD").replace(/\p{M}/gu, "").replace(UNUSUAL_SPACE, " ").toLowerCase()
 }
 

@@ -169,9 +169,13 @@ export function matchesFilter(
   // matching "is less than 10".
   if (isEmpty(value)) return false
 
-  if (isTextOperator(filter.operator)) return matchesText(value, textQuery(filter), type, context)
-
   switch (filter.operator) {
+    case "contains":
+    case "notContains":
+    case "startsWith":
+    case "endsWith":
+      return matchesText(value, textQuery(filter), type, context)
+
     case "eq":
     case "ne": {
       const hit = equals(value, filter.value, type, context)
@@ -395,39 +399,42 @@ export function filterRows<TRow, TNode = unknown>(
       const type = types(column.type)
       const columnContext = column.formatOptions ? { ...context, ...column.formatOptions } : context
 
+      const accessor = column.accessor
+
+      if (!isTextOperator(filter.operator)) {
+        return (row: TRow) => matchesFilter(accessor(row), filter, type, columnContext)
+      }
+
       /*
         A text condition is prepared here: its query folded once rather than
         once a row, and the key its column's formatted text is remembered
         under — the same one global search uses, so a table searched both ways
         formats each cell once.
       */
-      let text: TextQuery | undefined
-      if (isTextOperator(filter.operator)) {
-        text = textQuery(filter)
-        if (type.format) text.cacheKey = textCacheKey(column.key, type, columnContext)
-      }
+      const text = textQuery(filter)
+      if (type.format) text.cacheKey = textCacheKey(column.key, type, columnContext)
 
-      return { filter, accessor: column.accessor, type, context: columnContext, text }
+      return (row: TRow) => {
+        const value = accessor(row)
+        // The same answer `matchesFilter` gives an empty cell: it cannot
+        // satisfy a comparison, in either direction.
+        return !isEmpty(value) && matchesText(value, text, type, columnContext, row)
+      }
     })
-    .filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)
+    .filter((test): test is NonNullable<typeof test> => test !== undefined)
 
   if (usable.length === 0) return rows as TRow[]
 
-  const passes = (entry: (typeof usable)[number], row: TRow): boolean => {
-    const value = entry.accessor(row)
-    if (!entry.text) return matchesFilter(value, entry.filter, entry.type, entry.context)
-    // The same answer `matchesFilter` gives an empty cell: it cannot satisfy a
-    // comparison, in either direction.
-    if (isEmpty(value)) return false
-    return matchesText(value, entry.text, entry.type, entry.context, row)
-  }
+  // One condition is the usual case, and needs no loop over conditions at all.
+  const [only] = usable
+  if (usable.length === 1 && only) return rows.filter(only)
 
   // Short-circuited rather than collected: "all" stops at the first refusal and
   // "any" at the first acceptance, which for several conditions is most of the
   // comparisons never made.
-  if (match === "any") return rows.filter((row) => usable.some((entry) => passes(entry, row)))
+  if (match === "any") return rows.filter((row) => usable.some((test) => test(row)))
 
-  return rows.filter((row) => usable.every((entry) => passes(entry, row)))
+  return rows.filter((row) => usable.every((test) => test(row)))
 }
 
 /** Adds or replaces the filter on a column, which is what a column menu does. */

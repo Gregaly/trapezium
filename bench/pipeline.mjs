@@ -53,7 +53,9 @@ const results = []
 for (const size of SIZES) {
   const rows = makeRows(size, 3)
   const state = createState()
-  const resolved = resolveColumns({ columns, rows, state, types }).visible
+  // With header search on, so every column answers `contains` — which is what
+  // typing into a column's header asks.
+  const resolved = resolveColumns({ columns, rows, state, types, headerSearch: true }).visible
 
   const resolveColumnsMs = measure(() => resolveColumns({ columns, rows, state, types }))
 
@@ -73,6 +75,23 @@ for (const size of SIZES) {
     sortRows(rows, resolved, createState({ sort: [{ key: "version", direction: "asc" }] }), types, format),
   )
 
+  // Three levels, which is what a shift-click on two more headers builds.
+  const sortThree = measure(() =>
+    sortRows(
+      rows,
+      resolved,
+      createState({
+        sort: [
+          { key: "plan", direction: "asc" },
+          { key: "status", direction: "desc" },
+          { key: "name", direction: "asc" },
+        ],
+      }),
+      types,
+      format,
+    ),
+  )
+
   const filterOne = measure(() =>
     filterRows(rows, resolved, [{ key: "plan", operator: "eq", value: "pro" }], "all", types.get, format),
   )
@@ -90,6 +109,18 @@ for (const size of SIZES) {
       types.get,
       format,
     ),
+  )
+
+  // A search typed into a column header: a `contains` filter, answered from
+  // the stored value and from the text the column shows. Text first, then a
+  // column whose text has to be formatted — warm, as it is on every keystroke
+  // after the first.
+  const headerText = measure(() =>
+    filterRows(rows, resolved, [{ key: "name", operator: "contains", value: "ada" }], "all", types.get, format),
+  )
+
+  const headerDate = measure(() =>
+    filterRows(rows, resolved, [{ key: "seenAt", operator: "contains", value: "Aug" }], "all", types.get, format),
   )
 
   // The worst case for search: a term nothing matches, so every cell in every
@@ -120,8 +151,11 @@ for (const size of SIZES) {
     sortNumber,
     sortDate,
     sortCustom,
+    sortThree,
     filterOne,
     filterThree,
+    headerText,
+    headerDate,
     searchMiss,
     searchHit,
     whole,
@@ -135,14 +169,17 @@ const header = [
   "sort num",
   "sort date",
   "sort custom",
+  "sort ×3",
   "filter ×1",
   "filter ×3",
+  "header text",
+  "header date",
   "search miss",
   "search hit",
   "full pipeline",
 ]
 
-const widths = [9, 9, 10, 9, 10, 12, 10, 10, 12, 11, 14]
+const widths = [9, 9, 10, 9, 10, 12, 9, 10, 10, 12, 12, 12, 11, 14]
 
 console.log("\nTrapezium — pipeline, milliseconds (median of 7)\n")
 console.log(header.map((label, index) => pad(label, widths[index])).join("  "))
@@ -156,8 +193,11 @@ for (const result of results) {
     result.sortNumber.toFixed(2),
     result.sortDate.toFixed(2),
     result.sortCustom.toFixed(2),
+    result.sortThree.toFixed(2),
     result.filterOne.toFixed(2),
     result.filterThree.toFixed(2),
+    result.headerText.toFixed(2),
+    result.headerDate.toFixed(2),
     result.searchMiss.toFixed(2),
     result.searchHit.toFixed(2),
     result.whole.toFixed(2),

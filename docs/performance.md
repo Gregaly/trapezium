@@ -12,17 +12,17 @@ pnpm bench:browser    # a real table in a real browser
 
 Milliseconds, median of seven runs, on an Apple M-series laptop. The dataset is deliberately heavy: **26 columns** covering every built-in type plus two custom ones, with roughly one value in eight missing.
 
-| rows | sort (text) | sort (date) | sort (custom type) | filter ×1 | filter ×3 | search | everything at once |
-|---|---|---|---|---|---|---|---|
-| 100 | 0.13 | 0.11 | 0.09 | 0.09 | 0.13 | 0.37 | 0.18 |
-| 1,000 | 0.95 | 0.70 | 0.49 | 0.46 | 1.04 | 2.8 | 0.93 |
-| 10,000 | 9.2 | 7.1 | 7.2 | 3.7 | 7.9 | 30 | 11 |
-| 100,000 | 103 | 105 | 108 | 38 | 80 | 344 | 122 |
-| 250,000 | 273 | 320 | 297 | 96 | 203 | 801 | 330 |
+| rows | sort (text) | sort (date) | sort (custom type) | sort (three levels) | filter ×1 | filter ×3 | header search (text) | header search (date) | search | everything at once |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 100 | 0.11 | 0.11 | 0.08 | 0.14 | 0.06 | 0.13 | 0.04 | 0.03 | 0.37 | 0.13 |
+| 1,000 | 0.82 | 0.65 | 0.48 | 1.8 | 0.22 | 0.58 | 0.23 | 0.19 | 2.5 | 0.62 |
+| 10,000 | 9.5 | 7.0 | 7.2 | 23 | 1.8 | 4.6 | 2.0 | 2.0 | 28 | 8.6 |
+| 100,000 | 105 | 102 | 109 | 261 | 21 | 48 | 23 | 47 | 278 | 96 |
+| 250,000 | 263 | 334 | 321 | 660 | 52 | 120 | 58 | 124 | 687 | 266 |
 
-"Everything at once" is a filter, a search, a sort and a page, which is what a table actually does between one keystroke and the next.
+"Everything at once" is a filter, a search, a sort and a page, which is what a table actually does between one keystroke and the next. "Header search" is a search typed into one column's header — a `contains` filter answered from the text the cells show — on a text column and on a column of dates, once the dates have been formatted; the first keystroke in a column of dates also pays for the formatting, about 1.7 µs a row.
 
-Roughly: **1 µs per row to sort, 0.4 µs to filter, 3 µs to search**, across twenty-six columns. A table with the eight or ten columns most applications have is proportionally faster.
+Roughly: **1 µs per row to sort by one column and 2.6 µs by three, 0.2 µs to filter, 0.2–0.5 µs to search one column from its header, 3 µs to search all twenty-six**. A table with the eight or ten columns most applications have is proportionally faster.
 
 ## In a browser
 
@@ -53,8 +53,10 @@ Nothing exotic — mostly not doing avoidable work:
 
 - **Sort keys are worked out once per row**, not inside the comparator. A comparison sort asks about pairs `n log n` times; the naive version normalised 151,234 values to order 10,000 rows. Ordering by date got 4.5× faster, and by a custom type 8×.
 - **The text a cell displays is remembered against the row object.** `Intl` formatting is about a microsecond a cell, and search has to compare against what is on the screen. Cached, the second search costs a third of the first. Keyed by the row, so replacing your data invalidates it and dropping your data collects it.
-- **Nothing that does not depend on the row is computed per row.** Filter contexts, type lookups and the folded search query are all prepared once.
-- **Accent folding takes a fast path for text that has no accents**, which is nearly all of it — and for ASCII, folding *is* lower-casing, so the cheap answer is the same answer.
+- **Nothing that does not depend on the row is computed per row.** Filter contexts, type lookups and the folded search query are all prepared once — for a search in a column header as much as for the toolbar's, which is why typing into one costs a comparison a row and nothing else.
+- **A column header and the toolbar share what they remember.** Both search the text a cell shows, so both read the same cache: a table searched from its toolbar has already formatted every date a header search will look at, and the other way round.
+- **Accent folding takes a fast path for text that has no accents**, which is nearly all of it — and for ASCII, folding *is* lower-casing, so the cheap answer is the same answer. An equality filter folds four strings a row, so this alone halved it.
+- **The header is not rebuilt when the rows are.** In the DOM renderer — which is Vue's and Svelte's too — a sort, a filter or a search replaces the body and patches the header: an arrow, a number, a tint, a link's address. The cells themselves stay, which costs less and, more to the point, leaves the keyboard's focus on the header just pressed and the search box under the person typing into it.
 - **Filters short-circuit.** "Match all" stops at the first refusal, "match any" at the first acceptance.
 - **An appended page costs the size of the page, not the size of the list.** `loadMore` and `infinite` keep every page loaded so far on screen, so by the tenth page the table holds ten pages of rows. Reaching the sentinel renders the new rows and leaves every row already on screen alone — the DOM elements are not rebuilt, the cell renderers are not re-run, the header is not replaced, and the scroll position is not disturbed. Rows are recognised by identity, so this holds as long as the rows already shown are the same objects. This is what makes [`rowHeight="auto"`](styling.md#row-height) usable with an infinite list: rows of differing heights are the case a virtualised grid has to render, measure and place one at a time.
 - **Selecting a row changes that row.** Not the table around it: the attribute and the checkbox are updated in place, so a click in a list of five thousand rows costs one row's work.
@@ -63,9 +65,9 @@ Nothing exotic — mostly not doing avoidable work:
 
 | | minified | gzipped |
 |---|---|---|
-| `@trapezium/core` | 60 kB | 15 kB |
-| `@trapezium/react` (excluding the core) | 64 kB | 14 kB |
-| `@trapezium/vanilla` (core included) | 48 kB | 17 kB |
-| the stylesheet | 28 kB | 6 kB |
+| `@trapezium/core` | 41 kB | 14 kB |
+| `@trapezium/react` (excluding the core) | 41 kB | 14 kB |
+| `@trapezium/vanilla` (core included) | 81 kB | 28 kB |
+| the stylesheet | 24 kB | 5 kB |
 
-No runtime dependencies, so that is the whole of it.
+Each entry point bundled into one file and minified with esbuild, then gzipped. No runtime dependencies, so that is the whole of it.
