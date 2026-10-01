@@ -71,6 +71,37 @@ describe("server rendering", () => {
     expect(body).not.toContain("<strong")
   })
 
+  it("writes a sort of several levels, its reset, and the header search", () => {
+    const { body } = render(Table, {
+      props: {
+        data: people,
+        columns: ["name", "plan"],
+        pagination: false,
+        headerSearch: true,
+        buildHref: () => "/people",
+        state: {
+          sort: [
+            { key: "plan", direction: "asc" },
+            { key: "name", direction: "desc" },
+          ],
+          filters: [{ key: "name", operator: "contains", value: "o" }],
+        },
+      },
+    })
+
+    expect(body).toContain('<span class="tpz-th-order" aria-hidden="true">1</span>')
+    expect(body).toContain('aria-label="Sort by Name, sort level 2"')
+    expect(body).toContain('<a href="/people" class="tpz-btn tpz-btn-icon tpz-sort-reset" aria-label="Reset sort" title="Reset sort">')
+    expect(body.match(/class="tpz-th-search"/g)).toHaveLength(2)
+    expect(body).toContain('aria-label="Search Name, searching for o"')
+    // The box is opened by a click, so a server never writes one.
+    expect(body).not.toContain("tpz-th-searchbox")
+
+    // "Tom" and "Zoe" say "o"; free sorts before pro.
+    const names = [...body.matchAll(/data-key="name" data-label="Name">([^<]+)</g)].map((match) => match[1])
+    expect(names).toEqual(["Tom", "Zoe"])
+  })
+
   it("renders links for a table with URLs, so it works before the script arrives", () => {
     const { body } = render(Table, {
       props: {
