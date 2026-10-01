@@ -72,6 +72,32 @@ const [selected, setSelected] = useState<string[]>([])
 <Table data={rows} appendRow={<a href="/invoices/new" className="tpz-append">+ Add invoice</a>} />
 ```
 
+## A table that opens sorted, and can always get back
+
+Name the resting order once and use it twice: as where the table starts, and as where the reset returns to. The reset then appears only once somebody has sorted by something else.
+
+```tsx
+const newestFirst = [{ key: "created_at", direction: "desc" as const }]
+
+<Table data={rows} defaultState={{ sort: newestFirst }} sortable={{ reset: newestFirst }} />
+```
+
+## Search in the headers of the columns people look things up by
+
+Not every column wants it. Switch it on for the two or three that hold the things people come looking for, and leave the rest with their menus:
+
+```tsx
+<Table
+  data={rows}
+  columns={[
+    { key: "reference", headerSearch: true },
+    { key: "customer", headerSearch: true },
+    { key: "amount", type: "currency" },
+    { key: "status", type: "badge" },
+  ]}
+/>
+```
+
 ## Persisting a user's arrangement
 
 ```tsx

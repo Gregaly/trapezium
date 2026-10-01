@@ -103,6 +103,10 @@ function toCondition(filter) {
 }
 ```
 
+`state.sort` is an array because a shift-click adds a level: order by every entry, in order. If your backend can only order by one column, say `sortable={{ multiple: false }}` and the array never holds more than one.
+
+`contains` is what a [search typed into a column header](filtering.md#searching-one-column-from-its-header) sends. On a text column the `ilike` above is the whole answer. On a date or an amount it means "the text the cell shows contains this" — which only the formatting knows, so either answer those with `matchesFilter` and the table's own `format`, or switch `headerSearch` on only for the columns your query can treat as text.
+
 **Never interpolate a filter key or value into SQL.** `key` comes from your own column definitions, so check it against them before it reaches a query, and bind every value as a parameter. A filter arriving from a URL is untrusted input.
 
 ## Set filters in server mode

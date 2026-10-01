@@ -12,6 +12,9 @@ TanStack is headless: you wrote the markup, the styling, the pagination controls
 | `header: "Name"` | `header: "Name"` (defaults to the humanised key) |
 | `cell: (info) => …` | `render: ({ value, row, text }) => …` |
 | `getSortedRowModel()` | on by default |
+| `enableMultiSort` | on by default; `sortable={{ multiple: false }}` turns it off |
+| `table.resetSorting()` | the reset in the toolbar, or `resetSort(state)` |
+| a `column.setFilterValue` input in every header | `headerSearch` |
 | `getFilteredRowModel()` | on by default |
 | `getPaginationRowModel()` | `pagination` |
 | `globalFilter` | `state.search`, or the `search` prop |
@@ -40,6 +43,9 @@ The biggest difference: TanStack's state is several objects, Trapezium's is one.
 | `filter: "agSetColumnFilter"` | `filter: "set"` |
 | `filter: "agNumberColumnFilter"` | `filter: "range"` |
 | `filter: "agDateColumnFilter"` | `filter: "date"` |
+| `floatingFilter: true` | `headerSearch` — a magnifier on hover that turns the header into the box, rather than a second row that is always there |
+| `multiSortKey`, `suppressMultiSort` | shift-click by default; `sortable={{ multiple: false }}` |
+| `initialState.sort` and `api.resetColumnState()` | `defaultState.sort`, and `sortable={{ reset: [...] }}` to name the order the reset returns to |
 | `rowSelection: "multiple"` | `selection` |
 | `getRowId` | `getRowId` |
 | `onGridReady` / the grid API | state and `onStateChange` |
@@ -66,6 +72,8 @@ The API-object habit is the thing to unlearn: there is no imperative grid handle
 | `checkboxSelection` | `selection` |
 | `onRowSelectionModelChange` | `onSelectionChange` |
 | `sortModel` / `filterModel` | `state.sort` / `state.filters` |
+| `disableMultipleColumnsSorting` | `sortable={{ multiple: false }}` |
+| `headerFilters` | `headerSearch` |
 | `paginationModel` | `state.page`, `state.pageSize` |
 | `slots` / `slotProps` | `classNames`, `toolbar`, `footer`, `emptyState` |
 | `sx` | CSS tokens, or `classNames` |

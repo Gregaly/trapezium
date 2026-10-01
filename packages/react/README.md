@@ -15,6 +15,7 @@ That is a complete usage: columns come from the data, types from the values, and
 
 - Zero-config columns with type inference, and one property to override any of it
 - Per-column filters — including a set filter built from the values actually present — plus global search
+- Sorting by several columns with a shift-click, a reset back to the original order, and an optional search box in each column's header
 - Numbered, previous/next, load-more and infinite pagination
 - Selection with shift-click ranges, custom renderers, CSV export, column resize, reorder and pinning
 - Server-side data with one flag, and state that serialises to the URL

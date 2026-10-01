@@ -33,8 +33,9 @@ import { Table } from "@trapezium/react"
 | Prop | Type | Default | |
 |---|---|---|---|
 | `search` | `boolean \| { placeholder?, debounce? }` | `false` | Global search. |
-| `filters` | `boolean` | `true` | Per-column filters. |
-| `sortable` | `boolean` | `true` | Column sorting. |
+| `filters` | `boolean` | `true` | Per-column filters. Off, it takes header search with it: a search is a filter. |
+| `headerSearch` | `boolean \| { debounce? }` | `false` | A magnifier in each header that turns it into a text box and filters that column as "contains", against the text its cells show. `true` covers every column that can be filtered; a column's own `headerSearch` overrides it. `debounce` is the wait after a keystroke, 150ms by default. See [filtering](filtering.md#searching-one-column-from-its-header). |
+| `sortable` | `boolean \| SortOptions` | `true` | Column sorting. A shift-click adds a level, and a reset appears in the toolbar while a sort is applied. See [sorting](columns.md#sorting). |
 | `resizable` | `boolean` | `true` | Drag column edges. |
 | `reorderable` | `boolean` | `true` | Drag headers to move a column, or out of the table to remove it. |
 | `columnMenu` | `boolean` | `true` | The chevron menu in each header. |
@@ -43,6 +44,8 @@ import { Table } from "@trapezium/react"
 | `selection` | `boolean \| "single" \| "multiple" \| SelectionOptions` | `false` | `true` means multiple. |
 | `onSelectionChange` | `(ids: string[], rows: TRow[]) => void` | — | |
 | `export` | `boolean \| { filename?, clipboard?, scope?, fetchRows?, onExport? }` | `false` | CSV and clipboard. Contains the selected rows when there are any, and otherwise every matching row, not the page. `scope: "page"` narrows it; `fetchRows` supplies rows the table does not have and lets it write the file; `onExport` takes the whole thing over. |
+
+`SortOptions` — `{ multiple?: boolean, reset?: boolean \| Sort[] }`. `multiple` (default `true`) lets a shift-click, or "Then sort" in a column's menu, add a level; set it to `false` for a backend that orders by one column. `reset` (default `true`) is the reset control in the toolbar: `true` returns to no sort, an array names the sort the table rests in — the control returns there and hides while the table is already in it — and `false` leaves the control out.
 
 `PaginationOptions` — `{ mode?: "pages" \| "simple" \| "loadMore" \| "infinite", pageSize?: number, pageSizeOptions?: number[], siblings?: number }`
 
@@ -99,6 +102,7 @@ import { Table } from "@trapezium/react"
 | `compare` | `(a, b) => number` | the type's |
 | `searchable` | `boolean` | the type's |
 | `filter` | `boolean \| FilterKind \| { kind?, operators?, options?, defaultOperator? }` | the type's | `options` is a list of choices for a set filter, or a function returning one (possibly a promise), fetched on first open and remembered. |
+| `headerSearch` | `boolean` | the table's `headerSearch` | Search this column from its header. Opts one column in or out, whatever the table says. |
 | `align` | `"start" \| "center" \| "end"` | the type's |
 | `width` / `minWidth` / `maxWidth` | `number` | — |
 | `pin` | `"start" \| "end"` | — |
@@ -180,6 +184,7 @@ The model with no markup. Takes the same props as `<Table>` and returns:
   columns, hiddenColumns, allColumns,
   state, update, patch,
   types, format, pagination, selection, server,
+  headerSearchDebounce,   // how long a header search waits after a keystroke
 }
 ```
 
@@ -189,15 +194,27 @@ Everything below is exported from `@trapezium/core`, and re-exported from every 
 
 ### State
 
-`DEFAULT_STATE` · `createState(partial?)` · `toggleSort(state, key, additive?)` · `setSort` · `clearSort` · `setFilter` · `addFilter` · `removeFilter` · `removeFilterAt` · `clearFilters` · `setMatch` · `setSearch` · `setPage` · `setPageSize` · `setDensity` · `toggleSelection` · `setSelected` · `clearSelection` · `hideColumn` · `showColumn` · `toggleColumn` · `setOrder` · `setWidth` · `clearWidth` · `setPin` · `togglePin` · `resetView` · `isFiltering`
+`DEFAULT_STATE` · `createState(partial?)` · `toggleSort(state, key, additive?)` · `setSort` · `addSort(state, key, direction)` · `removeSort(state, key)` · `clearSort` · `resetSort(state, to?)` · `setFilter` · `addFilter` · `removeFilter` · `removeFilterAt` · `clearFilters` · `setColumnSearch(state, key, text)` · `columnSearchText(state, key)` · `setMatch` · `setSearch` · `setPage` · `setPageSize` · `setDensity` · `toggleSelection` · `setSelected` · `clearSelection` · `hideColumn` · `showColumn` · `toggleColumn` · `setOrder` · `setWidth` · `clearWidth` · `setPin` · `togglePin` · `resetView` · `isFiltering`
 
 All pure `(state, …) => state`. Anything that changes which rows match resets `page` to 1.
 
+`toggleSort` cycles a column ascending, descending, off. With `additive` — a shift-click — the other levels are left alone: a new column joins the end of the sort, and one already in it turns over where it is. `addSort` adds a level in a named direction, or redirects one in place; `removeSort` takes one level out; `resetSort` puts the whole sort back to the one given, or to none.
+
+`setColumnSearch` is what typing into a column's header does: the text becomes a `contains` filter on that column, and an empty string removes it — but only if it was a search, so a column filtered some other way is left alone. `columnSearchText` reads it back.
+
+### Sorting and header search
+
+`resolveSorting(sortable)` · `canResetSort(sort, sorting)` · `sortsEqual(a, b)` · `sortPriority(sort, key)` · `resolveHeaderSearch(headerSearch)` · `HEADER_SEARCH_DEBOUNCE`
+
+What the adapters use to read the `sortable` and `headerSearch` options the same way, for anyone binding their own renderer. `sortPriority` is a column's place in a sort of several levels, counted from one, and `undefined` when it is the only level.
+
 ### Pipeline
 
-`getRows(options)` · `sortRows` · `searchRows` · `filterRows` · `pageCount` · `resolveRowId` · `matchesFilter` · `isFilterUsable` · `normaliseFilter`
+`getRows(options)` · `sortRows` · `searchRows` · `filterRows` · `pageCount` · `resolveRowId` · `matchesFilter` · `isFilterUsable` · `normaliseFilter` · `isTextOperator` · `TEXT_OPERATORS`
 
 `matchesFilter` answers `true` for an incomplete filter — one that asks nothing excludes nothing. Drop those with `isFilterUsable` before combining conditions yourself, or a half-typed filter will widen an OR to everything.
+
+The text operators — `contains`, `notContains`, `startsWith`, `endsWith` — are answered from the stored value written out and from the text the column's type shows for it, so `matchesFilter(value, { operator: "contains", value: "Aug" }, dateType, format)` is true of a date in August. Pass the same `format` the table was given, or a server and a browser will disagree about what a cell says.
 
 `normaliseFilter` puts a filter's value into the shape its operator implies: a list for `in`, `notIn` and `between`, a single value for the rest, and none at all for `empty` and `notEmpty`. Every state transition applies it, which is what keeps state and its URL identical.
 
@@ -241,4 +258,4 @@ A CSV is read by a spreadsheet, not by a person looking at a page, so money and 
 
 ### Utilities
 
-`isEmpty` · `humanise` · `getPath` · `compareUnknown` · `textIncludes` · `textEquals` · `textStartsWith` · `textEndsWith` · `clamp` · `shallowEqual` · `toSelectOptions` — turns a loose list of choices, where a plain string stands for `{ value }`, into `SelectOption[]`.
+`isEmpty` · `humanise` · `getPath` · `compareUnknown` · `textIncludes` · `textEquals` · `textStartsWith` · `textEndsWith` · `createTextMatcher(query)` · `createTextTest(mode, query)` · `clamp` · `shallowEqual` · `toSelectOptions` — turns a loose list of choices, where a plain string stands for `{ value }`, into `SelectOption[]`.

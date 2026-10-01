@@ -23,7 +23,8 @@ Trapezium is the one that is beautiful out of the box, configured in five lines,
 
 - **Nothing to configure to start.** Columns, headers, types, alignment, formatting and filter controls are all inferred, and every one of them is one property to override.
 - **Plug your data straight in.** A Postgres row, a Supabase response, a REST payload, a Prisma model. No mapping layer, no wrapper types, dotted paths for nested fields.
-- **Real filtering and search.** Per-column filters that suit the column's type, including a set filter built from the values actually present, plus global search across everything.
+- **Real filtering and search.** Per-column filters that suit the column's type, including a set filter built from the values actually present, plus global search across everything — and, if you ask for it, a magnifier in each header that turns the header itself into a search box for that column.
+- **Sorting that goes further than one column.** Shift-click a second header to sort within the first, see which level each header is, and get back to the original order in one press.
 - **Four kinds of pagination.** Numbered, previous/next, load more, infinite scroll. One prop.
 - **Rows that size themselves.** `rowHeight="auto"` and each row is as tall as its tallest cell — prose, tags, a whole component from a cell renderer. No measuring pass, because a real `<table>` already knows. Appending a page leaves every row above it untouched.
 - **Server or client.** The same component sorts and pages your array, or tells you what to fetch.
@@ -77,9 +78,9 @@ Every property there is optional. Delete any of them and the table still works.
 | | |
 |---|---|
 | [Getting started](docs/getting-started.md) | Install, first table, the framework you use |
-| [Columns](docs/columns.md) | Keys, headers, accessors, widths, pinning, visibility |
+| [Columns](docs/columns.md) | Keys, headers, accessors, sorting by several columns, widths, pinning, visibility |
 | [Types](docs/types.md) | The built-in types, and writing your own |
-| [Filtering and search](docs/filtering.md) | Per-column filters, set filters, operators, global search |
+| [Filtering and search](docs/filtering.md) | Per-column filters, set filters, operators, global search, searching a column from its header |
 | [Pagination](docs/pagination.md) | The four modes, and page size |
 | [Selection](docs/selection.md) | Single, multiple, ranges, row identity |
 | [Custom rendering](docs/rendering.md) | Cells, headers, formatters, links, actions |

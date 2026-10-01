@@ -11,7 +11,7 @@ Both, independently, because they answer different questions. Search is "find me
 
 Search matches every column that is searchable, against **the formatted text as well as the raw value** — so searching "Aug" finds a date and "Yes" finds a checkbox. The words on the screen are the words people type.
 
-It is case- and accent-insensitive: "jose" finds "José".
+It is case- and accent-insensitive: "jose" finds "José". Nor does the kind of space matter — French writes an amount as "1 240,50 €" with two spaces no keyboard has a key for, and typing ordinary ones finds it.
 
 Exclude a column with `{ key: "internal_ref", searchable: false }`.
 
@@ -101,6 +101,76 @@ Narrow the list for one column:
 { key: "reference", filter: { kind: "text", operators: ["eq", "contains"] } }
 ```
 
+The four text operators — `contains`, `notContains`, `startsWith`, `endsWith` — ask what a cell *says*, whatever its type. They are answered from the stored value written out and from the text the column shows for it: `contains "Aug"` finds a date, `contains "1,2"` finds $1,240.00, and `contains "Professional"` finds a plan stored as `pro`. The rest compare values, through the column's type.
+
+## Searching one column from its header
+
+The quickest filter is the one that needs no menu. Switch it on and each header gets a magnifier — in the place of its type icon, and only while the header is hovered or focused — that turns the header itself into a text box:
+
+```tsx
+<Table data={rows} headerSearch />
+```
+
+Type, and the column narrows to the rows whose cells say it. Enter applies at once and closes the box. Escape empties it, and closes it if it was already empty. Clicking away closes it and keeps what was typed. A column that is being searched keeps its magnifier lit, and the search shows as a chip — "Customer contains ada" — like any other filter.
+
+Nothing moves when the magnifier appears, and nothing moves when the box opens: the magnifier borrows the icon's slot, and the box is laid over the header rather than swapped in for it, so every column stays exactly as wide as it was.
+
+It is off until asked for, at either level:
+
+```tsx
+// Every column that can be filtered.
+<Table data={rows} headerSearch />
+
+// The same, waiting 300ms after a keystroke rather than 150.
+<Table data={rows} headerSearch={{ debounce: 300 }} />
+
+// One column only.
+<Table data={rows} columns={[{ key: "name", headerSearch: true }, "email", "team"]} />
+
+// Every column but one.
+<Table data={rows} headerSearch columns={["name", "email", { key: "notes", headerSearch: false }]} />
+```
+
+**It is the column's filter, not a second kind of thing.** What is typed becomes `{ key, operator: "contains", value }` in `state.filters` — the entry the column's menu edits too — so it travels in the URL, reaches `onStateChange`, narrows an export, composes with every other filter and with the toolbar's search, and replaces whatever filter that column had. A column searched this way offers "contains" in its menu whatever its type, so the menu can always show the filter the header made. From code:
+
+```ts
+import { columnSearchText, setColumnSearch } from "@trapezium/core"
+
+const searched = setColumnSearch(state, "customer", "ada")   // "" takes the search away again
+columnSearchText(searched, "customer")                        // "ada"
+```
+
+**It matches what the cells show, for every type** — the rule global search follows, one column wide:
+
+| Type | Typing this | finds |
+|---|---|---|
+| `text`, `longText`, `email`, `url`, `phone`, `id`, `code` | any part of it | the value |
+| `number`, `currency`, `percent` | `1,2` · `$1,240` · `1240.5` · `12.5%` | the figure as it is written on screen, or the number underneath |
+| `date`, `datetime`, `relativeTime` | `Aug` · `13, 2026` · `9:30` · `days ago` · `2026-08` | the date as shown, or the stored one |
+| `time` | `2:05 PM` · `14:05` | either way of writing it |
+| `boolean` | `yes` · `no` | the word the checkbox is read as |
+| `select`, `badge` | `Professional` · `pro` | the label, or the key stored for it |
+| `tags` | any one tag | a row that has it, by label or by key |
+| `address`, `file` | a street, a postcode, a file name | the text the cell shows — never the shape of the object behind it |
+| a custom type | whatever its `format` writes | the same, through your formatter |
+
+`image` and `json` show no text, so they get no magnifier unless the column asks for one with `headerSearch: true` — and then an image is found by its address.
+
+Two things it does not do. A column's own `format` function is not consulted — the match is against the stored value and the text the column's *type* writes. And a `render` function is markup, which nothing can search: the value underneath is what is matched.
+
+**With the data on a server**, the table sends the filter and your query answers it, like every other filter. `contains` on a text column is an `ilike`. On a date or an amount it means "the text the cell shows contains this", which a database does not know — so either answer it where the formatting is, with the same function the table uses, or switch the search on only for the columns your query can treat as text:
+
+```ts
+import { BUILT_IN_TYPES, DEFAULT_FORMAT, matchesFilter } from "@trapezium/core"
+
+// The same formatting the table was given, so "20 Jan" means the same thing on both sides.
+const format = { ...DEFAULT_FORMAT, locale: "en-AU", timeZone: "Australia/Sydney", currency: "AUD" }
+
+const wanted = rows.filter((row) => matchesFilter(row.issued_at, filter, BUILT_IN_TYPES.datetime, format))
+```
+
+The box is opened by a click, so — like the column menus — it needs the table's script. A search already in the URL is rendered by the server like any other filter, magnifier lit and rows narrowed.
+
 ## Filters in code
 
 Filters live in table state, so setting them from outside the table is setting state:
@@ -138,5 +208,6 @@ The filter model is exactly the same, so you can translate `{ key, operator, val
 
 - An empty cell satisfies no comparison. `is less than 10` does not match a blank, because a blank is not zero.
 - `0` and `false` are **not** empty. That mistake is what makes a table show "—" for a real zero.
-- `contains` on a `tags` column looks inside the array.
+- `contains` on a `tags` column looks inside the array, at each tag's label as well as its stored value.
+- The text operators match what a cell shows as well as what it stores, for every type. An object is never matched by its shape: "contains object" finds nothing in a column of addresses.
 - A `select` column matches on both the stored value and the label, so a filter built from what the user can see works as well as one built from an id.

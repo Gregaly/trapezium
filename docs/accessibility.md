@@ -6,7 +6,11 @@ Accessibility is not a feature here; a feature that is not accessible does not s
 
 **Real table semantics.** A `<table>` with `<thead>`, `<th scope="col">` and `<td>`. That is what screen readers announce as a table, what browser find-in-page searches, what "copy as table" pastes into a spreadsheet, and what prints. A grid of divs is easier to style and worse at all four.
 
-**Sorting is announced.** Every header carries `aria-sort` — `ascending`, `descending` or `none` — so a screen reader says how the table is ordered, and says it changed.
+**Sorting is announced.** Every header carries `aria-sort` — `ascending`, `descending` or `none` — so a screen reader says how the table is ordered, and says it changed. When several columns are sorted, each header's sort control also says which level it is — "Name, sort level 2" — because the small numeral beside the arrow is hidden from a screen reader and would mean nothing read aloud on its own.
+
+**Nothing needs a modifier key or a hover.** A shift-click adds a sort level, and so do "Then sort ascending" and "Then sort descending" in every column's menu. The magnifier that searches a column appears on hover, and also on focus: it is a real button, first in its header, named "Search Name" — and "Search Name, searching for ada" once it is. Its box closes with Escape or Enter and hands focus back to it.
+
+**A header keeps your place.** Sorting does not rebuild the header you just pressed, so focus stays on it and the next press of Enter reverses the order.
 
 **Everything is reachable by keyboard.** Headers sort with Enter or Space. Column panels open with Enter or Down, move with the arrow keys, Home and End, close with Escape, and return focus to the control that opened them. Column resizing is on a real button that responds to the left and right arrows, and to Shift for larger steps.
 
@@ -18,7 +22,7 @@ Accessibility is not a feature here; a feature that is not accessible does not s
 
 **Live regions where they matter.** The row count and the pagination position are announced when they change, so a filter that removes rows is not silent.
 
-**Focus is visible**, using the `--tpz-ring` token, and never removed.
+**Focus is visible**, using the `--tpz-ring` token, and never removed. Inside a header it is drawn within the control, because a header cell clips anything drawn outside it.
 
 **Contrast passes AA** in both themes, including the muted header text and the disabled states.
 

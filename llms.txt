@@ -1,8 +1,9 @@
 # Trapezium
 
 > A data table library for React, Vue, Svelte and plain JavaScript. Zero-config columns with type
-> inference, per-column filters, global search, four pagination modes, selection, custom renderers,
-> SSR, URL state and CSS-variable theming. No runtime dependencies.
+> inference, multi-column sorting, per-column filters, global search, an optional search box in each
+> column header, four pagination modes, selection, custom renderers, SSR, URL state and CSS-variable
+> theming. No runtime dependencies.
 
 Packages: @trapezium/react, @trapezium/vue, @trapezium/svelte, @trapezium/vanilla, @trapezium/core
 Licence: MIT. Repository: https://github.com/Gregaly/trapezium
@@ -41,7 +42,8 @@ the data. Add configuration only to override a default.
 ## Table props
 
 data · columns · getRowId(row, index) · state · defaultState · onStateChange(state) · server ·
-total · loading · error · search · filters · sortable · resizable · reorderable · columnMenu ·
+total · loading · error · search · filters · headerSearch · sortable · resizable · reorderable ·
+columnMenu ·
 columnControl · pagination · selection · onSelectionChange(ids, rows) · export · density ·
 densityControl · responsive("scroll"|"cards") · stickyHeader · maxHeight ·
 rowHeight("fixed"|"auto"|number) · types · format ·
@@ -51,7 +53,30 @@ className · classNames ·
 unstyled · theme("light"|"dark") · id · aria-label · caption
 
 Booleans default to sensible: filters, sortable, resizable, reorderable, columnMenu, columnControl
-and stickyHeader are on; search, selection, export, densityControl are off until asked for.
+and stickyHeader are on; search, headerSearch, selection, export, densityControl are off until
+asked for.
+
+## Sorting
+
+Click a header: ascending, descending, off. Shift-click a second header to sort by it within the
+first; each sorted header then shows its level (1, 2, 3). A shift-click on a sorted header reverses
+that level in place, and a third removes it. A plain click replaces the whole sort. Without a shift
+key: "Then sort ascending" / "Then sort descending" in a column's menu, once another column is
+sorted. While a sort is applied a reset button leads the toolbar's controls and clears it; with
+`buildHref` it is a link. state.sort is an ordered array of { key, direction }.
+
+    sortable                                   // default: true, multi-column, with the reset
+    sortable={false}                           // no sorting
+    sortable={{ multiple: false }}             // one column at a time (a backend that orders by one)
+    sortable={{ reset: false }}                // no reset control
+    sortable={{ reset: [{ key: "created_at", direction: "desc" }] }}
+                                               // the table rests in this order: the reset returns
+                                               // to it and is hidden while the table is in it
+
+The reset is a toolbar control: a table with no toolbar controls at all (no search, columnControl
+false, no export) shows none. Per column: sortable:false, compare(a, b). Empty values sort last in
+both directions. In code: toggleSort(state, key, additive?) · addSort(state, key, direction) ·
+removeSort(state, key) · resetSort(state, to?) · clearSort(state).
 
 rowHeight: "fixed" (default) is one line a cell with an ellipsis. "auto" and a number both let every
 cell wrap, whatever a cell renderer put there — it is CSS only, because the table is a real <table>
@@ -82,7 +107,8 @@ clipboard copy.
 
 key (required, supports dotted paths and synthetic ids) · header · type · accessor(row) ·
 format(ctx)=>string · formatOptions · render(ctx)=>node · renderHeader(ctx)=>node · sortable ·
-compare(a,b) · searchable · filter · align · width · minWidth · maxWidth · pin("start"|"end") ·
+compare(a,b) · searchable · filter · headerSearch · align · width · minWidth · maxWidth ·
+pin("start"|"end") ·
 hidden · resizable · reorderable · wrap(boolean|number) · mono · icon · exportable · exportValue(ctx) · className ·
 headerClassName · meta
 
@@ -110,7 +136,30 @@ Custom type:
 Kinds: text, set (checkbox list of values present in the data), range, date, boolean, none.
 Operators: eq ne contains notContains startsWith endsWith gt gte lt lte between in notIn empty notEmpty.
 A date filter written as a day matches the whole day. Empty cells satisfy no comparison. 0 and false
-are not empty.
+are not empty. The text operators (contains, notContains, startsWith, endsWith) match what a cell
+SHOWS as well as what it stores, for every type: contains "Aug" finds a date, contains "1,2" finds
+$1,240.00, contains "Professional" finds a select stored as "pro". Case, accents and the kind of
+space are ignored. The other operators compare values through the column's type.
+
+## Header search (optional, off by default)
+
+    <Table data={rows} headerSearch />                       // every column that can be filtered
+    <Table data={rows} headerSearch={{ debounce: 300 }} />   // wait 300ms after a keystroke (default 150)
+    columns={[{ key: "name", headerSearch: true }]}          // one column only
+    columns={[{ key: "notes", headerSearch: false }]}        // opt one column out
+
+A magnifier replaces the column's type icon while its header is hovered or focused; clicking it turns
+the header into a text box (laid over the header, so no column changes width). Typing filters that
+column: it sets { key, operator: "contains", value } in state.filters — the same filter the column
+menu edits — so it shows as a chip, is in the URL, reaches onStateChange, narrows exports and
+replaces any other filter on that column. Enter applies and closes; Escape clears, then closes;
+clicking away keeps what was typed. Works for every type by the text the cells show (see Filters).
+image and json columns get none unless the column sets headerSearch:true. `filters={false}` turns it
+off too. A column's own `format` function is not consulted, only its type's formatting.
+In code: setColumnSearch(state, key, text) ("" removes it) · columnSearchText(state, key).
+In server mode the filter is sent like any other; answer `contains` on a formatted column with
+matchesFilter(value, filter, BUILT_IN_TYPES[type], format) using the table's own format, or enable
+headerSearch only on text columns.
 
 ## Columns: moving and removing
 
@@ -184,6 +233,9 @@ the server markup on mount (same bytes) and keeps anything done to it first — 
 search typed. Formatting defaults (locale "en", timeZone "UTC") are fixed rather than read from
 the runtime, so a server and a browser produce the same string. With `buildHref` (every adapter),
 controls render as links and the table works with no client JavaScript; `linkComponent` is React only.
+A multi-level sort or a header search already in the URL is rendered by the server (levels numbered,
+reset link present, rows narrowed). Making one needs the script: shift-click and the search box both
+report through onStateChange, which is where the caller turns state into a URL.
 When the URL is the source of truth: state={pickUrlState(stateFromUrl(query, opts))},
 buildHref={(next) => applyStateToUrl(path, next, opts)}, with opts = { defaults: { pageSize } } if the
 table's page size is not 25.
@@ -205,7 +257,8 @@ leaves every colour unset.
 ## Headless
 
 `useTable(props)` returns { rows, rowIds, total, pageCount, filtered, columns, hiddenColumns,
-allColumns, state, update, patch, types, format, pagination, selection, server }.
+allColumns, state, update, patch, types, format, pagination, selection, server,
+headerSearchDebounce }.
 `@trapezium/core` has the whole engine with no renderer.
 
 ## Not included, on purpose
@@ -220,6 +273,7 @@ accessor(row) · valueFormatter→format(ctx) · cellRenderer→render(ctx) · c
 pinned:"left"→pin:"start" · filter:"agSetColumnFilter"→filter:"set" ·
 filter:"agNumberColumnFilter"→filter:"range" · filter:"agDateColumnFilter"→filter:"date" ·
 rowSelection:"multiple"→selection · quickFilterText→search prop or state.search ·
+floatingFilter:true→headerSearch · multiSortKey/suppressMultiSort→sortable={{ multiple }} ·
 getRowStyle/getRowClass→rowClassName(row, index) · onRowClicked→onRowClick (clicks on links,
 buttons and inputs inside a row are already ignored) · rowHeight→rowHeight · getRowHeight→
 rowHeight:"auto" (the browser measures it; there is nothing to answer) · autoHeight→wrap:true ·

@@ -234,6 +234,26 @@ While a column is being dragged, the header it came from dims (`[data-dragging]`
 
 The puff of smoke on removal is `.tpz-poof`, and it does not render at all under `prefers-reduced-motion`.
 
+## Header controls
+
+The parts of a header are plain classes, so they restyle like anything else. A sorted header has an arrow (`.tpz-th-marker`) and, when several columns are sorted, its place in the order (`.tpz-th-order`). A column that can be searched from its header has `.tpz-th-search` where its icon would be, drawing both the type icon (`.tpz-th-type`) and the magnifier (`.tpz-th-glass`) and showing one of them; it carries `[data-active="true"]` while the column is being searched. While the box is open the header cell carries `[data-searching="true"]` and holds a `.tpz-th-searchbox`. The reset in the toolbar is `.tpz-sort-reset`.
+
+```css
+/* A pill instead of a bare numeral. */
+.tpz-th-order {
+  border-radius: 999px;
+  background: var(--tpz-accent);
+  padding: 0.125rem 0.3125rem;
+}
+
+/* Always show the magnifier, rather than only on hover. */
+.tpz-th-search .tpz-th-glass { opacity: 1; }
+.tpz-th-search .tpz-th-type { opacity: 0; }
+
+/* A different ring around the header while it is a search box. */
+.tpz-th-searchbox { box-shadow: inset 0 -2px 0 var(--tpz-primary); }
+```
+
 ## Motion and print
 
 Transitions respect `prefers-reduced-motion`. Printing drops the toolbar, the pagination and the selection column, unfreezes the header and lets cells wrap, so a printed table is the data rather than a screenshot of an interface.

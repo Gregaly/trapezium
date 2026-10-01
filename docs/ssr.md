@@ -140,6 +140,8 @@ Give the table `buildHref` and every control renders as a link instead of a butt
 
 The menus still need JavaScript to open, so this is progressive enhancement rather than a no-JS-only mode: the header sorts, the pagination pages, and everything else improves once the bundle arrives.
 
+A sort of several levels and a search in a column header are both just state, so a URL that carries them is rendered by the server like any other: the headers numbered, the searched column's magnifier lit, the rows already in order. The reset is a link too, and puts the table back without a script. What does need the script is *making* them — a shift-click has to be caught before the browser answers it with a new window, and the search box is opened by a click — and once it has loaded, both report through `onStateChange`, which is where a change of state becomes a URL for every control that is not a link.
+
 `buildHref` is the same option in every adapter. To route those links client-side, either give React your framework's link component with `linkComponent`, or — in any adapter — listen for `onNavigate`, which fires with the URL for a plain click and leaves modifier clicks to the browser. SvelteKit intercepts plain anchors itself, so it needs neither; Nuxt uses `@navigate`.
 
 ### Nuxt

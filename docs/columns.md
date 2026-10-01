@@ -86,9 +86,75 @@ Sortable by default for every type that can be ordered. Turn it off per column, 
 { key: "priority", compare: (a, b) => RANK[a] - RANK[b] }
 ```
 
-Multi-level sorting is supported by the model (`state.sort` is an array) and shift-clicking a header adds a level.
+Click a header to sort by it: ascending, then descending, then off.
 
 Empty values always sort last, in both directions. A column of dates with a few blanks should not put the blanks first when reversed — you asked for the newest, not the missing.
+
+### Several columns at once
+
+**Shift-click a second header and the table sorts by both** — by the first, and by the second wherever the first ties. Each sorted header shows its arrow and, once there is more than one, its place in the order. Shift-click a header that is already sorted and that level turns over where it is; once more and it leaves the sort, with the others still in order. A plain click starts again from that column alone.
+
+The same thing without a shift key is in each column's menu — "Then sort ascending" and "Then sort descending", offered once another column is sorted — which is how it is reached from a keyboard or a touch screen. "Clear sort" in a column's menu removes that column's level only.
+
+It is on by default, and it is plain state:
+
+```tsx
+<Table
+  data={rows}
+  defaultState={{
+    sort: [
+      { key: "team", direction: "asc" },
+      { key: "salary", direction: "desc" },
+    ],
+  }}
+/>
+```
+
+For a backend that can only order by one column, say so, and a shift-click sorts like a click:
+
+```tsx
+<Table data={page} total={total} server sortable={{ multiple: false }} onStateChange={refetch} />
+```
+
+### Getting back
+
+While a sort is applied, a reset appears at the head of the toolbar's controls: one press and the rows are back in the order they arrived. It is only there when there is something to undo, and it arrives without moving the search box or the buttons beside it. When the table's controls are links (`buildHref`), so is the reset — it works before any script has loaded.
+
+A table that rests in an order of its own names that order. The reset then returns to it rather than to nothing, and stays out of sight while the table is already there:
+
+```tsx
+const newestFirst = [{ key: "created_at", direction: "desc" as const }]
+
+<Table data={rows} defaultState={{ sort: newestFirst }} sortable={{ reset: newestFirst }} />
+```
+
+`sortable={{ reset: false }}` leaves the control out, for a table that draws its own from the state:
+
+```tsx
+import { Table, createState, resetSort } from "@trapezium/react"
+
+const [state, setState] = useState(createState())
+
+<Table
+  data={rows}
+  state={state}
+  onStateChange={setState}
+  sortable={{ reset: false }}
+  toolbar={
+    <button type="button" onClick={() => setState((current) => resetSort(current))}>
+      Original order
+    </button>
+  }
+/>
+```
+
+The reset lives in the toolbar, so a table with every toolbar control switched off — no search, no column control, no export — has none, rather than growing a toolbar on the click that sorted it. Each column's menu still has "Clear sort".
+
+| | | |
+|---|---|---|
+| `sortable` | `boolean \| { multiple?, reset? }` | `true`. `false` switches sorting off for the whole table. |
+| `multiple` | `boolean` | `true`. Whether a shift-click, or "Then sort", adds a level. |
+| `reset` | `boolean \| Sort[]` | `true`. The reset control: `true` returns to no sort, an array to that sort, `false` leaves it out. |
 
 ## Filtering
 
