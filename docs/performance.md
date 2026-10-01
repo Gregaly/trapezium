@@ -30,15 +30,19 @@ Time from the interaction to the browser having laid out the result, with 26 col
 
 | | 1,000 rows | 10,000 rows | 50,000 rows |
 |---|---|---|---|
-| first render | 29 ms | 24 ms | 29 ms |
-| sort a column | 31 ms | 40–48 ms | 115–118 ms |
-| apply a filter | 25 ms | 48 ms | 127 ms |
-| search, first time | 40 ms | 130 ms | 547 ms |
-| search, again | 9 ms | 54 ms | 235 ms |
-| turn the page | 25 ms | 47 ms | 102 ms |
-| DOM nodes | 8,822 | 8,781 | 8,838 |
+| first render | 15 ms | 17 ms | 17 ms |
+| sort a column | 16 ms | 25–28 ms | 63–70 ms |
+| sort by three columns | 20 ms | 45 ms | 148 ms |
+| apply a filter | 18 ms | 26 ms | 55 ms |
+| search one column from its header, a keystroke | 19 ms | 22 ms | 33 ms |
+| …in a column of dates, the first keystroke | 20 ms | 27 ms | 65–98 ms |
+| …and the next | 20 ms | 25 ms | 44 ms |
+| search every column, first time | 27 ms | 79 ms | 310 ms |
+| search every column, again | 6 ms | 27 ms | 125 ms |
+| turn the page | 18 ms | 18 ms | 16 ms |
+| DOM nodes | 8,821 | 8,820 | 8,820 |
 
-Two things to notice. **The DOM does not grow with the data** — only the page is rendered, so the browser's own costs are flat no matter how many rows are behind it. And **searching twice is much cheaper than searching once**, because the text each cell displays is remembered against the row the first time it is needed.
+Three things to notice. **The DOM does not grow with the data** — only the page is rendered, so the browser's own costs are flat no matter how many rows are behind it. **Searching twice is much cheaper than searching once**, because the text each cell displays is remembered against the row the first time it is needed. And **searching one column costs a fraction of searching all of them** — a keystroke in a column header stays inside a frame or two at fifty thousand rows, where the toolbar's search across twenty-six columns does not.
 
 ## What this means for your table
 

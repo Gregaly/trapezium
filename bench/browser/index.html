@@ -106,7 +106,38 @@
         const searchAgain = await timeToPaint(() => table.setState({ search: "adam", page: 1 }))
         lines.push(`  search, second time    ${searchAgain.toFixed(1)} ms`)
 
-        const clear = await timeToPaint(() => table.setState({ search: "", filters: [], page: 1 }))
+        // A search typed into one column's header is a `contains` filter on
+        // that column: a keystroke in a text column, then in a column of dates
+        // — which pays for formatting them the first time and not the second.
+        const headerText = await timeToPaint(() =>
+          table.setState({ search: "", filters: [{ key: "name", operator: "contains", value: "ada" }], page: 1 }),
+        )
+        lines.push(`  header search, text    ${headerText.toFixed(1)} ms`)
+
+        const headerFirst = await timeToPaint(() =>
+          table.setState({ filters: [{ key: "seenAt", operator: "contains", value: "Aug" }], page: 1 }),
+        )
+        lines.push(`  header search, dates   ${headerFirst.toFixed(1)} ms`)
+
+        const headerAgain = await timeToPaint(() =>
+          table.setState({ filters: [{ key: "seenAt", operator: "contains", value: "Au" }], page: 1 }),
+        )
+        lines.push(`  and the next keystroke ${headerAgain.toFixed(1)} ms`)
+
+        // Three levels, which is what a shift-click on two more headers builds.
+        const sortThree = await timeToPaint(() =>
+          table.setState({
+            filters: [],
+            sort: [
+              { key: "plan", direction: "asc" },
+              { key: "status", direction: "desc" },
+              { key: "name", direction: "asc" },
+            ],
+          }),
+        )
+        lines.push(`  sort by three columns  ${sortThree.toFixed(1)} ms`)
+
+        const clear = await timeToPaint(() => table.setState({ search: "", filters: [], sort: [], page: 1 }))
         lines.push(`  clear everything       ${clear.toFixed(1)} ms`)
 
         const nextPage = await timeToPaint(() => table.setState({ page: 2 }))
