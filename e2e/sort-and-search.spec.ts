@@ -318,7 +318,11 @@ for (const example of CLIENT) {
       expect(answers.length).toBeGreaterThan(0)
       expect([...new Set(answers)]).toEqual(["No"])
 
-      await panel.locator(".tpz-filter select").selectOption("true")
+      // Choosing an answer is the whole of the question, so the menu closed.
+      await expect(panel).toBeHidden()
+      const again = await table.openMenu(example.flag.header)
+      await expect(again.locator(".tpz-filter select")).toHaveValue("false")
+      await again.locator(".tpz-filter select").selectOption("true")
       await expect.poll(async () => [...new Set(await cellsOf(table, example.flag.key))]).toEqual(["Yes"])
     })
 
@@ -330,6 +334,8 @@ for (const example of CLIENT) {
       */
       const table = configured(page)
       const header = headerOf(table, example.group.key)
+      // The raw mouse does not scroll anything into view; a hover does.
+      await header.locator(".tpz-resizer").hover()
       const before = (await header.boundingBox())?.width ?? 0
 
       const handle = await header.locator(".tpz-resizer").boundingBox()

@@ -276,8 +276,16 @@
   text-align: left;
 }
 
+/*
+  `border-box` is stated rather than assumed from the host page's reset. Every
+  width here — the tokens, a `width` on a column, the width a drag sets — is
+  the width of the cell as drawn, so a page with no reset at all gets the same
+  table as one with Tailwind's, instead of one 17px wider per column and a
+  pixel taller per row.
+*/
 .tpz-th,
 .tpz-td {
+  box-sizing: border-box;
   max-width: var(--tpz-col-max-width);
   min-width: var(--tpz-col-min-width);
   overflow: hidden;
@@ -390,12 +398,11 @@
 }
 
 /*
-  `box-sizing` because `height` on a cell sizes the content box, and this mode
-  adds vertical padding — without it a 72px row measures 85, which is not the
-  number anybody typed.
+  Cells are `border-box` (see `.tpz-td` above), so the vertical padding this
+  mode adds comes out of the height — a 72px row measures 72, which is the
+  number somebody typed.
 */
 .tpz[data-row-height="exact"] .tpz-td {
-  box-sizing: border-box;
   height: var(--tpz-row-height);
   overflow: hidden;
 }

@@ -61,6 +61,10 @@ Also:
   is listening for state.
 - Dragging a column's edge to resize it applies the whole drag in Vue, Svelte
   and plain JavaScript; it used to stop at the first movement.
+- Cells are `box-sizing: border-box` in the stylesheet itself. On a page with
+  no global reset, a column's width — a token, a `width` on the column, or the
+  one a drag set — came out 17px wider than asked and rows a pixel taller than
+  everywhere else; now the table measures the same on every page.
 - Equality filters are about twice as fast.
 - New in the core: `addSort`, `removeSort`, `resetSort`, `setColumnSearch`,
   `columnSearchText`, `resolveSorting`, `canResetSort`, `sortsEqual`,
