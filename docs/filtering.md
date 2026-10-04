@@ -95,6 +95,8 @@ Which operators a column offers comes from its type, so a checkbox is never aske
 | `in` `notIn` | is any of, is none of |
 | `empty` `notEmpty` | is empty, is not empty |
 
+Each value is typed into the box that can hold it: a date picker for a date, a number box for a number, a time picker for a `time` column, and a plain text box for the text operators and the list ones — a number box cannot hold "1, 2", and a date picker cannot hold "Aug". "Is between" has two boxes, and filling in only one of them means what it plainly says: only a lower bound is "is at least", only an upper one is "is at most".
+
 Narrow the list for one column:
 
 ```tsx
@@ -154,7 +156,7 @@ columnSearchText(searched, "customer")                        // "ada"
 | `address`, `file` | a street, a postcode, a file name | the text the cell shows — never the shape of the object behind it |
 | a custom type | whatever its `format` writes | the same, through your formatter |
 
-`image` and `json` show no text, so they get no magnifier unless the column asks for one with `headerSearch: true` — and then an image is found by its address.
+`image` and `json` show no text, so they get no magnifier unless the column asks for one with `headerSearch: true` — and then an image is found by its address. Nor does a column with no heading — an actions column, a row menu — unless it asks: it has no name for the box to carry, and usually nothing behind it to search. And `filters={false}` on the table switches the search off everywhere, whatever a column says, because a search is a filter.
 
 Two things it does not do. A column's own `format` function is not consulted — the match is against the stored value and the text the column's *type* writes. And a `render` function is markup, which nothing can search: the value underneath is what is matched.
 
@@ -209,6 +211,7 @@ The filter model is exactly the same, so you can translate `{ key, operator, val
 
 - An empty cell satisfies no comparison. `is less than 10` does not match a blank, because a blank is not zero.
 - `0` and `false` are **not** empty. That mistake is what makes a table show "—" for a real zero.
+- A checkbox filter's value is a word — `"true"` or `"false"`, chosen from a list or read out of a URL — and is read as the word it is. (`Boolean("false")` is `true`; this is the one place that would have mattered.)
 - `contains` on a `tags` column looks inside the array, at each tag's label as well as its stored value.
 - The text operators match what a cell shows as well as what it stores, for every type. An object is never matched by its shape: "contains object" finds nothing in a column of addresses.
 - A `select` column matches on both the stored value and the label, so a filter built from what the user can see works as well as one built from an id.

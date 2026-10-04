@@ -84,7 +84,7 @@ import { Table } from "@trapezium/react"
 | `footer` | `ReactNode` | Below the table, inside the frame. A slot in Vue; a node or string elsewhere. |
 | `buildHref` | `(state) => string` | Renders controls as links. Every adapter. |
 | `linkComponent` | `(props) => ReactNode` | Your router's `Link`. React only. |
-| `onNavigate` | `(href, event) => void` | A plain click on one of the table's links, with its URL, the browser's navigation prevented — for a router with a `navigate` function. Every adapter; `@navigate` in Vue. |
+| `onNavigate` | `(href, event) => void` | A plain click on one of the table's links, with its URL, the browser's navigation prevented — for a router with a `navigate` function. Also a shift-click on a sortable header, with the URL of the view that adds that column to the sort, since no link points at it. Every adapter; `@navigate` in Vue. |
 
 ## `ColumnDef`
 
@@ -102,7 +102,7 @@ import { Table } from "@trapezium/react"
 | `compare` | `(a, b) => number` | the type's |
 | `searchable` | `boolean` | the type's |
 | `filter` | `boolean \| FilterKind \| { kind?, operators?, options?, defaultOperator? }` | the type's | `options` is a list of choices for a set filter, or a function returning one (possibly a promise), fetched on first open and remembered. |
-| `headerSearch` | `boolean` | the table's `headerSearch` | Search this column from its header. Opts one column in or out, whatever the table says. |
+| `headerSearch` | `boolean` | the table's `headerSearch` | Search this column from its header. Opts one column in or out, whatever the table says. The table's `true` does not reach a column with no heading, or with `filter: false`; the table's `filters={false}` switches it off everywhere. |
 | `align` | `"start" \| "center" \| "end"` | the type's |
 | `width` / `minWidth` / `maxWidth` | `number` | — |
 | `pin` | `"start" \| "end"` | — |
@@ -204,19 +204,21 @@ All pure `(state, …) => state`. Anything that changes which rows match resets 
 
 ### Sorting and header search
 
-`resolveSorting(sortable)` · `canResetSort(sort, sorting)` · `sortsEqual(a, b)` · `sortPriority(sort, key)` · `resolveHeaderSearch(headerSearch)` · `HEADER_SEARCH_DEBOUNCE`
+`resolveSorting(sortable)` · `canResetSort(sort, sorting)` · `sortsEqual(a, b)` · `sortLevels(sort, columns)` · `sortPriority(sort, key)` · `resolveHeaderSearch(headerSearch)` · `HEADER_SEARCH_DEBOUNCE`
 
-What the adapters use to read the `sortable` and `headerSearch` options the same way, for anyone binding their own renderer. `sortPriority` is a column's place in a sort of several levels, counted from one, and `undefined` when it is the only level.
+What the adapters use to read the `sortable` and `headerSearch` options the same way, for anyone binding their own renderer. `sortLevels` is the part of the sort the visible columns can speak for — a level on a hidden or unsortable column, or a column named twice in a link, does not order the rows and is left out — and `sortPriority` is a column's place in those levels, counted from one, and `undefined` when it is the only one.
 
 ### Pipeline
 
-`getRows(options)` · `sortRows` · `searchRows` · `filterRows` · `pageCount` · `resolveRowId` · `matchesFilter` · `isFilterUsable` · `normaliseFilter` · `isTextOperator` · `TEXT_OPERATORS` · `filterInputType(column, operator)`
+`getRows(options)` · `sortRows` · `searchRows` · `filterRows` · `pageCount` · `resolveRowId` · `matchesFilter` · `isFilterUsable` · `normaliseFilter` · `rangeFilter(key, low, high)` · `isTextOperator` · `TEXT_OPERATORS` · `filterInputType(column, operator)`
 
 `matchesFilter` answers `true` for an incomplete filter — one that asks nothing excludes nothing. Drop those with `isFilterUsable` before combining conditions yourself, or a half-typed filter will widen an OR to everything.
 
 The text operators — `contains`, `notContains`, `startsWith`, `endsWith` — are answered from the stored value written out and from the text the column's type shows for it, so `matchesFilter(value, { operator: "contains", value: "Aug" }, dateType, format)` is true of a date in August. Pass the same `format` the table was given, or a server and a browser will disagree about what a cell says.
 
 `filterInputType` says what kind of box a filter's value is typed into — `"text"`, `"number"`, `"date"` or `"time"` — for anyone drawing their own filter control: text for the text operators and the ones that take a list, a date picker for a `date` filter, a number box for a `range` filter, and a time picker for a `range` filter on a `time` column.
+
+`rangeFilter` is what a range control's two boxes mean: `between` when both are filled, `gte` or `lte` when one is, and no filter at all — `undefined` — when neither is.
 
 `normaliseFilter` puts a filter's value into the shape its operator implies: a list for `in`, `notIn` and `between`, a single value for the rest, and none at all for `empty` and `notEmpty`. Every state transition applies it, which is what keeps state and its URL identical.
 
@@ -230,7 +232,7 @@ The text operators — `contains`, `notContains`, `startsWith`, `endsWith` — a
 
 ### Formatting
 
-`DEFAULT_FORMAT` · `formatNumber` · `formatCurrency` · `formatPercent` · `formatDate` · `formatDateTime` · `formatTime` · `formatRelativeTime` · `minorUnitScale` · `optionLabel` · `toDate` · `toNumber` · `toText` · `isDateOnly`
+`DEFAULT_FORMAT` · `formatNumber` · `formatCurrency` · `formatPercent` · `formatDate` · `formatDateTime` · `formatTime` · `formatRelativeTime` · `minorUnitScale` · `optionLabel` · `toBoolean` · `toDate` · `toNumber` · `toText` · `isDateOnly`
 
 ### URL
 

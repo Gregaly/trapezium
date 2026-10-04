@@ -49,6 +49,18 @@ Also:
   did.
 - A toolbar with no controls of its own now appears for filter chips in Vue,
   Svelte and plain JavaScript, as it does in React.
+- Choosing "No" in a checkbox column's filter now shows the rows that say No.
+  The filter's value is the word "false", and `Boolean("false")` is true; the
+  boolean type now reads the word, in filters and in cells alike.
+- A `time` column's filter gets a time box rather than a number box, which could
+  not hold a time of day. The rule is `filterInputType` in the core.
+- "Is between" with one end filled in is "at least" or "at most" rather than a
+  range that matches nothing (`rangeFilter` in the core).
+- A shift-click on a header link goes to `onNavigate` with the address of the
+  added level when there is one, and to the address itself when nothing at all
+  is listening for state.
+- Dragging a column's edge to resize it applies the whole drag in Vue, Svelte
+  and plain JavaScript; it used to stop at the first movement.
 - Equality filters are about twice as fast.
 - New in the core: `addSort`, `removeSort`, `resetSort`, `setColumnSearch`,
   `columnSearchText`, `resolveSorting`, `canResetSort`, `sortsEqual`,

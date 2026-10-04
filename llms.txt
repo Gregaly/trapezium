@@ -136,7 +136,10 @@ Custom type:
 Kinds: text, set (checkbox list of values present in the data), range, date, boolean, none.
 Operators: eq ne contains notContains startsWith endsWith gt gte lt lte between in notIn empty notEmpty.
 A date filter written as a day matches the whole day. Empty cells satisfy no comparison. 0 and false
-are not empty. The text operators (contains, notContains, startsWith, endsWith) match what a cell
+are not empty. A boolean filter's value is the word "true" or "false" and is read as that word.
+Each value is typed into the box that can hold it (filterInputType): text for the text and list
+operators, a date picker for date kinds, a number box for range kinds, a time picker for a time
+column. "Is between" with one end filled is "at least" / "at most" (rangeFilter). The text operators (contains, notContains, startsWith, endsWith) match what a cell
 SHOWS as well as what it stores, for every type: contains "Aug" finds a date, contains "1,2" finds
 $1,240.00, contains "Professional" finds a select stored as "pro". Case, accents and the kind of
 space are ignored. The other operators compare values through the column's type.
@@ -154,8 +157,8 @@ column: it sets { key, operator: "contains", value } in state.filters — the sa
 menu edits — so it shows as a chip, is in the URL, reaches onStateChange, narrows exports and
 replaces any other filter on that column. Enter applies and closes; Escape clears, then closes;
 clicking away keeps what was typed. Works for every type by the text the cells show (see Filters).
-image and json columns get none unless the column sets headerSearch:true. `filters={false}` turns it
-off too. A column's own `format` function is not consulted, only its type's formatting.
+image and json columns get none unless the column sets headerSearch:true, and nor does a column
+with no heading (header: ""). `filters={false}` turns it off everywhere. A column's own `format` function is not consulted, only its type's formatting.
 In code: setColumnSearch(state, key, text) ("" removes it) · columnSearchText(state, key).
 In server mode the filter is sent like any other; answer `contains` on a formatted column with
 matchesFilter(value, filter, defaultTypeRegistry.get(type), format) using the table's own format, or
@@ -234,8 +237,9 @@ search typed. Formatting defaults (locale "en", timeZone "UTC") are fixed rather
 the runtime, so a server and a browser produce the same string. With `buildHref` (every adapter),
 controls render as links and the table works with no client JavaScript; `linkComponent` is React only.
 A multi-level sort or a header search already in the URL is rendered by the server (levels numbered,
-reset link present, rows narrowed). Making one needs the script: shift-click and the search box both
-report through onStateChange, which is where the caller turns state into a URL.
+reset link present, rows narrowed). Making one needs the script. A shift-click on a header link goes
+to onNavigate with the URL of the added level when there is one, else to onStateChange, else the
+browser navigates to it; the search box reports through onStateChange.
 When the URL is the source of truth: state={pickUrlState(stateFromUrl(query, opts))},
 buildHref={(next) => applyStateToUrl(path, next, opts)}, with opts = { defaults: { pageSize } } if the
 table's page size is not 25.
