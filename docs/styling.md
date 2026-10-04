@@ -30,6 +30,8 @@ Every value is a CSS custom property on `.tpz`. Set them anywhere that wins the 
 
 **Other** — `--tpz-transition` `--tpz-hover` `--tpz-selected` `--tpz-focus` `--tpz-max-height`
 
+Every width and height is the size of the thing as drawn, borders and padding included: cells are `box-sizing: border-box` in the stylesheet itself, so a page with no global reset gets the same table as one with Tailwind's.
+
 </details>
 
 ## 2. Bridge to your design system
