@@ -60,6 +60,10 @@ export type SortOptions = {
    * to it, and stays hidden while the table is already there. `false` leaves
    * the control out.
    *
+   * Naming a resting sort does not sort the table by it — it only says where
+   * the reset goes. Start the table there as well, with `defaultState.sort` or
+   * the state you control, or the reset is offered before anyone has sorted.
+   *
    * It lives in the toolbar, so a table with every toolbar control switched
    * off has no reset; "Clear sort" in the column menu is still there.
    */
@@ -79,8 +83,9 @@ export type ResolvedSorting = {
 /**
  * Searching a column from its header.
  *
- * `true` on a table switches it on for every column that can be filtered; a
- * column's own `headerSearch` overrides that either way.
+ * `true` on a table switches it on for every column that can be filtered and
+ * has a heading; a column's own `headerSearch` overrides that either way.
+ * Switching the table's `filters` off switches this off with them.
  */
 export type HeaderSearchOptions = {
   /** Milliseconds to wait after a keystroke before the search applies. Defaults to 150. */
@@ -318,8 +323,10 @@ export type ColumnDef<TRow = AnyRow, TNode = unknown> = {
    * same filter the column's menu edits, so it appears as a chip, travels in
    * the URL and reaches `onStateChange` like any other.
    *
-   * Defaults to the table's `headerSearch`, which is off. Set it on a column
-   * to opt that one in or out.
+   * Defaults to the table's `headerSearch`, which is off — and which, when
+   * on, covers every column that has a filter and a heading. Set it on a
+   * column to opt that one in or out. The table's `filters={false}` switches
+   * it off everywhere, whatever a column says: a search is a filter.
    */
   headerSearch?: boolean
 

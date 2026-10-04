@@ -180,6 +180,13 @@ export const Table = defineComponent({
     const instance = getCurrentInstance()
     const listensForRowClick = () => Boolean(instance?.vnode.props?.["onRowClick"])
     const listensForNavigate = () => Boolean(instance?.vnode.props?.["onNavigate"])
+    /*
+      Likewise for the state. A table whose controls are links sends a
+      shift-click to whoever turns state into an address — and when nobody is
+      listening, to the address itself. It can only tell the two apart if it is
+      not handed a listener that leads nowhere.
+    */
+    const listensForState = () => Boolean(instance?.vnode.props?.["onUpdate:state"])
 
     /*
       Containers holding a mounted VNode. Vue will not unmount them on its own —
@@ -306,7 +313,7 @@ export const Table = defineComponent({
       appendRow: slotHost("appendRow"),
       footer: slotHost("footer"),
       emptyState: slotHost("empty"),
-      onStateChange: (state) => emit("update:state", state),
+      onStateChange: listensForState() ? (state) => emit("update:state", state) : undefined,
       onSelectionChange: (ids, rows) => emit("selectionChange", ids, rows),
       onRowClick: listensForRowClick() ? (row, event) => emit("rowClick", row, event) : undefined,
       onNavigate: listensForNavigate() ? (href, event) => emit("navigate", href, event) : undefined,

@@ -139,6 +139,18 @@ describe("who gets a magnifier", () => {
     expect(host.querySelector(".tpz-th-search")).toBeNull()
   })
 
+  it("not even a column that asked, when the table's filters are switched off", () => {
+    setup({ filters: false, columns: [{ key: "name", headerSearch: true }] })
+    expect(host.querySelector(".tpz-th-search")).toBeNull()
+  })
+
+  it("not a column with no heading, which has no name for the box and nothing behind it", () => {
+    setup({ columns: [{ key: "name" }, { key: "actions", header: "", sortable: false, render: () => "Open" }] })
+
+    expect(host.querySelectorAll(".tpz-th-search")).toHaveLength(1)
+    expect(trigger("actions")).toBeNull()
+  })
+
   it("takes the type icon's place rather than a place of its own", () => {
     setup()
     const order = [...(header("name").querySelector(".tpz-th-inner")?.children ?? [])].map((child) => child.className)
@@ -386,6 +398,159 @@ describe("the box", () => {
 
     expect(host.querySelectorAll(".tpz-th-searchbox")).toHaveLength(1)
     expect(box("team")).not.toBeNull()
+  })
+})
+
+describe("the fine print of the box", () => {
+  const down = (target: Element) => {
+    const event = new MouseEvent("mousedown", { bubbles: true, cancelable: true })
+    target.dispatchEvent(event)
+    return event
+  }
+
+  it("keeps the focus in the text when anything else in the box is pressed", () => {
+    /*
+      Safari does not focus a button that is clicked. Without this, pressing
+      the clear button there reads as focus leaving: the box keeps the search
+      and closes before the click that was meant to clear it arrives.
+    */
+    setup()
+    const input = open("name")
+    const clear = header("name").querySelector(".tpz-th-search-clear")
+    const glass = header("name").querySelector(".tpz-th-searchbox .tpz-th-icon")
+    if (!clear || !glass) throw new Error("the box is missing a part")
+
+    expect(down(clear).defaultPrevented).toBe(true)
+    expect(down(glass).defaultPrevented).toBe(true)
+    // The text itself is left alone, or the caret could not be placed.
+    expect(down(input).defaultPrevented).toBe(false)
+  })
+
+  it("prevents Escape as well as stopping it, so a native dialog around the table stays open", () => {
+    setup()
+    expect(press(open("name"), "Escape").defaultPrevented).toBe(true)
+  })
+
+  it("leaves the Enter that confirms a composed character to the input method", () => {
+    setup()
+    const input = open("name")
+
+    // Chrome and Firefox say so; Safari reports an ordinary key with code 229.
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true }))
+    expect(box("name")).toBe(input)
+
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", keyCode: 229, bubbles: true, cancelable: true }))
+    expect(box("name")).toBe(input)
+
+    press(input, "Enter")
+    expect(box("name")).toBeNull()
+  })
+
+  it("does not search for half a composed character", () => {
+    vi.useFakeTimers()
+    const onStateChange = vi.fn<(state: TableState) => void>()
+    setup({ headerSearch: { debounce: 50 }, onStateChange })
+    const input = open("name")
+
+    input.value = "z"
+    input.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }))
+    vi.advanceTimersByTime(200)
+    expect(onStateChange).not.toHaveBeenCalled()
+
+    input.value = "zo"
+    input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }))
+    vi.advanceTimersByTime(60)
+    expect(onStateChange.mock.calls.at(-1)?.[0].filters).toEqual([{ key: "name", operator: "contains", value: "zo" }])
+  })
+
+  it("is not undone by a late answer, when the state is held somewhere that answers late", () => {
+    /*
+      A wrapper whose state lives in a URL hands it back after a navigation.
+      Type "ada", empty the box before that answer arrives, and the answer —
+      "ada" — must not be taken as news and put the search back.
+    */
+    vi.useFakeTimers()
+    const table = setup()
+    const input = open("name")
+
+    type(input, "ada")
+    vi.runAllTimers()
+    const asked = table.getState().filters
+
+    press(input, "Escape")
+    expect(table.getState().filters).toEqual([])
+
+    // The late answer, as a wrapper delivers one.
+    table.setOptions({ state: { filters: asked } })
+    vi.runAllTimers()
+
+    expect(input.value).toBe("")
+    expect(table.getState().filters).toEqual([])
+    expect(names()).toHaveLength(4)
+  })
+
+  it("still follows a change that really did come from outside", () => {
+    const table = setup()
+    const input = open("name")
+
+    table.setOptions({ state: { filters: [{ key: "name", operator: "contains", value: "zoe" }] } })
+    expect(input.value).toBe("zoe")
+  })
+
+  it("lets a click elsewhere land before the search it interrupted is applied", () => {
+    /*
+      Focus leaves because something else was pressed. Applying the search at
+      that moment would rebuild the rows between the press and its release —
+      and a click whose two halves land on different elements never happens.
+    */
+    vi.useFakeTimers()
+    const table = setup({ headerSearch: { debounce: 60_000 }, selection: true })
+    const input = open("name")
+    type(input, "a")
+
+    const checkbox = host.querySelector<HTMLInputElement>('tbody [data-key="__select"] input')
+    if (!checkbox) throw new Error("no row checkbox")
+
+    checkbox.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true }))
+    input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }))
+
+    // The box has gone, and nothing else has moved yet.
+    expect(box("name")).toBeNull()
+    expect(table.getState().filters).toEqual([])
+    expect(checkbox.isConnected).toBe(true)
+
+    checkbox.dispatchEvent(new MouseEvent("pointerup", { bubbles: true }))
+    checkbox.click()
+    expect(table.getState().selection).toEqual(["1"])
+
+    // And then the search, a turn later.
+    vi.runAllTimers()
+    expect(table.getState().filters).toEqual([{ key: "name", operator: "contains", value: "a" }])
+    expect(table.getState().selection).toEqual(["1"])
+  })
+
+  it("applies at once when focus left by the keyboard, where there is no click to wait for", () => {
+    const table = setup({ headerSearch: { debounce: 60_000 }, search: true })
+    const input = open("name")
+    type(input, "bea")
+
+    const elsewhere = host.querySelector<HTMLInputElement>(".tpz-search .tpz-input")
+    input.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: elsewhere }))
+
+    expect(table.getState().filters).toEqual([{ key: "name", operator: "contains", value: "bea" }])
+  })
+
+  it("stops listening for presses once it has closed", () => {
+    const added = vi.spyOn(document, "addEventListener")
+    const removed = vi.spyOn(document, "removeEventListener")
+    setup()
+
+    press(open("name"), "Escape")
+
+    const listening = added.mock.calls.filter(([name]) => name === "pointerdown").length
+    const stopped = removed.mock.calls.filter(([name]) => name === "pointerdown").length
+    expect(listening).toBe(1)
+    expect(stopped).toBe(1)
   })
 })
 

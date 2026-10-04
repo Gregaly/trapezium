@@ -10,11 +10,29 @@ import {
   formatRelativeTime,
   formatTime,
   minorUnitScale,
+  toBoolean,
   toDate,
   toNumber,
 } from "./format.js"
 
 const context = DEFAULT_FORMAT
+
+describe("toBoolean", () => {
+  it("takes booleans and numbers as they are", () => {
+    expect(toBoolean(true)).toBe(true)
+    expect(toBoolean(false)).toBe(false)
+    expect(toBoolean(1)).toBe(true)
+    expect(toBoolean(0)).toBe(false)
+  })
+
+  it("reads the words for no as no, however they are written", () => {
+    for (const no of ["false", "FALSE", " False ", "0", "no", "n", "off", "f", ""]) expect(toBoolean(no), no).toBe(false)
+  })
+
+  it("reads anything else that was written as yes", () => {
+    for (const yes of ["true", "1", "yes", "on", "anything"]) expect(toBoolean(yes), yes).toBe(true)
+  })
+})
 
 describe("formatNumber", () => {
   it("groups thousands", () => {

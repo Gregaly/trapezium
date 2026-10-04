@@ -63,6 +63,7 @@ export {
   minorUnitScale,
   optionLabel,
   resolveFormat,
+  toBoolean,
   toDate,
   toNumber,
   toText,
@@ -98,6 +99,7 @@ export {
   RANGE_OPERATORS,
   TEXT_OPERATORS,
   VALUELESS_OPERATORS,
+  filterInputType,
   filterRows,
   isFilterUsable,
   isListOperator,
@@ -105,6 +107,7 @@ export {
   matchesFilter,
   needsValue,
   normaliseFilter,
+  rangeFilter,
   withFilter,
   withoutFilter,
 } from "./filter.js"
@@ -157,7 +160,7 @@ export {
 } from "./state.js"
 
 export { resolveSelection, selectableIds } from "./selection.js"
-export { canResetSort, resolveSorting, sortPriority, sortsEqual } from "./sorting.js"
+export { canResetSort, resolveSorting, sortLevels, sortPriority, sortsEqual } from "./sorting.js"
 export { HEADER_SEARCH_DEBOUNCE, resolveHeaderSearch } from "./header-search.js"
 export { SLOT_CLASSES, createClasses, cx } from "./classes.js"
 export type { ClassResolver, TableSlots } from "./classes.js"

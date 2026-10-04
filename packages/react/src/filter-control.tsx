@@ -2,9 +2,10 @@ import { useEffect, useMemo, useState } from "react"
 import {
   OPERATOR_LABELS,
   distinctValues,
+  filterInputType,
   isListOperator,
-  isTextOperator,
   needsValue,
+  rangeFilter,
   toSelectOptions,
   type AnyRow,
   type ColumnFilter,
@@ -19,9 +20,11 @@ import type { TableColumn } from "./types.js"
  * The filter for one column.
  *
  * Which control appears is decided by the column's type, and which comparisons
- * it offers are too — a checkbox never offers "is more than", a date never
- * offers "contains". Offering a question the data cannot answer is worse than
- * offering none.
+ * it offers are too — a checkbox never offers "is more than". Offering a
+ * question the data cannot answer is worse than offering none. (A column that
+ * is searched from its header does offer "contains", whatever its type: that
+ * search is answered from the text the cells show, so the question has an
+ * answer.)
  *
  * It edits a draft and applies on a deliberate action, rather than filtering on
  * every keystroke: a table that reflows under the cursor while somebody is
@@ -35,6 +38,7 @@ export function FilterControl<TRow extends AnyRow>({
   fetchOptions,
   onApply,
   onClear,
+  onDone,
 }: {
   column: TableColumn<TRow>
   /** The filter already on this column, if any. */
@@ -53,6 +57,13 @@ export function FilterControl<TRow extends AnyRow>({
   fetchOptions?: FilterOptionsProvider
   onApply: (filter: ColumnFilter) => void
   onClear: () => void
+  /**
+   * Called after the control's own "Clear" button, once the filter has gone —
+   * for a panel that should close behind it. Not called when a set filter's
+   * last box is unticked, which clears the filter but is not somebody saying
+   * they have finished.
+   */
+  onDone?: () => void
 }) {
   if (column.filterKind === "set") {
     return (
@@ -64,13 +75,14 @@ export function FilterControl<TRow extends AnyRow>({
         fetchOptions={fetchOptions}
         onApply={onApply}
         onClear={onClear}
+        onDone={onDone}
       />
     )
   }
   if (column.filterKind === "boolean") {
     return <BooleanFilter filter={filter} column={column} onApply={onApply} onClear={onClear} />
   }
-  return <ValueFilter column={column} filter={filter} onApply={onApply} onClear={onClear} />
+  return <ValueFilter column={column} filter={filter} onApply={onApply} onClear={onClear} onDone={onDone} />
 }
 
 /** Operator plus a value, for text, numbers and dates. */
@@ -79,11 +91,13 @@ function ValueFilter<TRow extends AnyRow>({
   filter,
   onApply,
   onClear,
+  onDone,
 }: {
   column: TableColumn<TRow>
   filter: ColumnFilter | undefined
   onApply: (filter: ColumnFilter) => void
   onClear: () => void
+  onDone?: () => void
 }) {
   const [operator, setOperator] = useState<FilterOperator>(filter?.operator ?? column.operators[0] ?? "contains")
   const [value, setValue] = useState(() => firstValue(filter))
@@ -99,15 +113,9 @@ function ValueFilter<TRow extends AnyRow>({
   const operators =
     filter && !column.operators.includes(filter.operator) ? [...column.operators, filter.operator] : column.operators
 
-  // A date picker cannot hold "Aug" and a number box cannot hold "1,2": the
-  // text operators ask about what the cell says, so they are typed as text.
-  const inputType = isTextOperator(operator)
-    ? "text"
-    : column.filterKind === "date"
-      ? "date"
-      : column.filterKind === "range"
-        ? "number"
-        : "text"
+  // A date picker cannot hold "Aug", a number box cannot hold "1,2" or a time
+  // of day: the box follows the operator and the column, by the core's rule.
+  const inputType = filterInputType(column, operator)
   const wantsValue = needsValue(operator)
   const isBetween = operator === "between"
   const isList = isListOperator(operator)
@@ -117,6 +125,15 @@ function ValueFilter<TRow extends AnyRow>({
       onApply({ key: column.key, operator })
       return
     }
+
+    if (isBetween) {
+      // One end filled in is "at least" or "at most"; neither is no filter.
+      const range = rangeFilter(column.key, value, second)
+      if (range) onApply(range)
+      else onClear()
+      return
+    }
+
     if (value.trim() === "") {
       onClear()
       return
@@ -125,11 +142,7 @@ function ValueFilter<TRow extends AnyRow>({
     onApply({
       key: column.key,
       operator,
-      value: isBetween
-        ? [value.trim(), second.trim()]
-        : isList
-          ? value.split(",").map((entry) => entry.trim()).filter(Boolean)
-          : value.trim(),
+      value: isList ? value.split(",").map((entry) => entry.trim()).filter(Boolean) : value.trim(),
     })
   }
 
@@ -143,7 +156,8 @@ function ValueFilter<TRow extends AnyRow>({
       >
         {operators.map((entry) => (
           <option key={entry} value={entry}>
-            {OPERATOR_LABELS[entry]}
+            {/* An operator nobody defined can still arrive in a link; it is shown as written. */}
+            {OPERATOR_LABELS[entry] ?? entry}
           </option>
         ))}
       </select>
@@ -177,7 +191,14 @@ function ValueFilter<TRow extends AnyRow>({
           Apply
         </button>
         {filter && (
-          <button type="button" className="tpz-btn" onClick={onClear}>
+          <button
+            type="button"
+            className="tpz-btn"
+            onClick={() => {
+              onClear()
+              onDone?.()
+            }}
+          >
             Clear
           </button>
         )}
@@ -201,6 +222,7 @@ function SetFilter<TRow extends AnyRow>({
   fetchOptions,
   onApply,
   onClear,
+  onDone,
 }: {
   column: TableColumn<TRow>
   filter: ColumnFilter | undefined
@@ -209,6 +231,7 @@ function SetFilter<TRow extends AnyRow>({
   fetchOptions?: FilterOptionsProvider
   onApply: (filter: ColumnFilter) => void
   onClear: () => void
+  onDone?: () => void
 }) {
   const [query, setQuery] = useState("")
   // The column's own list first; failing that, whatever the table was told to
@@ -305,7 +328,14 @@ function SetFilter<TRow extends AnyRow>({
 
       {filter && (
         <div className="tpz-filter-actions">
-          <button type="button" className="tpz-btn" onClick={onClear}>
+          <button
+            type="button"
+            className="tpz-btn"
+            onClick={() => {
+              onClear()
+              onDone?.()
+            }}
+          >
             Clear
           </button>
         </div>

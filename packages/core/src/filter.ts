@@ -80,6 +80,50 @@ export function isTextOperator(operator: FilterOperator): boolean {
 }
 
 /**
+ * The kind of box a filter's value is typed into, for a column and the
+ * operator chosen.
+ *
+ * Decided here rather than in each adapter because it is a rule about the
+ * data, not about a framework — and getting it wrong makes a filter that
+ * cannot be used at all: a time of day cannot be typed into a number box, a
+ * list of values cannot be typed into a date picker, and "Aug" cannot be typed
+ * into either.
+ *
+ * - the text operators, and the ones that take a list, are typed as text;
+ * - a `date` filter gets a date picker;
+ * - a `range` filter gets a number box — except on a `time` column, where the
+ *   values being compared are times of day and the box is a time picker.
+ */
+export function filterInputType(
+  column: { filterKind: string; type: string },
+  operator: FilterOperator,
+): "text" | "number" | "date" | "time" {
+  if (isTextOperator(operator) || isListOperator(operator)) return "text"
+  if (column.filterKind === "date") return "date"
+  if (column.filterKind === "range") return column.type === "time" ? "time" : "number"
+  return "text"
+}
+
+/**
+ * The filter a range control means, given what was typed at each end.
+ *
+ * "Is between" has two boxes and people fill in one. A range with an empty end
+ * matches nothing — every value fails to be at most nothing — so the half that
+ * was typed is taken for what it plainly says: only a lower bound is "at
+ * least", only an upper one is "at most". Neither is no filter at all, which
+ * is `undefined`.
+ */
+export function rangeFilter(key: string, low: string, high: string): ColumnFilter | undefined {
+  const from = low.trim()
+  const to = high.trim()
+
+  if (from !== "" && to !== "") return { key, operator: "between", value: [from, to] }
+  if (from !== "") return { key, operator: "gte", value: from }
+  if (to !== "") return { key, operator: "lte", value: to }
+  return undefined
+}
+
+/**
  * Puts a filter's value into the shape its operator implies.
  *
  * List operators take a list; everything else takes a single value. Without
@@ -310,7 +354,7 @@ function equals(
   const right = type.normalise ? type.normalise(target, context) : target
 
   if (typeof left === "number" && typeof right === "number") return left === right
-  if (typeof left === "boolean" || typeof right === "boolean") return toBoolean(left) === toBoolean(right)
+  if (typeof left === "boolean" || typeof right === "boolean") return truthy(left) === truthy(right)
   if (left === null || right === null) return left === right
 
   // The stored value is compared too, because `normalise` on a select column
@@ -360,7 +404,7 @@ function compareAgainst(
   }
 }
 
-function toBoolean(value: unknown): boolean {
+function truthy(value: unknown): boolean {
   if (typeof value === "string") return value === "true" || value === "1" || value === "yes"
   return Boolean(value)
 }

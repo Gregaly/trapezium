@@ -98,6 +98,11 @@ export function comparable(column: OracleColumn, value: unknown): string | numbe
       return typeof value === "string" ? (PRIORITY_ORDER.get(value) ?? null) : null
 
     case "boolean":
+      // A filter's value is text — "true" or "false" from a list or a URL —
+      // and the word "false" means no, whatever JavaScript thinks of it.
+      if (typeof value === "string") {
+        return !["", "false", "0", "no", "n", "off", "f"].includes(value.trim().toLowerCase())
+      }
       return Boolean(value)
 
     case "date":

@@ -20,6 +20,7 @@ import {
   type AnyRow,
   type ColumnFilter,
   type SelectOption,
+  type Sort,
   type TableState,
 } from "@trapezium/core"
 
@@ -36,9 +37,10 @@ import type { LinkComponent, TableColumn } from "./types.js"
  * by mouse, by keyboard, and — when the table is given `buildHref` — by
  * following a link with no JavaScript at all.
  *
- * The drag handle is the type icon rather than the whole cell, because a
- * draggable element swallows the pointer events its children need. That is the
- * same reason the resize handle is its own button rather than a border style.
+ * The whole header is the handle for moving its column, and the controls
+ * inside it keep their own behaviour — which is why the resize handle is a
+ * button of its own rather than a border style, and why the header stops
+ * being draggable while it is a search box.
  */
 export function HeaderCell<TRow extends AnyRow>({
   column,
@@ -58,6 +60,8 @@ export function HeaderCell<TRow extends AnyRow>({
   formatValue,
   fetchOptions,
   searchDebounce = HEADER_SEARCH_DEBOUNCE,
+  sortLevels,
+  navigate,
   className = "tpz-th",
 }: {
   column: TableColumn<TRow>
@@ -91,6 +95,19 @@ export function HeaderCell<TRow extends AnyRow>({
   fetchOptions?: () => Promise<SelectOption[]>
   /** Milliseconds a header search waits after a keystroke. Defaults to 150. */
   searchDebounce?: number
+  /**
+   * The levels of the sort that order the rows — `sortLevels(state.sort,
+   * columns)` — which is what the arrow and the numeral are drawn from.
+   * Defaults to `state.sort` as it stands.
+   */
+  sortLevels?: readonly Sort[]
+  /**
+   * Where a shift-click on a header link goes, when the table's controls are
+   * links: called with the address of the view that adds this column to the
+   * sort. Without it the change is made to the state instead, and the caller's
+   * `onStateChange` turns it into an address.
+   */
+  navigate?: (href: string, event: React.MouseEvent) => void
   /** The resolved slot class, with the column's own `headerClassName` already added. */
   className?: string
 }) {
@@ -98,11 +115,14 @@ export function HeaderCell<TRow extends AnyRow>({
   const [dragging, setDragging] = useState(false)
   const headerRef = useRef<HTMLTableCellElement | null>(null)
 
-  const sort = state.sort.find((entry) => entry.key === column.key)
+  // From the levels that really order the rows, so a column hidden since, or
+  // named twice in a link, does not make this one call itself "2".
+  const levels = sortLevels ?? state.sort
+  const sort = levels.find((entry) => entry.key === column.key)
   const filter = state.filters.find((entry) => entry.key === column.key)
   const sortable = features.sortable && column.sortable
   const multiSort = sortable && features.multiSort === true
-  const priority = sortPriority(state.sort, column.key)
+  const priority = sortPriority(levels, column.key)
   // A level can only be added to a sort that already has another column in it.
   const sortedElsewhere = state.sort.some((entry) => entry.key !== column.key)
   const filterable = features.filters && column.filterKind !== "none"
@@ -217,10 +237,10 @@ export function HeaderCell<TRow extends AnyRow>({
       /*
         A shift-click on a header that is a link. The browser's answer to that
         is a new window, and a link component leaves modified clicks to the
-        browser — so it is caught here, on the way down, and turned into the
-        change of state it means. The caller's `onStateChange` is what turns a
-        change of state into a URL, as it does for every control that is not a
-        link.
+        browser — so it is caught here, on the way down, and sent where it
+        means to go: to the address of the view with this column added to the
+        sort, when the table has been told how to go to an address, and to the
+        state otherwise, where the caller's `onStateChange` turns it into one.
       */
       onClickCapture={
         multiSort && buildHref
@@ -229,7 +249,9 @@ export function HeaderCell<TRow extends AnyRow>({
               if (!(event.target instanceof Element) || !event.target.closest("a.tpz-th-button")) return
               event.preventDefault()
               event.stopPropagation()
-              apply((current) => toggleSort(current, column.key, true))
+
+              if (navigate) navigate(buildHref(toggleSort(state, column.key, true)), event)
+              else apply((current) => toggleSort(current, column.key, true))
             }
           : undefined
       }
@@ -471,6 +493,7 @@ export function HeaderCell<TRow extends AnyRow>({
                         if (column.filterKind !== "set") close()
                       }}
                       onClear={() => apply((current) => removeFilter(current, column.key))}
+                      onDone={close}
                     />
                     <MenuSeparator />
                   </>

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { canResetSort, resolveSorting, sortPriority, sortsEqual } from "./sorting.js"
+import { resolveColumns } from "./columns.js"
+import { defaultTypeRegistry } from "./registry.js"
+import { canResetSort, resolveSorting, sortLevels, sortPriority, sortsEqual } from "./sorting.js"
+import { createState } from "./state.js"
 import type { Sort } from "./types.js"
 
 const byTeam: Sort = { key: "team", direction: "asc" }
@@ -62,6 +65,40 @@ describe("canResetSort", () => {
   it("is never true when the control is switched off, or sorting is", () => {
     expect(canResetSort([byTeam], resolveSorting({ reset: false }))).toBe(false)
     expect(canResetSort([byTeam], resolveSorting(false))).toBe(false)
+  })
+})
+
+describe("sortLevels", () => {
+  const rows = [{ team: "Eng", name: "Ada", photo: "a.png" }]
+  const visible = (hidden: string[] = []) =>
+    resolveColumns({
+      columns: ["team", "name", { key: "photo", type: "image" }],
+      rows,
+      state: createState({ hidden }),
+      types: defaultTypeRegistry,
+    }).visible
+
+  it("keeps the levels the rows are really ordered by, in order", () => {
+    expect(sortLevels([byTeam, byName], visible())).toEqual([byTeam, byName])
+  })
+
+  it("leaves out a level on a column that is hidden", () => {
+    expect(sortLevels([byTeam, byName], visible(["team"]))).toEqual([byName])
+  })
+
+  it("leaves out a level on a column that cannot be sorted, or does not exist", () => {
+    const byPhoto: Sort = { key: "photo", direction: "asc" }
+    const byNothing: Sort = { key: "gone", direction: "asc" }
+    expect(sortLevels([byPhoto, byNothing, byName], visible())).toEqual([byName])
+  })
+
+  it("counts a column named twice once, by its first mention", () => {
+    const again: Sort = { key: "team", direction: "desc" }
+    expect(sortLevels([byTeam, byName, again], visible())).toEqual([byTeam, byName])
+  })
+
+  it("means a lone visible level gets no number", () => {
+    expect(sortPriority(sortLevels([byTeam, byName], visible(["team"])), "name")).toBeUndefined()
   })
 })
 

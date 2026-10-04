@@ -174,10 +174,11 @@ export type TableProps<TRow extends AnyRow = AnyRow> = {
    *
    * A magnifier appears in a header on hover and turns it into a text box;
    * what is typed filters that column as "contains", against the text its
-   * cells show. `true` switches it on for every column that can be filtered,
-   * and the object form sets how long it waits after a keystroke. Off by
-   * default — and a single column can opt in or out with its own
-   * `headerSearch`, whatever is said here.
+   * cells show. `true` switches it on for every column that can be filtered
+   * and has a heading; the object form also sets how long it waits after a
+   * keystroke. Off by default — and a single column can opt in or out with
+   * its own `headerSearch`, whatever is said here. `filters={false}` switches
+   * it off everywhere: a search is a filter.
    */
   headerSearch?: boolean | HeaderSearchOptions
   /**
@@ -276,8 +277,12 @@ export type TableProps<TRow extends AnyRow = AnyRow> = {
    * Fires when one of the table's own links is clicked plainly, with the URL
    * it points at, and prevents the browser's navigation — for a router with a
    * `navigate` function rather than a link component. A click with a modifier
-   * held, or with the middle button, is left to the browser. Ignored when
-   * `linkComponent` is given, since the link then routes itself.
+   * held, or with the middle button, is left to the browser. Ignored for plain
+   * clicks when `linkComponent` is given, since the link then routes itself.
+   *
+   * One modified click is the table's: a shift-click on a sortable header,
+   * which adds that column to the sort. It fires this with the URL of that
+   * view, since no link on the page points at it.
    */
   onNavigate?: (href: string, event: React.MouseEvent) => void
 

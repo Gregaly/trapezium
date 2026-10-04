@@ -22,6 +22,7 @@ import {
   formatTime,
   minorUnitScale,
   optionLabel,
+  toBoolean,
   toDate,
   toNumber,
   toText,
@@ -220,8 +221,11 @@ export const BUILT_IN_TYPES: Record<string, TypeDef> = {
     operators: ["eq", "empty", "notEmpty"],
     icon: "boolean",
     searchable: false,
-    format: (value) => (isEmpty(value) ? "" : value ? "Yes" : "No"),
-    normalise: (value) => (isEmpty(value) ? null : Boolean(value)),
+    // Read the same way everywhere — the cell, the sort and the filter — so
+    // a column of "true" and "false" out of a CSV says what it sorts by, and a
+    // filter for "false" finds the rows that say "No".
+    format: (value) => (isEmpty(value) ? "" : toBoolean(value) ? "Yes" : "No"),
+    normalise: (value) => (isEmpty(value) ? null : toBoolean(value)),
   },
 
   date: {

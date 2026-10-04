@@ -146,10 +146,13 @@ function resolveColumn<TRow extends AnyRow, TNode>(
   /*
     The table's switch covers the columns that can be filtered at all; a
     picture or a blob of JSON has nothing to type against, and a column with
-    its filter turned off has said it does not want one. A column that asks
-    for itself is taken at its word.
+    its filter turned off has said it does not want one. Nor does it reach a
+    column with no heading — an actions column, a row menu — which has no name
+    for the box to carry and usually no value behind it to search. A column
+    that asks for itself is taken at its word.
   */
-  const headerSearch = merged.headerSearch ?? (options.headerSearch === true && filter.kind !== "none")
+  const headerSearch =
+    merged.headerSearch ?? (options.headerSearch === true && filter.kind !== "none" && merged.header !== "")
 
   return {
     ...merged,

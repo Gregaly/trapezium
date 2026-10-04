@@ -136,25 +136,35 @@ export function clearFilters(state: TableState): TableState {
  * that was never typed there.
  */
 export function columnSearchText(state: TableState, key: string): string {
-  const filter = state.filters.find((entry) => entry.key === key)
-  if (!filter || filter.operator !== "contains") return ""
-  if (filter.value === undefined || filter.value === null || Array.isArray(filter.value)) return ""
+  // A column can carry several conditions — `addFilter`, or a link somebody
+  // built — so the search is looked for among them rather than assumed first.
+  const filter = state.filters.find(isSearchOf(key))
+  if (!filter || filter.value === undefined || filter.value === null || Array.isArray(filter.value)) return ""
   return String(filter.value)
+}
+
+/** Picks out the `contains` filter on a column, which is what a header search is. */
+function isSearchOf(key: string): (filter: ColumnFilter) => boolean {
+  return (filter) => filter.key === key && filter.operator === "contains"
 }
 
 /**
  * Searches one column, the way typing into its header does.
  *
  * Text becomes a `contains` filter on the column, replacing whatever filter it
- * had. Nothing typed removes that filter — but only if it was a search: an
- * empty box closed over a column filtered some other way leaves that filter
- * exactly as it was, and returns the same state so nothing is told to change.
+ * had. Nothing typed removes the search — and only the search: an empty box
+ * closed over a column filtered some other way leaves that filter exactly as
+ * it was, and returns the same state so nothing is told to change.
  */
 export function setColumnSearch(state: TableState, key: string, text: string): TableState {
   const query = text.trim()
 
   if (query === "") {
-    return columnSearchText(state, key) === "" ? state : removeFilter(state, key)
+    // The search alone: any other condition on the column was not typed here.
+    const search = isSearchOf(key)
+    return state.filters.some(search)
+      ? { ...state, filters: state.filters.filter((filter) => !search(filter)), page: 1 }
+      : state
   }
 
   if (columnSearchText(state, key) === query) return state

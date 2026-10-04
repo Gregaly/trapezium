@@ -20,6 +20,8 @@ export {
   type ExportScenario,
 } from "./export-matrix.js"
 
+export { filterPlans, type FilterPlan } from "./filter-plans.js"
+
 export {
   columns,
   compareSeats,

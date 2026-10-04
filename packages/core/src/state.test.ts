@@ -180,6 +180,23 @@ describe("searching a column from its header", () => {
   it("reads nothing back from a column that is not being searched", () => {
     expect(columnSearchText(createState(), "name")).toBe("")
   })
+
+  it("finds the search among several conditions on one column, and clears only the search", () => {
+    // A column can carry more than one condition, from `addFilter` or a link.
+    const both = createState({
+      filters: [
+        { key: "salary", operator: "gt", value: "10" },
+        { key: "salary", operator: "contains", value: "12" },
+        { key: "name", operator: "contains", value: "ada" },
+      ],
+    })
+
+    expect(columnSearchText(both, "salary")).toBe("12")
+    expect(setColumnSearch(both, "salary", "").filters).toEqual([
+      { key: "salary", operator: "gt", value: "10" },
+      { key: "name", operator: "contains", value: "ada" },
+    ])
+  })
 })
 
 describe("page invariants", () => {

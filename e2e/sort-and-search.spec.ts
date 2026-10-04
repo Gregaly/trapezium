@@ -27,6 +27,8 @@ type Example = {
   /** A money column and a date column, searched by whatever their first cells happen to show. */
   money: { header: string; key: string }
   date: { header: string; key: string }
+  /** A yes-or-no column. */
+  flag: { header: string; key: string }
 }
 
 const PEOPLE = {
@@ -34,6 +36,7 @@ const PEOPLE = {
   group: { header: "Team", key: "team" },
   money: { header: "Salary", key: "salary" },
   date: { header: "Started", key: "started" },
+  flag: { header: "Remote", key: "remote" },
 }
 
 const CLIENT: Example[] = [
@@ -47,6 +50,7 @@ const CLIENT: Example[] = [
     group: { header: "Status", key: "status" },
     money: { header: "Amount", key: "amount" },
     date: { header: "Due", key: "due_date" },
+    flag: { header: "Paid", key: "paid" },
   },
 ]
 
@@ -264,6 +268,84 @@ for (const example of CLIENT) {
       await expect(box(table, example.text.key)).toHaveCount(0)
     })
 
+    test("clears the search from the box's own button", async ({ page }) => {
+      /*
+        In every engine. Safari does not focus a button that is clicked, so a
+        press on this one used to read as focus leaving the box: the search was
+        kept, the box closed, and the click that was meant to clear it never
+        arrived.
+      */
+      const table = configured(page)
+      const total = await table.count().innerText()
+
+      await headerOf(table, example.text.key).hover()
+      await magnifier(table, example.text.key).click()
+      await box(table, example.text.key).pressSequentially(example.text.typed, { delay: 60 })
+      await expect(table.root.locator(".tpz-chip")).toHaveCount(1)
+
+      await headerOf(table, example.text.key).locator(".tpz-th-search-clear").click()
+
+      await expect(box(table, example.text.key)).toHaveCount(0)
+      await expect(table.root.locator(".tpz-chip")).toHaveCount(0)
+      await expect(table.count()).toHaveText(total)
+      await expect(magnifier(table, example.text.key)).not.toHaveAttribute("data-active", "true")
+    })
+
+    test("stays open when the magnifier inside the box is pressed", async ({ page }) => {
+      const table = configured(page)
+
+      await headerOf(table, example.text.key).hover()
+      await magnifier(table, example.text.key).click()
+      const input = box(table, example.text.key)
+      await input.fill(example.text.typed)
+
+      // A press on the glass is not a press somewhere else.
+      await headerOf(table, example.text.key).locator(".tpz-th-searchbox .tpz-th-icon").click()
+
+      await expect(input).toBeFocused()
+      await expect(input).toHaveValue(example.text.typed)
+    })
+
+    test("filters a yes-or-no column to No, and means it", async ({ page }) => {
+      // The value a filter carries is the word "false", which is not false.
+      const table = configured(page)
+
+      const panel = await table.openMenu(example.flag.header)
+      await panel.locator(".tpz-filter select").selectOption("false")
+
+      await expect(table.root.locator(".tpz-chip")).toHaveCount(1)
+      const answers = await cellsOf(table, example.flag.key)
+      expect(answers.length).toBeGreaterThan(0)
+      expect([...new Set(answers)]).toEqual(["No"])
+
+      await panel.locator(".tpz-filter select").selectOption("true")
+      await expect.poll(async () => [...new Set(await cellsOf(table, example.flag.key))]).toEqual(["Yes"])
+    })
+
+    test("resizes a column by dragging its edge, for the whole of the drag", async ({ page }) => {
+      /*
+        The handle lives in the header cell it resizes. When a new width
+        rebuilt that cell, the first movement threw the handle away and the
+        column stopped following the pointer.
+      */
+      const table = configured(page)
+      const header = headerOf(table, example.group.key)
+      const before = (await header.boundingBox())?.width ?? 0
+
+      const handle = await header.locator(".tpz-resizer").boundingBox()
+      if (!handle) throw new Error("no resize handle")
+      const x = handle.x + handle.width / 2
+      const y = handle.y + handle.height / 2
+
+      await page.mouse.move(x, y)
+      await page.mouse.down()
+      for (const step of [10, 25, 40, 60, 80]) await page.mouse.move(x + step, y)
+      await page.mouse.up()
+
+      const after = (await header.boundingBox())?.width ?? 0
+      expect(Math.abs(after - (before + 80))).toBeLessThanOrEqual(3)
+    })
+
     test("keeps what was typed when the pointer goes elsewhere", async ({ page }) => {
       const table = configured(page)
 
@@ -408,9 +490,17 @@ test("reaches the magnifier, the box and the reset with the keyboard alone", asy
   await page.keyboard.press("Enter")
   await expect(headerOf(table, "email")).toHaveAttribute("aria-sort", "ascending")
 
+  // The reset takes itself off the screen when it is pressed. Focus goes to
+  // the control beside it rather than being dropped at the top of the page.
   await reset(table).focus()
+  // Out and back by the keyboard, so the browser knows it is a keyboard's focus.
+  await page.keyboard.press("Tab")
+  await page.keyboard.press("Shift+Tab")
+  await expect(reset(table)).toBeFocused()
   await page.keyboard.press("Enter")
   await expect(headerOf(table, "email")).toHaveAttribute("aria-sort", "none")
+  await expect(reset(table)).toHaveCount(0)
+  await expect(table.search()).toBeFocused()
 })
 
 /* ── The examples whose view lives in the URL ────────────────────────────── */

@@ -210,11 +210,13 @@ What the adapters use to read the `sortable` and `headerSearch` options the same
 
 ### Pipeline
 
-`getRows(options)` · `sortRows` · `searchRows` · `filterRows` · `pageCount` · `resolveRowId` · `matchesFilter` · `isFilterUsable` · `normaliseFilter` · `isTextOperator` · `TEXT_OPERATORS`
+`getRows(options)` · `sortRows` · `searchRows` · `filterRows` · `pageCount` · `resolveRowId` · `matchesFilter` · `isFilterUsable` · `normaliseFilter` · `isTextOperator` · `TEXT_OPERATORS` · `filterInputType(column, operator)`
 
 `matchesFilter` answers `true` for an incomplete filter — one that asks nothing excludes nothing. Drop those with `isFilterUsable` before combining conditions yourself, or a half-typed filter will widen an OR to everything.
 
 The text operators — `contains`, `notContains`, `startsWith`, `endsWith` — are answered from the stored value written out and from the text the column's type shows for it, so `matchesFilter(value, { operator: "contains", value: "Aug" }, dateType, format)` is true of a date in August. Pass the same `format` the table was given, or a server and a browser will disagree about what a cell says.
+
+`filterInputType` says what kind of box a filter's value is typed into — `"text"`, `"number"`, `"date"` or `"time"` — for anyone drawing their own filter control: text for the text operators and the ones that take a list, a date picker for a `date` filter, a number box for a `range` filter, and a time picker for a `range` filter on a `time` column.
 
 `normaliseFilter` puts a filter's value into the shape its operator implies: a list for `in`, `notIn` and `between`, a single value for the rest, and none at all for `empty` and `notEmpty`. Every state transition applies it, which is what keeps state and its URL identical.
 

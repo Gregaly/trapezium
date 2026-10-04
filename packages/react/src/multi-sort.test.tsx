@@ -198,6 +198,49 @@ describe("a shift-click adds a level", () => {
   })
 })
 
+describe("which levels a header speaks for", () => {
+  it("does not count a level on a column that is hidden", () => {
+    // The rows are ordered by level alone — the pipeline cannot see Team — so
+    // Level is the only level, not the second of two.
+    setup({
+      defaultState: {
+        hidden: ["team"],
+        sort: [
+          { key: "team", direction: "asc" },
+          { key: "level", direction: "desc" },
+        ],
+      },
+    })
+
+    expect(order("Level")).toBeNull()
+    expect(header("Level").getAttribute("aria-sort")).toBe("descending")
+    expect(names()).toEqual(["Cy", "Bo", "Ada", "Dee", "Bea", "Abe"])
+  })
+
+  it("does not count a column named twice in a link", () => {
+    setup({ defaultState: stateFromUrl("sort=name:asc,name:desc") })
+
+    expect(order("Name")).toBeNull()
+    expect(header("Name").getAttribute("aria-sort")).toBe("ascending")
+  })
+
+  it("does not show a column as sorted when it cannot be", () => {
+    setup({
+      columns: [{ key: "name" }, { key: "team", sortable: false }, { key: "level" }],
+      defaultState: {
+        sort: [
+          { key: "team", direction: "asc" },
+          { key: "name", direction: "desc" },
+        ],
+      },
+    })
+
+    expect(header("Team").getAttribute("aria-sort")).toBe("none")
+    expect(order("Name")).toBeNull()
+    expect(names()).toEqual(["Dee", "Cy", "Bo", "Bea", "Ada", "Abe"])
+  })
+})
+
 describe("a table that sorts by one column only", () => {
   it("treats a shift-click as a click", async () => {
     const user = userEvent.setup()
@@ -527,6 +570,22 @@ describe("when the controls are links", () => {
 
   it("turns a shift-click on a header link into a change of state, not a new window", () => {
     const onStateChange = vi.fn<(state: TableState) => void>()
+    setup({ buildHref: href, onStateChange, defaultState: { sort: [{ key: "team", direction: "asc" }] } })
+
+    const link = screen.getByRole("link", { name: "Sort by Name" })
+    const allowed = fireEvent.click(link, { shiftKey: true })
+
+    // Prevented, so the browser opens nothing; the caller hears about the
+    // state, which is where it turns state into an address.
+    expect(allowed).toBe(false)
+    expect(onStateChange.mock.calls.at(-1)?.[0].sort).toEqual([
+      { key: "team", direction: "asc" },
+      { key: "name", direction: "asc" },
+    ])
+  })
+
+  it("sends a shift-click to the router when there is one, with the address of the added level", () => {
+    const onStateChange = vi.fn()
     const onNavigate = vi.fn()
     setup({
       buildHref: href,
@@ -535,17 +594,40 @@ describe("when the controls are links", () => {
       defaultState: { sort: [{ key: "team", direction: "asc" }] },
     })
 
-    const link = screen.getByRole("link", { name: "Sort by Name" })
-    const allowed = fireEvent.click(link, { shiftKey: true })
+    const allowed = fireEvent.click(screen.getByRole("link", { name: "Sort by Name" }), { shiftKey: true })
 
-    // Prevented, so the browser opens nothing; and not sent to the router as
-    // if it were a plain click on the link's own address.
     expect(allowed).toBe(false)
-    expect(onNavigate).not.toHaveBeenCalled()
-    expect(onStateChange.mock.calls.at(-1)?.[0].sort).toEqual([
+    // Not the link's own address, which would replace the sort: the one that adds to it.
+    expect(onNavigate).toHaveBeenCalledTimes(1)
+    expect(stateFromUrl(String(onNavigate.mock.calls[0]?.[0]).split("?")[1] ?? "").sort).toEqual([
       { key: "team", direction: "asc" },
       { key: "name", direction: "asc" },
     ])
+    // One or the other: a caller that wired both must not be sent there twice.
+    expect(onStateChange).not.toHaveBeenCalled()
+  })
+
+  it("goes to the address itself when nothing is listening at all", () => {
+    /*
+      The table the documentation calls "a table with no JavaScript": state
+      from the URL, links for controls, and nothing wired to hear a change.
+      Once its script has loaded, a shift-click must still get somewhere.
+      (A fragment, because that is the one kind of navigation jsdom performs.)
+    */
+    const before = window.location.hash
+    setup({
+      buildHref: (state) => `#${applyStateToUrl("", state).replace(/^\?/, "")}`,
+      state: { sort: [{ key: "team", direction: "asc" }] },
+    })
+
+    const allowed = fireEvent.click(screen.getByRole("link", { name: "Sort by Name" }), { shiftKey: true })
+
+    expect(allowed).toBe(false)
+    expect(stateFromUrl(window.location.hash.slice(1)).sort).toEqual([
+      { key: "team", direction: "asc" },
+      { key: "name", direction: "asc" },
+    ])
+    window.location.hash = before
   })
 
   it("leaves a shift-click alone when the table sorts by one column", () => {

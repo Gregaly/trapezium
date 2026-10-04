@@ -7,6 +7,7 @@ import {
   resetSort,
   resolveSelection,
   resolveSorting,
+  sortLevels as sortLevelsOf,
   rowsToExport,
   selectRange,
   selectableIds as selectableIdsOf,
@@ -136,6 +137,25 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
     }),
     [sorting, props.filters, props.columnMenu, props.resizable, props.reorderable],
   )
+
+  // The levels that really order the rows, which is what the headers number.
+  const sortLevels = useMemo(() => sortLevelsOf(state.sort, columns), [state.sort, columns])
+
+  /*
+    Where a shift-click on a header link goes. A table whose controls are
+    links is a table whose view lives in an address, so adding a sort level
+    means going to another address — by the caller's router when it was given
+    one, and by the browser when nothing at all is listening, which is the
+    table with no script wired up. In between, a caller that listens for
+    state is already turning state into addresses, and is left to.
+  */
+  const hasStateListener = props.onStateChange !== undefined
+  const navigate = useMemo(() => {
+    if (!buildHref) return undefined
+    if (onNavigate) return onNavigate
+    if (hasStateListener) return undefined
+    return (href: string) => window.location.assign(href)
+  }, [buildHref, onNavigate, hasStateListener])
 
   /*
     Offered only while the sort is somewhere other than where the table rests,
@@ -495,6 +515,8 @@ export function Table<TRow extends AnyRow>(props: TableProps<TRow>) {
                     formatValue={formatValue(column)}
                     fetchOptions={column.filterOptions ? undefined : distinctFor?.(column.key)}
                     searchDebounce={headerSearchDebounce}
+                    sortLevels={sortLevels}
+                    navigate={navigate}
                     className={classes("headerCell", column.headerClassName)}
                     style={{ width: column.width, minWidth: column.minWidth, maxWidth: column.maxWidth }}
                   />

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { resolveColumns } from "./columns.js"
 import { DEFAULT_FORMAT } from "./format.js"
-import { filterRows, matchesFilter, normaliseFilter } from "./filter.js"
+import { filterRows, matchesFilter, normaliseFilter, rangeFilter } from "./filter.js"
 import { BUILT_IN_TYPES, defaultTypeRegistry } from "./registry.js"
 import { createState, setFilter } from "./state.js"
 import { stateFromUrl, stateToQueryString } from "./url.js"
@@ -265,6 +265,50 @@ describe("dates", () => {
 
   it("compares two instants precisely", () => {
     expect(check(stamp, { key: "d", operator: "gt", value: "2026-08-13T10:00:00Z" }, "datetime")).toBe(true)
+  })
+})
+
+describe("yes and no", () => {
+  it("reads a filter's value as the word it is, not as text that happens to be truthy", () => {
+    // A filter's value always arrives as text — chosen from a list, or read
+    // out of a URL — and `Boolean("false")` is true.
+    expect(check(false, { key: "b", operator: "eq", value: "false" }, "boolean")).toBe(true)
+    expect(check(true, { key: "b", operator: "eq", value: "false" }, "boolean")).toBe(false)
+    expect(check(true, { key: "b", operator: "eq", value: "true" }, "boolean")).toBe(true)
+    expect(check(false, { key: "b", operator: "eq", value: "true" }, "boolean")).toBe(false)
+  })
+
+  it("takes the other ways of writing it", () => {
+    for (const no of ["0", "no", "No", "FALSE", "off"]) {
+      expect(check(false, { key: "b", operator: "eq", value: no }, "boolean"), no).toBe(true)
+      expect(check(true, { key: "b", operator: "eq", value: no }, "boolean"), no).toBe(false)
+    }
+    for (const yes of ["1", "yes", "TRUE", "on"]) {
+      expect(check(true, { key: "b", operator: "eq", value: yes }, "boolean"), yes).toBe(true)
+    }
+  })
+
+  it("reads a stored word the same way, and never matches a blank", () => {
+    expect(check("false", { key: "b", operator: "eq", value: "false" }, "boolean")).toBe(true)
+    expect(check(0, { key: "b", operator: "eq", value: "false" }, "boolean")).toBe(true)
+    expect(check(null, { key: "b", operator: "eq", value: "false" }, "boolean")).toBe(false)
+  })
+})
+
+describe("a range with one end", () => {
+  it("is between when both ends are given", () => {
+    expect(rangeFilter("n", " 10 ", "20")).toEqual({ key: "n", operator: "between", value: ["10", "20"] })
+  })
+
+  it("is at least, or at most, when only one is", () => {
+    // A range with an empty end matches nothing; the half that was typed is
+    // taken for what it plainly says.
+    expect(rangeFilter("n", "10", "")).toEqual({ key: "n", operator: "gte", value: "10" })
+    expect(rangeFilter("n", "", "20")).toEqual({ key: "n", operator: "lte", value: "20" })
+  })
+
+  it("is no filter at all when neither is", () => {
+    expect(rangeFilter("n", "", "  ")).toBeUndefined()
   })
 })
 

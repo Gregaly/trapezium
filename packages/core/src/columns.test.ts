@@ -204,6 +204,15 @@ describe("header search", () => {
     expect(resolved.map((column) => column.headerSearch)).toEqual([false, false, true])
   })
 
+  it("leaves out a column with no heading, which has no name for the box and nothing behind it", () => {
+    const resolved = resolveWith(true, [{ key: "full_name" }, { key: "actions", header: "" }])
+    expect(searchable(resolved)).toEqual({ full_name: true, actions: false })
+
+    // Unless it asks for itself.
+    const [, asked] = resolveWith(true, [{ key: "full_name" }, { key: "actions", header: "", headerSearch: true }])
+    expect(asked?.headerSearch).toBe(true)
+  })
+
   it("lets a column opt in on its own, and out of the table's", () => {
     expect(searchable(resolveWith(undefined, [{ key: "full_name", headerSearch: true }, "notes"]))).toEqual({
       full_name: true,

@@ -3,6 +3,7 @@ import {
   formatWithType,
   isEmpty,
   optionLabel,
+  toBoolean,
   type AnyRow,
   type SelectOption,
   type TypeRegistry,
@@ -43,9 +44,9 @@ export function renderCell<TRow extends AnyRow>(
       // An icon reads faster than a word in a dense column, but it still needs
       // a text alternative — an icon alone announces nothing.
       return (
-        <span className={value ? "tpz-boolean-true" : "tpz-boolean-false"}>
-          <Icon name={value ? "check" : "minus"} />
-          <span className="tpz-sr">{value ? "Yes" : "No"}</span>
+        <span className={toBoolean(value) ? "tpz-boolean-true" : "tpz-boolean-false"}>
+          <Icon name={toBoolean(value) ? "check" : "minus"} />
+          <span className="tpz-sr">{toBoolean(value) ? "Yes" : "No"}</span>
         </span>
       )
 

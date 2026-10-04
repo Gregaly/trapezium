@@ -9,14 +9,15 @@ import {
   defaultTypeRegistry,
   distinctValues,
   downloadText,
+  filterInputType,
   formatWithType,
   getRows,
   hideColumn,
   isEmpty,
   isListOperator,
-  isTextOperator,
   moveColumn,
   needsValue,
+  rangeFilter,
   optionLabel,
   poof,
   removeFilter,
@@ -41,7 +42,9 @@ import {
   setSelected,
   setWidth,
   showColumn,
+  sortLevels,
   sortPriority,
+  toBoolean,
   toCsv,
   toDelimitedText,
   toggleSelection,
@@ -72,6 +75,7 @@ import {
   type SelectOption,
   type SelectionInput,
   type ServerSource,
+  type Sort,
   type SortOptions,
   type TableSlots,
   type TableState,
@@ -228,6 +232,10 @@ export type TableOptions<TRow extends AnyRow = AnyRow> = {
    * prevented, so hand the URL to your router for a client-side navigation.
    * A click with a modifier held, or with the middle button, is left to the
    * browser. The framework-neutral counterpart of React's `linkComponent`.
+   *
+   * One modified click is the table's: a shift-click on a sortable header,
+   * which adds that column to the sort. It fires this with the URL of that
+   * view, since no link on the page points at it.
    */
   onNavigate?: (href: string, event: MouseEvent) => void
 
@@ -404,7 +412,10 @@ export function createTable<TRow extends AnyRow>(
           update(setSearch(state, searchInput?.value ?? ""))
         }
         if (event.key === "Escape" && searchInput?.value) {
+          // Stopped and prevented: a native dialog closes on the key's default
+          // action, which stopping its propagation does not touch.
           event.stopPropagation()
+          event.preventDefault()
           clearTimeout(searchTimer)
           searchInput.value = ""
           update(setSearch(state, ""))
@@ -584,10 +595,19 @@ export function createTable<TRow extends AnyRow>(
         sortResetControl = routed(el("a", { href, ...attributes }, [icon("reset")]))
       } else {
         const button = el("button", { type: "button", ...attributes }, [icon("reset")])
-        // Read when it is pressed: the resting sort is the caller's to change.
-        button.addEventListener("click", () =>
-          update(resetSort(state, resolveSorting(settings.sortable)?.reset ?? [])),
-        )
+        button.addEventListener("click", () => {
+          /*
+            Pressing it takes it off the screen, and focus with it. For someone
+            working the keyboard that is being dropped at the top of the
+            document, so focus is handed to the control beside it first. A
+            mouse has no such problem, and would only be puzzled by the search
+            box lighting up.
+          */
+          const next = isKeyboardFocused(button) ? controlAfter(button) : undefined
+          // Read when it is pressed: the resting sort is the caller's to change.
+          update(resetSort(state, resolveSorting(settings.sortable)?.reset ?? []))
+          next?.focus()
+        })
         sortResetControl = button
       }
     } else if (href !== undefined) {
@@ -832,6 +852,9 @@ export function createTable<TRow extends AnyRow>(
         renderedSelectable = selectable
       }
 
+      // Nothing in the header is rebuilt by this, only brought up to date: a
+      // link in it carries the whole state, and the page has just changed.
+      renderHeader(columns, cls, selectionMode)
       syncSelection()
       renderPagination(pagination, total, pageCount, rows.length)
       void hidden
@@ -1244,6 +1267,14 @@ export function createTable<TRow extends AnyRow>(
   const headerParts = new WeakMap<HTMLElement, HeaderParts>()
   /** The columns the header was last drawn from, for handlers that run long after. */
   let headerColumns: ResolvedColumn<TRow, Node | string>[] = []
+  /** The sort levels those columns can speak for — see `sortLevels`. */
+  let headerLevels: Sort[] = []
+  /**
+   * True for the one render that follows a state handed in through
+   * `setOptions` — by a wrapper, from a URL or a parent — as distinct from a
+   * change the table made itself. An open search box needs to know which.
+   */
+  let stateHandedIn = false
   let selectionCell: { mode: "single" | "multiple"; cell: HTMLElement } | undefined
 
   /**
@@ -1266,6 +1297,9 @@ export function createTable<TRow extends AnyRow>(
     selectionMode: "single" | "multiple" | undefined,
   ) {
     headerColumns = columns
+    // The levels that really order the rows, which is what the headers number:
+    // not one on a column hidden since, or named twice in a link.
+    headerLevels = sortLevels(state.sort, columns)
     headerRow.className = cls("headerRow")
 
     const cells: HTMLElement[] = []
@@ -1284,6 +1318,7 @@ export function createTable<TRow extends AnyRow>(
     // be open over.
     if (headerSearch && !columns.some((column) => column.key === headerSearch?.key)) {
       clearTimeout(headerSearch.timer)
+      headerSearch.dispose()
       headerSearch = undefined
     }
 
@@ -1311,15 +1346,43 @@ export function createTable<TRow extends AnyRow>(
 
     placeHeaderCells(cells)
 
-    if (headerSearch) {
-      // The search can change from outside while its box is open — its chip
-      // removed, the back button pressed — and the box has to follow.
-      const text = columnSearchText(state, headerSearch.key)
-      if (text !== headerSearch.committed) {
-        headerSearch.committed = text
-        headerSearch.input.value = text
-      }
+    const open = headerSearch
+    if (!open) return
+
+    /*
+      The state's word on what the column is searched for, and what to make of
+      it when it is not what the box last asked for.
+
+      Usually that is somebody else's doing — the chip removed, the back button
+      pressed — and the box follows. But a wrapper whose state is held
+      elsewhere, in a URL or a parent component, hands it back late: by the
+      time "ada" comes back the box may have been emptied, and taking the late
+      answer as news would undo the Escape that emptied it. So a state handed
+      in from outside that says something this box sent earlier is not
+      followed; it is answered with what is wanted now.
+    */
+    const text = columnSearchText(state, open.key)
+    const handedIn = stateHandedIn
+
+    if (text === open.committed) {
+      // The answer to the latest thing asked: nothing earlier is still on its way.
+      if (handedIn) open.sent = []
+      return
     }
+
+    if (handedIn && open.sent.includes(text)) {
+      open.sent = open.sent.filter((earlier) => earlier !== text)
+      const wanted = open.committed
+      // After this render, not inside it.
+      setTimeout(() => {
+        if (headerSearch === open) update(setColumnSearch(state, open.key, wanted))
+      }, 0)
+      return
+    }
+
+    open.committed = text
+    open.sent = []
+    open.input.value = text
   }
 
   /**
@@ -1367,6 +1430,11 @@ export function createTable<TRow extends AnyRow>(
    * wrappers: a Vue template writes `:get-row-id="(row) => row.id"` inline,
    * which is a new function on every render of the parent, and if that rebuilt
    * the header then every sort would drop the focus of the header just sorted.
+   *
+   * Nor does it include the column's widths, which `syncHeaderCell` writes. A
+   * column is resized by dragging a handle inside its own header cell: if a
+   * new width rebuilt the cell, the first movement of the drag would throw
+   * away the handle being dragged, and the rest of the drag with it.
    */
   function headerSignature(
     column: ResolvedColumn<TRow, Node | string>,
@@ -1382,9 +1450,6 @@ export function createTable<TRow extends AnyRow>(
       column.align,
       column.pin ?? null,
       isPinEdge(columns, column.key),
-      column.width ?? null,
-      column.minWidth ?? null,
-      column.maxWidth ?? null,
       sorting !== undefined && column.sortable,
       Boolean(settings.buildHref),
       settings.columnMenu !== false,
@@ -1479,24 +1544,36 @@ export function createTable<TRow extends AnyRow>(
 
     if (sortable) {
       /*
-        A shift-click adds a level instead of replacing the sort. On a link it
-        is caught before the browser can answer it with a new window, and
-        turned into the change of state it means — which the caller's
-        `onStateChange` turns into a URL, as it does for every control that is
-        not a link. A plain click on a link is the link's, and `routed` has it.
+        A shift-click adds a level instead of replacing the sort. A plain click
+        on a link is the link's, and `routed` has it.
+
+        A shift-click on a link is caught before the browser can answer it
+        with a new window, and sent where it means to go. A table whose
+        controls are links keeps its view in an address, so that is the
+        address of the view with this column added to the sort: by the
+        caller's router when it gave one, and by the browser when nothing at
+        all is listening — the table with no script wired up. In between, a
+        caller that listens for state is already turning state into addresses,
+        and is left to.
       */
       label.addEventListener("click", (event) => {
         const additive =
           event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey && event.button === 0 &&
           resolveSorting(settings.sortable)?.multiple === true
 
-        if (settings.buildHref) {
-          if (!additive) return
-          event.preventDefault()
-          event.stopImmediatePropagation()
+        if (!settings.buildHref) {
+          update(toggleSort(state, key, additive))
+          return
         }
 
-        update(toggleSort(state, key, additive))
+        if (!additive) return
+        event.preventDefault()
+        event.stopImmediatePropagation()
+
+        const next = toggleSort(state, key, true)
+        if (settings.onNavigate) settings.onNavigate(settings.buildHref(next), event)
+        else if (settings.onStateChange) update(next)
+        else window.location.assign(settings.buildHref(next))
       })
 
       // A shift-click also stretches the page's text selection to wherever
@@ -1545,10 +1622,20 @@ export function createTable<TRow extends AnyRow>(
     if (!parts) return
 
     const key = column.key
-    const sort = state.sort.find((entry) => entry.key === key)
-    const priority = sortPriority(state.sort, key)
+    const sort = headerLevels.find((entry) => entry.key === key)
+    const priority = sortPriority(headerLevels, key)
 
     cell.setAttribute("aria-sort", sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none")
+
+    // Written only when it differs, so a cell built a moment ago — which set
+    // these itself — is left exactly as it was.
+    const size = (property: "width" | "minWidth" | "maxWidth", pixels: number | undefined) => {
+      const wanted = pixels ? `${String(pixels)}px` : ""
+      if (cell.style[property] !== wanted) cell.style[property] = wanted
+    }
+    size("width", column.width)
+    size("minWidth", column.minWidth)
+    size("maxWidth", column.maxWidth)
 
     if (state.filters.some((entry) => entry.key === key)) cell.dataset["filtered"] = "true"
     else delete cell.dataset["filtered"]
@@ -1607,7 +1694,11 @@ export function createTable<TRow extends AnyRow>(
         input: HTMLInputElement
         /** What the table has been told, so that the same text is not told to it twice. */
         committed: string
+        /** Searches sent before that one, which a table whose state lives elsewhere may yet report back. */
+        sent: string[]
         timer: ReturnType<typeof setTimeout> | undefined
+        /** Takes away what the box was listening for outside itself. */
+        dispose: () => void
       }
     | undefined
 
@@ -1641,7 +1732,27 @@ export function createTable<TRow extends AnyRow>(
       clear,
     ])
 
-    const open = { key, cell, input, committed: text, timer: undefined as ReturnType<typeof setTimeout> | undefined }
+    /*
+      Whether the pointer is being pressed somewhere outside the box. A press
+      is the first half of a click, and it is also what takes the focus away —
+      see the `focusout` handler for why the two have to be told apart.
+    */
+    let pressedOutside = false
+    const page = currentDocument()
+    const onPress = (event: Event) => {
+      pressedOutside = !(event.target instanceof Node && box.contains(event.target))
+    }
+    page.addEventListener("pointerdown", onPress, true)
+
+    const open: NonNullable<typeof headerSearch> = {
+      key,
+      cell,
+      input,
+      committed: text,
+      sent: [],
+      timer: undefined,
+      dispose: () => page.removeEventListener("pointerdown", onPress, true),
+    }
     headerSearch = open
 
     /** Tells the table what has been typed, unless it already knows. */
@@ -1650,17 +1761,40 @@ export function createTable<TRow extends AnyRow>(
       const query = input.value.trim()
       if (query === open.committed) return
       open.committed = query
+      open.sent.push(query)
       update(setColumnSearch(state, key, query))
     }
 
-    // Typing is local until it settles, the same way the toolbar's search is:
-    // the wait belongs to a person typing, not to the table.
-    input.addEventListener("input", () => {
+    const schedule = () => {
       clearTimeout(open.timer)
       open.timer = setTimeout(commit, resolveHeaderSearch(settings.headerSearch).debounce)
+    }
+
+    // Typing is local until it settles, the same way the toolbar's search is:
+    // the wait belongs to a person typing, not to the table. Half a composed
+    // character is not something to search for, so an input method is waited
+    // out as well.
+    input.addEventListener("input", (event) => {
+      if (event instanceof InputEvent && event.isComposing) clearTimeout(open.timer)
+      else schedule()
+    })
+    input.addEventListener("compositionend", schedule)
+
+    /*
+      A press anywhere in the box but the text keeps the focus where it is.
+      Safari does not focus a button that is clicked, so without this a press
+      on the clear button reads as focus leaving — the box would keep the
+      search and close before the click that was meant to clear it arrived.
+    */
+    box.addEventListener("mousedown", (event) => {
+      if (event.target !== input) event.preventDefault()
     })
 
     input.addEventListener("keydown", (event) => {
+      // The Enter that confirms a composed character belongs to the input
+      // method, not to the box. Safari reports it as an ordinary key.
+      if (event.isComposing || event.keyCode === 229) return
+
       if (event.key === "Enter") {
         // Prevented, or the key carries on to wherever focus lands. Focus goes
         // back to the magnifier, and Enter on a button presses it: the box
@@ -1671,9 +1805,12 @@ export function createTable<TRow extends AnyRow>(
       }
 
       if (event.key === "Escape") {
-        // Handled here either way, so a dialog the table sits in does not
-        // close because somebody dismissed a search box.
+        // Handled here either way, so whatever the table sits in does not
+        // close because somebody dismissed a search box. Stopped *and*
+        // prevented: a native dialog closes on the key's default action,
+        // which stopping its propagation does nothing about.
         event.stopPropagation()
+        event.preventDefault()
 
         // Empties a box with something in it and closes one without — the
         // same two steps the toolbar's search takes.
@@ -1702,6 +1839,30 @@ export function createTable<TRow extends AnyRow>(
       // be typing when they come back.
       if (!currentDocument().hasFocus()) return
 
+      /*
+        Focus left because something else was pressed, and what was typed has
+        not been applied yet. Applying it now would rebuild the rows — and the
+        chips, and the pagination — between the press and its release, and a
+        click whose two halves land on different elements is a click that
+        never happens: the box would have eaten it. So the box closes now,
+        which touches nothing but its own header, and the search is applied
+        once the click has had its turn.
+      */
+      if (pressedOutside && input.value.trim() !== open.committed) {
+        const typed = input.value
+        closeHeaderSearch(false)
+
+        const finish = () => {
+          page.removeEventListener("pointerup", finish, true)
+          page.removeEventListener("pointercancel", finish, true)
+          // A turn later, so the click that follows the release goes first.
+          setTimeout(() => update(setColumnSearch(state, key, typed)), 0)
+        }
+        page.addEventListener("pointerup", finish, true)
+        page.addEventListener("pointercancel", finish, true)
+        return
+      }
+
       commit()
       closeHeaderSearch(false)
     })
@@ -1729,6 +1890,7 @@ export function createTable<TRow extends AnyRow>(
 
     headerSearch = undefined
     clearTimeout(open.timer)
+    open.dispose()
 
     const column = headerColumns.find((entry) => entry.key === open.key)
     if (!column || headerCells.get(open.key) !== open.cell) return
@@ -1884,18 +2046,21 @@ export function createTable<TRow extends AnyRow>(
        * An action that changes the view: a link when the table has URLs, a
        * button otherwise — the same choice the React adapter makes.
        */
-      const action = (label: string, next: TableState, glyph: Node | null) =>
+      const action = (label: string, next: (current: TableState) => TableState, glyph: Node | null) =>
         settings.buildHref
-          ? routed(menuLink(label, settings.buildHref(next), { icon: glyph }))
+          ? routed(menuLink(label, settings.buildHref(next(state)), { icon: glyph }))
           : menuItem(label, () => {
-              update(next)
+              // From the state as it is when the item is chosen, not as it was
+              // when the menu opened: a set filter ticked in this same menu
+              // has changed it since, and must not be undone by sorting.
+              update(next(state))
               close()
             }, { icon: glyph })
 
       if (sorting && column.sortable) {
         items.push(
-          action("Sort ascending", { ...state, sort: [{ key: column.key, direction: "asc" }], page: 1 }, icon("sortAscending")),
-          action("Sort descending", { ...state, sort: [{ key: column.key, direction: "desc" }], page: 1 }, icon("sortDescending")),
+          action("Sort ascending", (current) => ({ ...current, sort: [{ key: column.key, direction: "asc" }], page: 1 }), icon("sortAscending")),
+          action("Sort descending", (current) => ({ ...current, sort: [{ key: column.key, direction: "desc" }], page: 1 }), icon("sortDescending")),
         )
 
         /*
@@ -1906,15 +2071,15 @@ export function createTable<TRow extends AnyRow>(
         */
         if (sorting.multiple && state.sort.some((entry) => entry.key !== column.key)) {
           items.push(
-            action("Then sort ascending", addSort(state, column.key, "asc"), icon("sortAscending")),
-            action("Then sort descending", addSort(state, column.key, "desc"), icon("sortDescending")),
+            action("Then sort ascending", (current) => addSort(current, column.key, "asc"), icon("sortAscending")),
+            action("Then sort descending", (current) => addSort(current, column.key, "desc"), icon("sortDescending")),
           )
         }
 
         items.push(
           // This column's level only: the others are somebody's deliberate
           // choice, and the reset is there for all of them.
-          sort ? action("Clear sort", removeSort(state, column.key), icon("close")) : null,
+          sort ? action("Clear sort", (current) => removeSort(current, column.key), icon("close")) : null,
           menuSeparator(),
         )
       }
@@ -1924,7 +2089,7 @@ export function createTable<TRow extends AnyRow>(
           filterControl(column, filter, (next) => {
             update(setFilter(state, next))
             if (column.filterKind !== "set") close()
-          }, () => update(removeFilter(state, column.key))),
+          }, () => update(removeFilter(state, column.key)), close),
           menuSeparator(),
         )
       }
@@ -1951,7 +2116,7 @@ export function createTable<TRow extends AnyRow>(
           },
           { icon: icon("pin") },
         ),
-        action("Hide column", hideColumn(state, column.key), icon("eyeOff")),
+        action("Hide column", (current) => hideColumn(current, column.key), icon("eyeOff")),
       )
 
       return items
@@ -1964,6 +2129,8 @@ export function createTable<TRow extends AnyRow>(
     filter: ColumnFilter | undefined,
     onApply: (filter: ColumnFilter) => void,
     onClear: () => void,
+    /** Called after the control's own "Clear" button, for a panel that should close behind it. */
+    onDone: () => void,
   ): HTMLElement {
     const wrap = el("div", { class: "tpz-filter" })
 
@@ -2108,7 +2275,10 @@ export function createTable<TRow extends AnyRow>(
       wrap.append(list, note)
       if (filter) {
         const clear = el("button", { type: "button", class: "tpz-btn", text: "Clear" })
-        clear.addEventListener("click", onClear)
+        clear.addEventListener("click", () => {
+          onClear()
+          onDone()
+        })
         wrap.append(el("div", { class: "tpz-filter-actions" }, [clear]))
       }
       return wrap
@@ -2143,7 +2313,8 @@ export function createTable<TRow extends AnyRow>(
 
     const operators = el("select", { class: "tpz-input", "aria-label": `How to filter ${column.header}` }) as HTMLSelectElement
     for (const operator of offered) {
-      operators.append(el("option", { value: operator, text: OPERATOR_LABELS[operator] }))
+      // An operator nobody defined can still arrive in a link; it is shown as written.
+      operators.append(el("option", { value: operator, text: OPERATOR_LABELS[operator] ?? operator }))
     }
     operators.value = filter?.operator ?? column.operators[0] ?? "contains"
 
@@ -2178,6 +2349,13 @@ export function createTable<TRow extends AnyRow>(
         onApply({ key: column.key, operator })
         return
       }
+      if (operator === "between") {
+        // One end filled in is "at least" or "at most"; neither is no filter.
+        const range = rangeFilter(column.key, value.value, second.value)
+        if (range) onApply(range)
+        else onClear()
+        return
+      }
       if (value.value.trim() === "") {
         onClear()
         return
@@ -2185,12 +2363,9 @@ export function createTable<TRow extends AnyRow>(
       onApply({
         key: column.key,
         operator,
-        value:
-          operator === "between"
-            ? [value.value.trim(), second.value.trim()]
-            : isListOperator(operator)
-              ? value.value.split(",").map((entry) => entry.trim()).filter(Boolean)
-              : value.value.trim(),
+        value: isListOperator(operator)
+          ? value.value.split(",").map((entry) => entry.trim()).filter(Boolean)
+          : value.value.trim(),
       })
     }
 
@@ -2206,39 +2381,48 @@ export function createTable<TRow extends AnyRow>(
     const actions = el("div", { class: "tpz-filter-actions" }, [button])
     if (filter) {
       const clear = el("button", { type: "button", class: "tpz-btn", text: "Clear" })
-      clear.addEventListener("click", onClear)
+      clear.addEventListener("click", () => {
+        onClear()
+        onDone()
+      })
       actions.append(clear)
     }
 
     /**
      * Lays the panel out for the operator chosen: no box for "is empty", two
-     * for "is between", and a plain text box for the operators that ask about
-     * what the cell says — a date picker cannot hold "Aug", and a number box
-     * cannot hold "1,2".
+     * for "is between", and the kind of box the core says the value needs — a
+     * date picker cannot hold "Aug", and a number box cannot hold "1,2" or a
+     * time of day.
      */
     const arrange = () => {
       const operator = operators.value as FilterOperator
-      const type = isTextOperator(operator)
-        ? "text"
-        : column.filterKind === "date"
-          ? "date"
-          : column.filterKind === "range"
-            ? "number"
-            : "text"
+      const type = filterInputType(column, operator)
 
       for (const input of [value, second]) input.setAttribute("type", type)
       if (type === "number") value.setAttribute("inputmode", "decimal")
       else value.removeAttribute("inputmode")
       value.setAttribute("placeholder", isListOperator(operator) ? "Separate with commas" : "Value")
 
-      fill(wrap, [
-        operators,
-        needsValue(operator) ? value : null,
-        operator === "between" ? second : null,
-        actions,
-      ])
+      /*
+        The boxes come and go around the operator list; the list itself is
+        never moved. Taking it out of the document and putting it back would
+        drop its focus — and a closed list changes its value on every arrow
+        key, so a keyboard would be thrown out of the panel one option in.
+      */
+      if (needsValue(operator)) {
+        if (value.parentNode !== wrap) operators.after(value)
+      } else {
+        value.remove()
+      }
+
+      if (operator === "between") {
+        if (second.parentNode !== wrap) value.after(second)
+      } else {
+        second.remove()
+      }
     }
 
+    wrap.append(operators, actions)
     operators.addEventListener("change", arrange)
     arrange()
     return wrap
@@ -2574,7 +2758,10 @@ export function createTable<TRow extends AnyRow>(
         rather than being reapplied on every call and undoing what the user
         just did with the page-size picker.
       */
-      if (next.state && next.state !== previous.state) state = { ...state, ...next.state }
+      if (next.state && next.state !== previous.state) {
+        state = { ...state, ...next.state }
+        stateHandedIn = true
+      }
 
       const pageSize = paginationOf(settings)?.pageSize
       if (pageSize !== undefined && pageSize !== paginationOf(previous)?.pageSize) {
@@ -2585,6 +2772,7 @@ export function createTable<TRow extends AnyRow>(
 
       buildToolbar()
       render()
+      stateHandedIn = false
     },
     getState: () => state,
     setState(partial) {
@@ -2597,6 +2785,7 @@ export function createTable<TRow extends AnyRow>(
       observer?.disconnect()
       clearTimeout(searchTimer)
       clearTimeout(headerSearch?.timer)
+      headerSearch?.dispose()
       headerSearch = undefined
       closeMenu()
       root.remove()
@@ -2674,6 +2863,27 @@ const PASSIVE_OPTIONS: ReadonlySet<string> = new Set([
   // hands over a fresh function on every change, so identity means nothing here.
   "onRowClick",
 ])
+
+/** Whether an element has the kind of focus a keyboard gives, as far as the browser will say. */
+function isKeyboardFocused(element: Element): boolean {
+  try {
+    return element.matches(":focus-visible")
+  } catch {
+    // An engine that does not know the selector cannot tell, and then nothing is moved.
+    return false
+  }
+}
+
+/** The next control along in the same group that can take focus. */
+function controlAfter(element: Element): HTMLElement | undefined {
+  const focusable = "button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]"
+
+  for (let sibling = element.nextElementSibling; sibling; sibling = sibling.nextElementSibling) {
+    const control = sibling.matches(focusable) ? sibling : sibling.querySelector(focusable)
+    if (control instanceof HTMLElement) return control
+  }
+  return undefined
+}
 
 /** The keys whose value is not the one already held, compared by identity. */
 function changedKeys<T extends object>(next: Partial<T>, previous: T): string[] {
@@ -2764,11 +2974,15 @@ function renderCell<TRow extends AnyRow>(
   }
 
   switch (column.type) {
-    case "boolean":
-      return el("span", { class: value ? "tpz-boolean-true" : "tpz-boolean-false" }, [
-        icon(value ? "check" : "minus"),
-        el("span", { class: "tpz-sr", text: value ? "Yes" : "No" }),
+    case "boolean": {
+      // Read the way the type reads it, so a "false" out of a CSV is a No here
+      // as it is in the sort and the filter.
+      const yes = toBoolean(value)
+      return el("span", { class: yes ? "tpz-boolean-true" : "tpz-boolean-false" }, [
+        icon(yes ? "check" : "minus"),
+        el("span", { class: "tpz-sr", text: yes ? "Yes" : "No" }),
       ])
+    }
 
     case "url": {
       const href = String(value)

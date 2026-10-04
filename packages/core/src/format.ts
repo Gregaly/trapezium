@@ -319,6 +319,22 @@ export function toNumber(value: unknown): number | undefined {
   return undefined
 }
 
+/**
+ * Whatever a row holds, as a yes or a no.
+ *
+ * Booleans arrive as booleans, as 0 and 1 out of SQLite, and as the words
+ * "true" and "false" out of a CSV or a query string — which is also how a
+ * filter's value always arrives, because it was chosen from a list or read out
+ * of a URL. `Boolean("false")` is `true`, since any text is truthy, and that
+ * one line is how a filter for "No" comes to show every row that says "Yes".
+ */
+export function toBoolean(value: unknown): boolean {
+  if (typeof value !== "string") return Boolean(value)
+
+  const word = value.trim().toLowerCase()
+  return !(word === "" || word === "false" || word === "0" || word === "no" || word === "n" || word === "off" || word === "f")
+}
+
 /** A safe `String()` for values that may be objects, used as the last resort. */
 export function toText(value: unknown, context: FormatContext): string {
   if (isEmpty(value)) return ""

@@ -177,6 +177,40 @@ describe("a shift-click adds a level", () => {
   })
 })
 
+describe("which levels a header speaks for", () => {
+  it("does not count a level on a column that is hidden", () => {
+    setup({
+      state: {
+        hidden: ["team"],
+        sort: [
+          { key: "team", direction: "asc" },
+          { key: "level", direction: "desc" },
+        ],
+      },
+    })
+
+    expect(order("level")).toBeNull()
+    expect(sorted("level")).toBe("descending")
+  })
+
+  it("does not count a column named twice in a link", () => {
+    setup({ state: stateFromUrl("sort=name:asc,name:desc") })
+
+    expect(order("name")).toBeNull()
+    expect(sorted("name")).toBe("ascending")
+  })
+
+  it("does not show a column as sorted when it cannot be", () => {
+    setup({
+      columns: [{ key: "name" }, { key: "team", sortable: false }, { key: "level" }],
+      state: { sort: [{ key: "team", direction: "asc" }, { key: "name", direction: "desc" }] },
+    })
+
+    expect(sorted("team")).toBe("none")
+    expect(order("name")).toBeNull()
+  })
+})
+
 describe("a table that sorts by one column only", () => {
   it("treats a shift-click as a click", () => {
     setup({ sortable: { multiple: false } })
@@ -229,6 +263,25 @@ describe("adding a level without a shift key", () => {
     menuItem(openMenu("team"), "Clear sort")?.click()
 
     expect([sorted("team"), sorted("name")]).toEqual(["none", "descending"])
+  })
+
+  it("uses the state as it is when an item is chosen, not as it was when the menu opened", () => {
+    const table = setup({ columns: ["name", { key: "team", filter: "set" }, "level"], state: { sort: [{ key: "name", direction: "asc" }] } })
+
+    // Tick a choice in the menu's own set filter, which leaves the menu open…
+    const panel = openMenu("team")
+    const eng = [...panel.querySelectorAll<HTMLElement>(".tpz-filter-option")].find((option) => option.textContent === "Eng")
+    eng?.querySelector<HTMLInputElement>("input")?.click()
+    expect(table.getState().filters).toEqual([{ key: "team", operator: "eq", value: "Eng" }])
+
+    // …then add a sort level from the same menu. The filter must still be there.
+    menuItem(panel, "Then sort descending")?.click()
+
+    expect(table.getState().filters).toEqual([{ key: "team", operator: "eq", value: "Eng" }])
+    expect(table.getState().sort).toEqual([
+      { key: "name", direction: "asc" },
+      { key: "team", direction: "desc" },
+    ])
   })
 
   it("uses the columns as they are now, not as they were when the header was drawn", () => {
@@ -439,17 +492,66 @@ describe("when the controls are links", () => {
 
   it("turns a shift-click on a header link into a change of state, not a new window", () => {
     const onStateChange = vi.fn<(state: TableState) => void>()
+    setup({ buildHref: href, onStateChange, state: { sort: [{ key: "team", direction: "asc" }] } })
+
+    const allowed = click(sortControl("name"), { shiftKey: true })
+
+    // Prevented, so the browser opens nothing; the caller hears about the
+    // state, which is where it turns state into an address.
+    expect(allowed).toBe(false)
+    expect(onStateChange.mock.calls.at(-1)?.[0].sort).toEqual([
+      { key: "team", direction: "asc" },
+      { key: "name", direction: "asc" },
+    ])
+  })
+
+  it("sends a shift-click to the router when there is one, with the address of the added level", () => {
+    const onStateChange = vi.fn()
     const onNavigate = vi.fn()
     setup({ buildHref: href, onNavigate, onStateChange, state: { sort: [{ key: "team", direction: "asc" }] } })
 
     const allowed = click(sortControl("name"), { shiftKey: true })
 
     expect(allowed).toBe(false)
-    expect(onNavigate).not.toHaveBeenCalled()
-    expect(onStateChange.mock.calls.at(-1)?.[0].sort).toEqual([
+    // Not the link's own address, which would replace the sort: the one that adds to it.
+    expect(onNavigate).toHaveBeenCalledTimes(1)
+    expect(stateFromUrl(String(onNavigate.mock.calls[0]?.[0]).split("?")[1] ?? "").sort).toEqual([
       { key: "team", direction: "asc" },
       { key: "name", direction: "asc" },
     ])
+    // One or the other: a caller that wired both must not be sent there twice.
+    expect(onStateChange).not.toHaveBeenCalled()
+  })
+
+  it("goes to the address itself when nothing is listening at all", () => {
+    // The table with no script wired up, once its script has loaded. (A
+    // fragment, because that is the one kind of navigation jsdom performs.)
+    const before = window.location.hash
+    setup({
+      buildHref: (state) => `#${applyStateToUrl("", state).replace(/^\?/, "")}`,
+      state: { sort: [{ key: "team", direction: "asc" }] },
+    })
+
+    const allowed = click(sortControl("name"), { shiftKey: true })
+
+    expect(allowed).toBe(false)
+    expect(stateFromUrl(window.location.hash.slice(1)).sort).toEqual([
+      { key: "team", direction: "asc" },
+      { key: "name", direction: "asc" },
+    ])
+    window.location.hash = before
+  })
+
+  it("keeps a header link's address current when only the selection moved", () => {
+    // A selection takes the cheap path, which rebuilds nothing — and a link
+    // that carries the whole state must not be left pointing at the old one.
+    const table = setup({
+      selection: true,
+      buildHref: (state) => `/staff?sel=${state.selection.join(".")}&sort=${state.sort.map((level) => level.key).join(".")}`,
+    })
+
+    table.setState({ selection: ["2", "4"] })
+    expect(sortControl("name").getAttribute("href")).toBe("/staff?sel=2.4&sort=name")
   })
 
   it("still hands a plain click on a header link to the router, and changes nothing itself", () => {
@@ -571,15 +673,60 @@ describe("the header stays put under the person using it", () => {
     expect(header("name").querySelector(".tpz-th-label")?.textContent).toBe("Full name")
   })
 
-  it("rebuilds the cells that changed width or pin, and no others", () => {
+  it("changes a column's width on the cell it has, and takes it away again", () => {
+    const table = setup()
+    const name = header("name")
+
+    table.setState({ widths: { name: 240 } })
+    expect(header("name")).toBe(name)
+    expect(name.style.width).toBe("240px")
+
+    table.setState({ widths: {} })
+    expect(header("name")).toBe(name)
+    expect(name.style.width).toBe("")
+  })
+
+  it("applies every movement of a drag on the resize handle, not only the first", () => {
+    /*
+      The handle lives in the header cell it resizes. When a new width rebuilt
+      that cell, the first movement threw the handle away and the drag went
+      nowhere after it.
+    */
+    const table = setup()
+    const cell = header("team")
+    const handle = cell.querySelector<HTMLElement>(".tpz-resizer")
+    if (!handle) throw new Error("no resize handle")
+
+    // jsdom has no layout: say how wide the cell is, and let capture be a no-op.
+    cell.getBoundingClientRect = () => ({ width: 180 }) as DOMRect
+    handle.setPointerCapture = () => {}
+    handle.releasePointerCapture = () => {}
+
+    const pointer = (type: string, clientX: number) =>
+      handle.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, clientX }))
+
+    pointer("pointerdown", 100)
+    for (const x of [112, 130, 155, 190, 220]) pointer("pointermove", x)
+
+    expect(table.getState().widths["team"]).toBe(300)
+    // Still the same cell and the same handle, so the drag is still attached.
+    expect(header("team")).toBe(cell)
+    expect(handle.isConnected).toBe(true)
+
+    pointer("pointerup", 220)
+    pointer("pointermove", 400)
+    expect(table.getState().widths["team"]).toBe(300)
+  })
+
+  it("rebuilds a cell that is pinned, and no others", () => {
     const table = setup()
     const name = header("name")
     const team = header("team")
 
-    table.setState({ widths: { name: 240 } })
+    table.setState({ pinned: { name: "start" } })
 
     expect(header("name")).not.toBe(name)
-    expect(header("name").style.width).toBe("240px")
+    expect(header("name").dataset["pin"]).toBe("start")
     expect(header("team")).toBe(team)
   })
 

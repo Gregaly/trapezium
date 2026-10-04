@@ -174,9 +174,50 @@ function SortReset({
     children: <Icon name="reset" />,
   }
 
-  if (!reset.href) return <button type="button" {...props} onClick={reset.onReset} />
+  if (!reset.href) {
+    return (
+      <button
+        type="button"
+        {...props}
+        onClick={(event) => {
+          /*
+            Pressing it takes it off the screen, and focus with it. For someone
+            working the keyboard that is being dropped at the top of the
+            document, so focus is handed to the control beside it first. A
+            mouse has no such problem, and would only be puzzled by the search
+            box lighting up.
+          */
+          const next = isKeyboardFocused(event.currentTarget) ? controlAfter(event.currentTarget) : undefined
+          reset.onReset()
+          next?.focus()
+        }}
+      />
+    )
+  }
+
   if (Link) return <Link href={reset.href} {...props} />
   return <a href={reset.href} {...props} onClick={routeClick(reset.href, onNavigate)} />
+}
+
+/** Whether an element has the kind of focus a keyboard gives, as far as the browser will say. */
+function isKeyboardFocused(element: Element): boolean {
+  try {
+    return element.matches(":focus-visible")
+  } catch {
+    // An engine that does not know the selector cannot tell, and then nothing is moved.
+    return false
+  }
+}
+
+/** The next control along in the same group that can take focus. */
+function controlAfter(element: Element): HTMLElement | undefined {
+  const focusable = "button:not([disabled]), input:not([disabled]), select:not([disabled]), a[href]"
+
+  for (let sibling = element.nextElementSibling; sibling; sibling = sibling.nextElementSibling) {
+    const control = sibling.matches(focusable) ? sibling : sibling.querySelector(focusable)
+    if (control instanceof HTMLElement) return control
+  }
+  return undefined
 }
 
 /**
@@ -238,7 +279,10 @@ function SearchBox({
             commit(value)
           }
           if (event.key === "Escape" && value !== "") {
+            // Stopped and prevented: a native dialog closes on the key's
+            // default action, which stopping its propagation does not touch.
             event.stopPropagation()
+            event.preventDefault()
             setValue("")
             clearTimeout(timer.current)
             commit("")

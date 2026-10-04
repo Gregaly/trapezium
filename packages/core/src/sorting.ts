@@ -1,4 +1,4 @@
-import type { ResolvedSorting, Sort, SortInput } from "./types.js"
+import type { ResolvedColumn, ResolvedSorting, Sort, SortInput } from "./types.js"
 
 /**
  * Sorting, read the same way by every adapter.
@@ -42,6 +42,32 @@ export function sortsEqual(a: readonly Sort[], b: readonly Sort[]): boolean {
 export function canResetSort(sort: readonly Sort[], sorting: ResolvedSorting | undefined): boolean {
   if (!sorting?.reset) return false
   return !sortsEqual(sort, sorting.reset)
+}
+
+/**
+ * The levels of a sort that a table's headers can speak for.
+ *
+ * State is the caller's, and a link can say anything: a level on a column that
+ * has since been hidden, one on a column that cannot be sorted, the same
+ * column twice. None of those order the rows — the pipeline skips them — so
+ * none of them should be counted when a header says which level it is. Left
+ * in, the one sorted column on screen announces itself as level two of a sort
+ * nobody can see the first level of.
+ *
+ * `columns` are the visible ones. The order of the levels is kept.
+ */
+export function sortLevels<TRow, TNode>(
+  sort: readonly Sort[],
+  columns: readonly ResolvedColumn<TRow, TNode>[],
+): Sort[] {
+  const sortable = new Set(columns.filter((column) => column.sortable).map((column) => column.key))
+  const seen = new Set<string>()
+
+  return sort.filter((level) => {
+    if (!sortable.has(level.key) || seen.has(level.key)) return false
+    seen.add(level.key)
+    return true
+  })
 }
 
 /**

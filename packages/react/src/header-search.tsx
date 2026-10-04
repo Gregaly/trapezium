@@ -88,16 +88,44 @@ export function HeaderSearchBox({
   onClose: (returnFocus: boolean) => void
 }) {
   const [value, setValue] = useState(text)
+  const input = useRef<HTMLInputElement | null>(null)
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const committed = useRef(text)
 
-  // The search can change from outside while the box is open — its chip
-  // removed, the back button pressed — and the box has to follow when it does.
+  /** The search this box wants: the last thing it told the table. */
+  const wanted = useRef(text)
+  /** Searches it sent before that one, which a table whose state lives elsewhere may yet report back. */
+  const sent = useRef<string[]>([])
+  /** True while an input method is still composing a character. */
+  const composing = useRef(false)
+
+  /*
+    The table's word on what the column is searched for, and what to make of it
+    when it is not what this box last asked for.
+
+    Usually that is somebody else's doing — the chip removed, the back button
+    pressed — and the box follows. But a table whose state is held elsewhere,
+    in a URL, answers late: by the time "ada" comes back the box may have been
+    emptied, and taking the late answer as news would undo the Escape that
+    emptied it. So an answer the box recognises as its own, from earlier, is
+    not followed; it is answered with what is wanted now.
+  */
   useEffect(() => {
-    if (text !== committed.current) {
-      committed.current = text
-      setValue(text)
+    if (text === wanted.current) {
+      sent.current = []
+      return
     }
+
+    const echo = sent.current.indexOf(text)
+    if (echo !== -1) {
+      sent.current.splice(echo, 1)
+      onSearch(wanted.current)
+      return
+    }
+
+    wanted.current = text
+    sent.current = []
+    setValue(text)
+    // Only `text`: `onSearch` is the one from the render that brought it.
   }, [text])
 
   useEffect(() => () => clearTimeout(timer.current), [])
@@ -105,14 +133,29 @@ export function HeaderSearchBox({
   const commit = (next: string) => {
     clearTimeout(timer.current)
     const query = next.trim()
-    if (query === committed.current) return
-    committed.current = query
+    if (query === wanted.current) return
+    wanted.current = query
+    sent.current.push(query)
     onSearch(query)
+  }
+
+  const schedule = (next: string) => {
+    clearTimeout(timer.current)
+    timer.current = setTimeout(() => commit(next), debounce)
   }
 
   return (
     <div
       className="tpz-th-searchbox"
+      /*
+        A press anywhere in the box but the text keeps the focus where it is.
+        Safari does not focus a button that is clicked, so without this a press
+        on the clear button reads as focus leaving — the box would keep the
+        search and close before the click that was meant to clear it arrived.
+      */
+      onMouseDown={(event) => {
+        if (event.target !== input.current) event.preventDefault()
+      }}
       onBlur={(event) => {
         if (event.currentTarget.contains(event.relatedTarget)) return
         // The window lost focus, not the box: it is still where the person
@@ -126,6 +169,7 @@ export function HeaderSearchBox({
         <Icon name="search" />
       </span>
       <input
+        ref={input}
         type="text"
         role="searchbox"
         className="tpz-th-search-input"
@@ -139,10 +183,22 @@ export function HeaderSearchBox({
         onChange={(event) => {
           const next = event.target.value
           setValue(next)
+          // Half a character is not something to search for.
+          if (!composing.current) schedule(next)
+        }}
+        onCompositionStart={() => {
+          composing.current = true
           clearTimeout(timer.current)
-          timer.current = setTimeout(() => commit(next), debounce)
+        }}
+        onCompositionEnd={(event) => {
+          composing.current = false
+          schedule(event.currentTarget.value)
         }}
         onKeyDown={(event) => {
+          // The Enter that confirms a composed character belongs to the input
+          // method, not to the box. Safari reports it as an ordinary key.
+          if (event.nativeEvent.isComposing || event.keyCode === 229) return
+
           if (event.key === "Enter") {
             /*
               Prevented, or the key carries on to wherever focus lands. Focus
@@ -153,10 +209,17 @@ export function HeaderSearchBox({
             commit(value)
             onClose(true)
           }
+
           if (event.key === "Escape") {
-            // Handled here either way, so a dialog the table sits in does not
-            // close because somebody dismissed a search box.
+            /*
+              Handled here either way, so whatever the table sits in does not
+              close because somebody dismissed a search box. Stopped *and*
+              prevented: a native dialog closes on the key's default action,
+              which stopping its propagation does nothing about.
+            */
             event.stopPropagation()
+            event.preventDefault()
+
             if (value === "") {
               // Emptied by hand a moment ago, perhaps, with the wait still running.
               commit("")

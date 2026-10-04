@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, createEvent, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import axe from "axe-core"
 import { renderToString } from "react-dom/server"
@@ -109,6 +109,23 @@ describe("who gets a magnifier", () => {
   it("nobody at all when the table's filters are switched off, because a search is one", () => {
     setup({ filters: false })
     expect(screen.queryByRole("button", { name: /^Search / })).toBeNull()
+  })
+
+  it("not even a column that asked, when the table's filters are switched off", () => {
+    setup({ filters: false, columns: [{ key: "name", headerSearch: true }] })
+    expect(screen.queryByRole("button", { name: /^Search / })).toBeNull()
+  })
+
+  it("not a column with no heading, which has no name for the box and nothing behind it", () => {
+    setup({
+      columns: [
+        { key: "name" },
+        { key: "actions", header: "", sortable: false, render: ({ row }) => <button type="button">Open {row.name}</button> },
+      ],
+    })
+
+    expect(screen.getAllByRole("button", { name: /^Search / })).toHaveLength(1)
+    expect(header("actions").querySelector(".tpz-th-search")).toBeNull()
   })
 
   it("still everybody when only the column menus are switched off", () => {
@@ -333,6 +350,122 @@ describe("the box", () => {
     hasFocus.mockRestore()
 
     expect(screen.queryByRole("searchbox")).not.toBeNull()
+  })
+})
+
+describe("the fine print of the box", () => {
+  it("keeps the focus in the text when anything else in the box is pressed", async () => {
+    /*
+      Safari does not focus a button that is clicked. Without this, pressing
+      the clear button there reads as focus leaving: the box keeps the search
+      and closes before the click that was meant to clear it arrives.
+    */
+    const user = userEvent.setup()
+    setup()
+    await user.click(trigger("Name"))
+
+    const clear = screen.getByRole("button", { name: "Clear search on Name" })
+    const glass = header("name").querySelector(".tpz-th-searchbox .tpz-th-icon")
+    if (!glass) throw new Error("no magnifier in the box")
+
+    // `fireEvent` answers false when the default was prevented.
+    expect(fireEvent.mouseDown(clear)).toBe(false)
+    expect(fireEvent.mouseDown(glass)).toBe(false)
+    // The text itself is left alone, or the caret could not be placed.
+    expect(fireEvent.mouseDown(box("Name"))).toBe(true)
+  })
+
+  it("prevents Escape as well as stopping it, so a native dialog around the table stays open", async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(trigger("Name"))
+
+    const escape = createEvent.keyDown(box("Name"), { key: "Escape" })
+    fireEvent(box("Name"), escape)
+    expect(escape.defaultPrevented).toBe(true)
+  })
+
+  it("leaves the Enter that confirms a composed character to the input method", async () => {
+    const user = userEvent.setup()
+    setup()
+    await user.click(trigger("Name"))
+
+    // Chrome and Firefox say so; Safari reports an ordinary key with code 229.
+    fireEvent.keyDown(box("Name"), { key: "Enter", isComposing: true })
+    expect(screen.queryByRole("searchbox", { name: "Search Name" })).not.toBeNull()
+
+    fireEvent.keyDown(box("Name"), { key: "Enter", keyCode: 229 })
+    expect(screen.queryByRole("searchbox", { name: "Search Name" })).not.toBeNull()
+
+    fireEvent.keyDown(box("Name"), { key: "Enter" })
+    expect(screen.queryByRole("searchbox", { name: "Search Name" })).toBeNull()
+  })
+
+  it("does not search for half a composed character", () => {
+    vi.useFakeTimers()
+    const onStateChange = vi.fn<(state: TableState) => void>()
+    setup({ headerSearch: { debounce: 50 }, onStateChange })
+
+    act(() => trigger("Name").click())
+    const input = box("Name")
+
+    fireEvent.compositionStart(input)
+    fireEvent.change(input, { target: { value: "z" } })
+    act(() => vi.advanceTimersByTime(200))
+    expect(onStateChange).not.toHaveBeenCalled()
+
+    fireEvent.change(input, { target: { value: "zo" } })
+    fireEvent.compositionEnd(input)
+    act(() => vi.advanceTimersByTime(60))
+    expect(onStateChange.mock.calls.at(-1)?.[0].filters).toEqual([{ key: "name", operator: "contains", value: "zo" }])
+  })
+
+  it("is not undone by a late answer, when the state is held somewhere that answers late", async () => {
+    /*
+      A table whose state lives in a URL hears back after a navigation. Type
+      "ada", empty the box before that answer arrives, and the answer — "ada" —
+      must not be taken as news and put the search back.
+    */
+    const user = userEvent.setup()
+    const onStateChange = vi.fn<(state: TableState) => void>()
+    const props = {
+      data: staff,
+      columns,
+      getRowId: (person: Person) => person.id,
+      pagination: false as const,
+      headerSearch: { debounce: 0 },
+      onStateChange,
+    }
+
+    const none: TableState["filters"] = []
+    const { rerender } = render(<Table {...props} aria-label="Staff" state={{ filters: none }} />)
+
+    await searchFor(user, "Name", "ada")
+    await waitFor(() => expect(onStateChange).toHaveBeenCalled())
+    const asked = onStateChange.mock.calls.at(-1)?.[0].filters ?? []
+    expect(asked).toEqual([{ key: "name", operator: "contains", value: "ada" }])
+
+    // Emptied before the state has caught up.
+    await user.keyboard("{Escape}")
+    expect(box("Name")).toHaveProperty("value", "")
+
+    // Now the late answer arrives.
+    rerender(<Table {...props} aria-label="Staff" state={{ filters: asked }} />)
+
+    // The box does not refill, and the table is told again what is wanted.
+    expect(box("Name")).toHaveProperty("value", "")
+    expect(onStateChange.mock.calls.at(-1)?.[0].filters).toEqual([])
+  })
+
+  it("still follows a change that really did come from outside", async () => {
+    const user = userEvent.setup()
+    const props = { data: staff, columns, getRowId: (person: Person) => person.id, pagination: false as const, headerSearch: true }
+    const { rerender } = render(<Table {...props} aria-label="Staff" state={{ filters: [] }} />)
+
+    await user.click(trigger("Name"))
+    rerender(<Table {...props} aria-label="Staff" state={{ filters: [{ key: "name", operator: "contains", value: "zoe" }] }} />)
+
+    expect(box("Name")).toHaveProperty("value", "zoe")
   })
 })
 
