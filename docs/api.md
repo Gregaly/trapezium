@@ -111,6 +111,7 @@ import { Table } from "@trapezium/react"
 | `formatOptions` | `FormatOptions` | — |
 | `render` | `(context) => ReactNode` | the default renderer |
 | `renderHeader` | `(context) => ReactNode` | the header text | Replaces the header's text; the sort, menu, search and resize controls stay around it. Phrasing content only — it sits inside the sort control, which keeps `header` as its name. |
+| `renderHeaderControls` | `(context) => ReactNode` | — | Controls of your own in the header — a search box, a filter button — after the sort control and before the menu. They can be links, buttons and inputs; a click or press in them never sorts or moves the column. Hidden with the header row in the card layout. |
 | `description` | `string` | — | What the column means: a tooltip on hover or focus, and `aria-describedby` on the header. |
 | `sortable` | `boolean` | the type's |
 | `compare` | `(a, b) => number` | the type's |

@@ -121,7 +121,8 @@ clipboard copy.
 ## Column definition
 
 key (required, supports dotted paths and synthetic ids) · header · description · type · accessor(row) ·
-format(ctx)=>string · formatOptions · render(ctx)=>node · renderHeader(ctx)=>node · sortable ·
+format(ctx)=>string · formatOptions · render(ctx)=>node · renderHeader(ctx)=>node ·
+renderHeaderControls(ctx)=>node · sortable ·
 compare(a,b) · searchable · filter · headerSearch · align · width (held exactly) · minWidth ·
 maxWidth (caps cells too) · grow(number: share of spare width; others keep to content) ·
 pin("start"|"end"|{ side, below?, above? }: frozen only under/over that table width, by a CSS
@@ -136,6 +137,12 @@ validate(value, row)
 (arrow, level), menu and resize handle stay and work. It renders inside the sort button, so return
 phrasing content (text/icons/badges, no links or buttons); the button keeps `header` as its
 accessible name. Rendered on the server in every adapter (Vue: may return a VNode).
+`renderHeaderControls({ column, sort })` puts CONTROLS in the header (a search box, a filter button):
+after the sort button, before the menu, outside the sort button, so links/buttons/inputs are fine.
+They take the header's spare width. A click or press in them never sorts or drags the column.
+React and Vue keep them in place across state changes (an input keeps focus and text); plain JS and
+Svelte: return the SAME node each time to keep it ("" leaves the slot empty). Rendered on the
+server. Hidden with the header row in the cards layout — put a control phones need in the toolbar.
 `description: "…"` shows a tooltip on header hover/focus (Escape hides it) and links the text with
 aria-describedby; a dotted underline marks described headers.
 
@@ -502,7 +509,7 @@ getRowStyle/getRowClass→rowClassName(row, index) · onRowClicked→onRowClick 
 buttons and inputs inside a row are already ignored) · rowHeight→rowHeight · getRowHeight→
 rowHeight:"auto" (the browser measures it; there is nothing to answer) · autoHeight→wrap:true ·
 wrapText→wrap · domLayout→maxHeight · flex→grow · headerTooltip→description ·
-headerComponent→renderHeader · masterDetail/detailCellRenderer/isRowMaster→detail={{ render, canExpand }} ·
+headerComponent→renderHeader (text) / renderHeaderControls (inputs, buttons) · masterDetail/detailCellRenderer/isRowMaster→detail={{ render, canExpand }} ·
 editable/cellEditor/valueParser→editable/renderEditor/parse · onCellValueChanged→onCellEdit ·
 singleClickEdit→editTrigger="click" · ensureIndexVisible/setFocusedCell→focusCell(state, rowId, key) ·
 treeData (one level)→getParentId · pinnedTopRowData/pinnedBottomRowData→pinnedRows={{ top, bottom }} ·

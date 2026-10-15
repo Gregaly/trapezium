@@ -37,6 +37,19 @@ describe("server rendering", () => {
     expect(names).toEqual(["Zoe", "Tom", "Ada"])
   })
 
+  it("renders a column's header controls built with the el helper", () => {
+    const { body } = render(Table, {
+      props: {
+        data: people,
+        columns: [{ key: "name", renderHeaderControls: () => el("button", { type: "button", class: "pick", text: "Pick" }) }],
+        pagination: false,
+      },
+    })
+
+    expect(body).toContain('data-controls="true"')
+    expect(body).toContain('<span class="tpz-th-controls" data-tpz-interactive=""><button type="button" class="pick">Pick</button></span>')
+  })
+
   it("renders a cell built with the el helper", () => {
     const { body } = render(Table, {
       props: {

@@ -4,6 +4,12 @@ Every `@trapezium/*` package is released together at the same version, so this o
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow [semver](https://semver.org/). Before 1.0 a minor version can add to the API but never removes or renames anything without saying so here, with a migration note.
 
+## Unreleased
+
+### Added
+
+- **Header controls.** `renderHeaderControls(context)` on a column puts controls of your own in its header — a search box for the column, a filter button, a toggle — where `renderHeader` can only put text. They are drawn after the sort control and before the column's menu, outside the sort control, so they can be links, buttons and inputs, and they take the header's spare width while the text keeps to its own. A click, a key or a press in them never sorts the column or picks it up to move it: pressing in one turns the header's dragging off until the press ends, so text typed in a box can be selected. Called again as the state changes, with the column's current `sort`; React and Vue keep the controls in place, so an input keeps its focus and text while it changes the table, and in plain JavaScript and Svelte returning the same node does the same. Rendered on the server in every adapter; in Vue it may return a VNode. Hidden with the header row in the card layout. The header carries `data-controls="true"` and the slot is `.tpz-th-controls`. See [docs/rendering.md](docs/rendering.md#controls-in-a-header).
+
 ## 0.4.0 — 2026-10-15
 
 ### Added

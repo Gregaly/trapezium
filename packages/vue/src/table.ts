@@ -60,12 +60,21 @@ import type {
  * reactive like any other template.
  */
 
-export type VueColumn<TRow extends AnyRow = AnyRow> = Omit<ColumnDef<TRow, unknown>, "render" | "renderHeader" | "renderEditor"> & {
+export type VueColumn<TRow extends AnyRow = AnyRow> = Omit<
+  ColumnDef<TRow, unknown>,
+  "render" | "renderHeader" | "renderHeaderControls" | "renderEditor"
+> & {
   render?: (context: CellContext<TRow, unknown>) => VNode | Node | string
   /** Your own editor for the column's cells — a VNode, so it can be a real component. */
   renderEditor?: (context: EditorContext<TRow, unknown>) => VNode | Node | string
   /** The header's text, drawn your way — a VNode, inside the sort control, so phrasing content only. */
   renderHeader?: (context: HeaderContext<TRow, unknown>) => VNode | Node | string
+  /**
+   * Controls of your own in the header, beside its text — a VNode, so a real
+   * component: a search box, a filter button. Patched in place as the table
+   * changes, so an input keeps its focus and what was typed.
+   */
+  renderHeaderControls?: (context: HeaderContext<TRow, unknown>) => VNode | Node | string
 }
 
 /** Detail rows, with a renderer that may return a VNode — a real component, below its row. */
@@ -269,10 +278,33 @@ export const Table = defineComponent({
     */
     let mounted: HTMLElement[] = []
 
+    /*
+      Header controls, one container per column, made once and patched each
+      time the table asks again: a fresh container on every change of state
+      would be a fresh input, and the person typing in it would lose their
+      place. `display: contents`, so the controls lay out in the header's slot
+      as if the container were not there.
+    */
+    const headerControls = new Map<string, HTMLElement>()
+
+    const toHeaderControls = (key: string, result: VNode | Node | string): Node | string => {
+      if (!isVNode(result)) return result
+      let container = headerControls.get(key)
+      if (!container) {
+        container = document.createElement("span")
+        container.style.display = "contents"
+        headerControls.set(key, container)
+      }
+      renderVNode(result, container)
+      return container
+    }
+
     /** Everything, for when the component itself is going away. */
     const releaseVNodes = () => {
       for (const container of mounted) renderVNode(null, container)
       mounted = []
+      for (const container of headerControls.values()) renderVNode(null, container)
+      headerControls.clear()
     }
 
     /*
@@ -312,6 +344,12 @@ export const Table = defineComponent({
         else renderVNode(null, container)
       }
       mounted = kept
+      // A column no longer shown takes its controls with it; shown again, it gets new ones.
+      for (const [key, container] of headerControls) {
+        if (container.isConnected) continue
+        renderVNode(null, container)
+        headerControls.delete(key)
+      }
     }
 
     /** Wraps the caller's renderers so a VNode becomes a real DOM node. */
@@ -326,14 +364,22 @@ export const Table = defineComponent({
 
     const adaptColumns = () =>
       props.columns?.map((column) => {
-        if (typeof column === "string" || (!column.render && !column.renderEditor && !column.renderHeader)) return column
-        const { render, renderEditor, renderHeader } = column
+        if (
+          typeof column === "string" ||
+          (!column.render && !column.renderEditor && !column.renderHeader && !column.renderHeaderControls)
+        )
+          return column
+        const { render, renderEditor, renderHeader, renderHeaderControls } = column
 
         return {
           ...column,
           render: render ? (context: CellContext<AnyRow, unknown>) => toNode(render(context)) : undefined,
           renderEditor: renderEditor ? (context: EditorContext<AnyRow, unknown>) => toNode(renderEditor(context)) : undefined,
           renderHeader: renderHeader ? (context: HeaderContext<AnyRow, unknown>) => toNode(renderHeader(context)) : undefined,
+          renderHeaderControls: renderHeaderControls
+            ? (context: HeaderContext<AnyRow, unknown>) =>
+                toHeaderControls(context.column.key, renderHeaderControls(context))
+            : undefined,
         }
       })
 
@@ -441,8 +487,9 @@ export const Table = defineComponent({
       renderToTree(() => ({
         ...options(),
         columns: props.columns?.map((column) => {
-          if (typeof column === "string" || (!column.render && !column.renderHeader)) return column
-          const { render, renderHeader } = column
+          if (typeof column === "string" || (!column.render && !column.renderHeader && !column.renderHeaderControls))
+            return column
+          const { render, renderHeader, renderHeaderControls } = column
           /** A VNode as a marker in the server tree, to be filled with it when the tree becomes VNodes. */
           const mark = (result: VNode) => {
             const key = String(cellVNodes.size)
@@ -462,6 +509,13 @@ export const Table = defineComponent({
               ? (context: HeaderContext<AnyRow, unknown>) => {
                   const result = renderHeader(context)
                   if (!isVNode(result)) return typeof result === "string" ? result : context.column.header
+                  return mark(result)
+                }
+              : undefined,
+            renderHeaderControls: renderHeaderControls
+              ? (context: HeaderContext<AnyRow, unknown>) => {
+                  const result = renderHeaderControls(context)
+                  if (!isVNode(result)) return typeof result === "string" ? result : ""
                   return mark(result)
                 }
               : undefined,

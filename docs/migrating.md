@@ -61,7 +61,7 @@ The biggest difference: TanStack's state is several objects, Trapezium's is one.
 | `flex` | `grow` |
 | `width` on a column | `width`, held exactly |
 | `headerTooltip` | `description` |
-| `headerComponent` | `renderHeader` |
+| `headerComponent` | `renderHeader` for the text; `renderHeaderControls` for a search box or a button beside it |
 | `masterDetail`, `detailCellRenderer`, `isRowMaster` | `detail={{ render, canExpand }}` |
 | `editable`, `cellEditor`, `valueParser` | `editable`, `renderEditor`, `parse` (and `validate`) |
 | `onCellValueChanged` | `onCellEdit` — the table never changes `data`; a returned promise shows the cell saving |

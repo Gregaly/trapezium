@@ -34,7 +34,7 @@ import type {
  * never has to write the generic themselves.
  */
 
-/** A column, with React nodes for `render` and `renderHeader`. */
+/** A column, with React nodes for `render`, `renderHeader` and `renderHeaderControls`. */
 export type Column<TRow = AnyRow> = ColumnDef<TRow, ReactNode>
 
 /** A column definition, or just the key of one. */

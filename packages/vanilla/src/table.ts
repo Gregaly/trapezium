@@ -2693,6 +2693,8 @@ export function createTable<TRow extends AnyRow>(
     link: boolean
     /** The magnifier, on a column that can be searched from its header. */
     search: HTMLElement | undefined
+    /** The slot for the column's own controls, on a column with `renderHeaderControls`. */
+    controls: HTMLElement | undefined
   }
 
   /** The header cell on screen for each column, by key. */
@@ -2912,6 +2914,7 @@ export function createTable<TRow extends AnyRow>(
       settings.filters !== false && column.headerSearch,
       column.description ?? null,
       Boolean(column.renderHeader),
+      Boolean(column.renderHeaderControls),
     ])
   }
 
@@ -3055,6 +3058,41 @@ export function createTable<TRow extends AnyRow>(
     }
     inner.append(label)
 
+    /*
+      The column's own controls, outside the sort control so they can be
+      controls, and marked interactive so nothing of the table's reads a click
+      in them as its own. Filled by `syncHeaderCell`, which hands the renderer
+      the sort as it stands and keeps a node it is given back.
+
+      A press in them turns the header's dragging off until it is released:
+      the whole header is the handle for moving the column, and a draggable
+      ancestor takes the mouse away from a text box — the reason the header
+      search does the same.
+    */
+    let controls: HTMLElement | undefined
+    if (column.renderHeaderControls) {
+      const slot = el("span", { class: "tpz-th-controls", "data-tpz-interactive": "" })
+      slot.addEventListener("pointerdown", () => {
+        if (!cell.draggable) return
+        cell.draggable = false
+        const release = () => {
+          if (headerSearch?.cell !== cell) cell.draggable = reorderable
+          window.removeEventListener("pointerup", release)
+          window.removeEventListener("pointercancel", release)
+        }
+        window.addEventListener("pointerup", release)
+        window.addEventListener("pointercancel", release)
+      })
+      // A backstop for a drag the browser starts before the header has
+      // stopped being draggable.
+      slot.addEventListener("dragstart", (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      })
+      inner.append(slot)
+      controls = slot
+    }
+
     if (settings.columnMenu !== false) {
       const trigger = el(
         "button",
@@ -3110,7 +3148,7 @@ export function createTable<TRow extends AnyRow>(
       })
     }
 
-    headerParts.set(cell, { signature: headerSignature(column, columns, cls), label, link, search })
+    headerParts.set(cell, { signature: headerSignature(column, columns, cls), label, link, search, controls })
     syncHeaderCell(cell, column)
     return cell
   }
@@ -3161,6 +3199,32 @@ export function createTable<TRow extends AnyRow>(
     if (labelText) {
       const drawn = column.renderHeader ? column.renderHeader({ column, sort }) : column.header
       labelText.replaceChildren(typeof drawn === "string" ? text(drawn) : drawn)
+    }
+
+    /*
+      The column's own controls, drawn for the sort as it now stands. A node
+      already in the slot is left exactly where it is — that is what keeps a
+      control's focus, and what was typed in it, while the table changes
+      around it — so a renderer that hands back the same node keeps its
+      control. Nothing to draw empties the slot, and the text has the header.
+    */
+    if (parts.controls && column.renderHeaderControls) {
+      const drawn = column.renderHeaderControls({ column, sort })
+      const slot = parts.controls
+      // A renderer may hand back nothing at all, whatever its type says.
+      if (!drawn) {
+        slot.replaceChildren()
+        slot.setAttribute("hidden", "")
+        delete cell.dataset["controls"]
+      } else {
+        slot.removeAttribute("hidden")
+        cell.dataset["controls"] = "true"
+        if (typeof drawn === "string") {
+          if (slot.childNodes.length !== 1 || slot.textContent !== drawn) slot.replaceChildren(text(drawn))
+        } else if (slot.childNodes.length !== 1 || slot.firstChild !== drawn) {
+          slot.replaceChildren(drawn)
+        }
+      }
     }
 
     if (parts.link && settings.buildHref) {

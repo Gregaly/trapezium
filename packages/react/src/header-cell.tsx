@@ -163,6 +163,29 @@ export function HeaderCell<TRow extends AnyRow>({
   const reorderable = features.reorderable && column.reorderable !== false && !column.pin
 
   /*
+    The column's own controls, when it has some (`renderHeaderControls`), given
+    the sort as it now stands. A press in one turns the header's dragging off
+    until it is released: the whole header is the handle for moving the column,
+    and a draggable ancestor takes the mouse away from a text box, so selecting
+    what was typed would pick the column up instead — the reason the header
+    search does the same.
+  */
+  const drawnControls = column.renderHeaderControls?.({ column, sort })
+  // Nothing to draw is no slot at all, so the text keeps the header as before.
+  const controls = drawnControls === false || drawnControls === "" ? null : drawnControls
+  const [controlsHeld, setControlsHeld] = useState(false)
+  useEffect(() => {
+    if (!controlsHeld) return
+    const release = () => setControlsHeld(false)
+    window.addEventListener("pointerup", release)
+    window.addEventListener("pointercancel", release)
+    return () => {
+      window.removeEventListener("pointerup", release)
+      window.removeEventListener("pointercancel", release)
+    }
+  }, [controlsHeld])
+
+  /*
     A header search is a filter, so the table's `filters` switch governs it
     too. Whether the box is open is this header's own business — nothing else
     in the table needs to know — and it is never open on a server, so the
@@ -268,6 +291,7 @@ export function HeaderCell<TRow extends AnyRow>({
       data-drop={dropEdge}
       data-searching={searching && searchable ? "true" : undefined}
       data-described={description ? "true" : undefined}
+      data-controls={controls != null ? "true" : undefined}
       aria-describedby={describedBy}
       onMouseEnter={description ? () => showTooltip(400) : undefined}
       onMouseLeave={description ? hideTooltip : undefined}
@@ -276,7 +300,7 @@ export function HeaderCell<TRow extends AnyRow>({
       onKeyDown={description ? (event) => event.key === "Escape" && hideTooltip() : undefined}
       // A draggable ancestor takes the mouse away from a text box: dragging to
       // select what was typed would pick the column up instead.
-      draggable={reorderable && !searching}
+      draggable={reorderable && !searching && !controlsHeld}
       aria-sort={sort ? (sort.direction === "asc" ? "ascending" : "descending") : "none"}
       style={{
         ...style,
@@ -429,6 +453,29 @@ export function HeaderCell<TRow extends AnyRow>({
               {description}
             </div>
           </Popup>
+        )}
+
+        {/*
+          The column's own controls, outside the sort control so they can be
+          controls. Marked interactive, so nothing of the table's reads a click
+          in them as its own.
+        */}
+        {controls != null && (
+          <span
+            className="tpz-th-controls"
+            data-tpz-interactive=""
+            onPointerDown={() => {
+              if (reorderable) setControlsHeld(true)
+            }}
+            // A backstop for a drag the browser starts before the header has
+            // stopped being draggable.
+            onDragStart={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+            }}
+          >
+            {controls}
+          </span>
         )}
 
         {features.menu && (

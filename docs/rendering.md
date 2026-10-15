@@ -124,6 +124,28 @@ import Link from "next/link"
 
 `renderHeader` replaces the header's text and nothing else. The type icon (or the search magnifier), the sort control with its arrow and level, the column's menu and the resize handle all stay around it and keep working, and it is given the column's current `sort` so it can follow it. It is drawn inside the sort control, so return phrasing content — text, icons, a badge — and not a link or a button. The control is still named by `header`, so a screen reader hears "Amount" whatever the renderer draws. Every adapter renders it on the server too; in Vue it may return a VNode.
 
+### Controls in a header
+
+```tsx
+{
+  key: "family",
+  renderHeaderControls: () => (
+    <>
+      <input aria-label="Search families" value={search} onChange={(event) => setSearch(event.target.value)} />
+      <BadgePicker />
+    </>
+  ),
+}
+```
+
+`renderHeaderControls` puts controls of your own in the header — a search box for the column, a filter button, a toggle — where `renderHeader` can only put text. They are drawn after the sort control and before the column's menu, outside the sort control, so they can be links, buttons and inputs. When a column has them, they take the header's spare width and the text keeps to its own.
+
+A click, a key or a press in them is theirs alone: it never sorts the column, and never picks the column up to move it — pressing in a text box turns the header's dragging off until the press ends, so what was typed can be selected. Nothing the table does with a click reads one in them as its own.
+
+The renderer is called again as the state changes, given the column's current `sort`. React and Vue keep what they rendered in place, so an input keeps its focus and its text while what it types changes the table (in Vue it may return a VNode, patched in place). In plain JavaScript and Svelte, return the same node each time to keep a control; a different node replaces it, and `""` or nothing leaves the slot empty. Every adapter renders the controls on the server too.
+
+The header row is hidden in the card layout, and the controls with it — a control a phone must reach belongs in the toolbar.
+
 ### A description
 
 ```tsx

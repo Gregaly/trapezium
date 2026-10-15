@@ -48,3 +48,40 @@ describe("header renderers in Vue", () => {
     expect(html).toContain('id="items-desc-amount"')
   })
 })
+
+describe("header controls in Vue", () => {
+  const Search = defineComponent({
+    setup: () => () => h("input", { class: "search", "aria-label": "Search names" }),
+  })
+  const withControls: VueColumn[] = [{ key: "name", renderHeaderControls: () => h(Search) }, { key: "amount" }]
+
+  it("renders a component as the controls, and patches it in place as the table changes", async () => {
+    host = document.createElement("div")
+    document.body.append(host)
+    const app = createApp(defineComponent(() => () => h(Table, { data: items, columns: withControls })))
+    app.mount(host)
+    unmount = () => app.unmount()
+    await nextTick()
+
+    const input = host.querySelector<HTMLInputElement>('th[data-key="name"] .tpz-th-controls input.search')
+    expect(input).toBeTruthy()
+    input?.focus()
+    if (input) input.value = "buc"
+
+    // A change of state: a sort on another column.
+    host.querySelector<HTMLButtonElement>('th[data-key="amount"] .tpz-th-button')?.click()
+    await nextTick()
+
+    expect(host.querySelector('th[data-key="amount"]')?.getAttribute("aria-sort")).toBe("ascending")
+    expect(host.querySelector('th[data-key="name"] .tpz-th-controls input.search')).toBe(input)
+    expect(document.activeElement).toBe(input)
+    expect(input?.value).toBe("buc")
+  })
+
+  it("renders them on a server", async () => {
+    const html = await renderToString(createSSRApp(defineComponent(() => () => h(Table, { data: items, columns: withControls }))))
+    expect(html).toContain('class="tpz-th-controls"')
+    expect(html).toContain('class="search"')
+    expect(html).toContain('data-controls="true"')
+  })
+})

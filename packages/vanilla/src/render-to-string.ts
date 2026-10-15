@@ -63,8 +63,8 @@ function serialisable<TRow extends AnyRow>(options: TableOptions<TRow>): TableOp
   }
 
   copy.columns = options.columns?.map((column) => {
-    if (typeof column === "string" || (!column.render && !column.renderHeader)) return column
-    const { render, renderHeader } = column
+    if (typeof column === "string" || (!column.render && !column.renderHeader && !column.renderHeaderControls)) return column
+    const { render, renderHeader, renderHeaderControls } = column
     return {
       ...column,
       render: render
@@ -87,6 +87,18 @@ function serialisable<TRow extends AnyRow>(options: TableOptions<TRow>): TableOp
               return typeof result === "string" || result instanceof ServerNode ? result : context.column.header
             } catch {
               return context.column.header
+            }
+          }
+        : undefined,
+      // And header controls: what a server cannot draw is no controls, and the
+      // browser draws them when the table is created there.
+      renderHeaderControls: renderHeaderControls
+        ? (context: HeaderContext<TRow, Node | string>) => {
+            try {
+              const result = renderHeaderControls(context)
+              return typeof result === "string" || result instanceof ServerNode ? result : ""
+            } catch {
+              return ""
             }
           }
         : undefined,

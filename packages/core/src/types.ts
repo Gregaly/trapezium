@@ -386,6 +386,26 @@ export type ColumnDef<TRow = AnyRow, TNode = unknown> = {
   renderHeader?: (context: HeaderContext<TRow, TNode>) => TNode
 
   /**
+   * Controls of your own in the header, beside its text — a search box for the
+   * column, a filter button, a toggle. Drawn after the sort control and before
+   * the column's menu, outside the sort control, so they may be links, buttons
+   * and inputs. When a column has them they take the header's spare width and
+   * the text keeps to its own.
+   *
+   * A click, a key or a press in them is theirs alone: it never sorts the
+   * column, never picks the column up to move it, and never reaches a row.
+   * They are rendered on the server like the rest of the header. The header
+   * row is hidden in the card layout, and these with it — a control a phone
+   * must reach belongs in the toolbar.
+   *
+   * Called again as the table's state changes, with the column's current
+   * sort. React and Vue keep what they rendered in place. In plain JavaScript
+   * and Svelte, return the same node each time to keep a control's focus and
+   * what was typed in it; a different node replaces it.
+   */
+  renderHeaderControls?: (context: HeaderContext<TRow, TNode>) => TNode
+
+  /**
    * What the column means, for anyone who is not sure — "Days since the
    * invoice was due", "Excludes tax". Shown as a tooltip while the header is
    * hovered or has the keyboard, linked to the header with `aria-describedby`

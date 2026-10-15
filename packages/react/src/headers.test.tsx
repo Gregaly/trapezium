@@ -1,9 +1,11 @@
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import axe from "axe-core"
 import { hydrateRoot } from "react-dom/client"
 import { renderToString } from "react-dom/server"
 import { afterEach, describe, expect, it, vi } from "vitest"
+
+import { useState } from "react"
 
 import { Table } from "./table.js"
 
@@ -96,6 +98,122 @@ describe("description", () => {
 
   it("passes the automated accessibility checks", async () => {
     const { container } = render(<Table data={items} columns={[{ key: "amount", description: "Excludes tax" }, "name"]} />)
+    const results = await axe.run(container, { rules: { "color-contrast": { enabled: false }, region: { enabled: false } } })
+    expect(results.violations.map((violation) => violation.id)).toEqual([])
+  })
+})
+
+describe("renderHeaderControls", () => {
+  const header = (key: string) => document.querySelector<HTMLTableCellElement>(`th[data-key="${key}"]`)
+
+  it("draws controls beside the text, outside the sort control and before the menu", () => {
+    render(
+      <Table
+        data={items}
+        columns={[
+          { key: "name", renderHeaderControls: () => <button type="button">Pick</button> },
+          "amount",
+        ]}
+      />,
+    )
+    const cell = header("name")
+    const controls = cell?.querySelector(".tpz-th-controls")
+    expect(controls?.contains(screen.getByRole("button", { name: "Pick" }))).toBe(true)
+    expect(cell?.querySelector(".tpz-th-button")?.contains(controls ?? null)).toBe(false)
+    // In the header's row, after the sort control and before the menu.
+    const order = [...(cell?.querySelector(".tpz-th-inner")?.children ?? [])].map((child) => child.className)
+    expect(order.indexOf("tpz-th-controls")).toBeGreaterThan(order.indexOf("tpz-th-button"))
+    expect(order.indexOf("tpz-th-controls")).toBeLessThan(order.indexOf("tpz-th-menu"))
+    expect(cell?.dataset["controls"]).toBe("true")
+    expect(header("amount")?.dataset["controls"]).toBeUndefined()
+  })
+
+  it("never sorts the column from a click in them", async () => {
+    const user = userEvent.setup()
+    render(
+      <Table data={items} columns={[{ key: "name", renderHeaderControls: () => <button type="button">Pick</button> }]} />,
+    )
+    await user.click(screen.getByRole("button", { name: "Pick" }))
+    expect(header("name")?.getAttribute("aria-sort")).toBe("none")
+  })
+
+  it("keeps an input's focus and text while what it types changes the table", async () => {
+    const user = userEvent.setup()
+    function Searchable() {
+      const [search, setSearch] = useState("")
+      return (
+        <Table
+          data={items}
+          state={{ search }}
+          onStateChange={(next) => setSearch(next.search)}
+          columns={[
+            {
+              key: "name",
+              renderHeaderControls: () => (
+                <input aria-label="Search names" value={search} onChange={(event) => setSearch(event.target.value)} />
+              ),
+            },
+          ]}
+        />
+      )
+    }
+    render(<Searchable />)
+    const input = screen.getByRole("textbox", { name: "Search names" })
+    await user.type(input, "buc")
+
+    expect(document.activeElement).toBe(input)
+    expect((input as HTMLInputElement).value).toBe("buc")
+    expect(document.querySelectorAll(".tpz-tbody .tpz-tr")).toHaveLength(1)
+  })
+
+  it("stops the header being a handle while a control is pressed, so text can be selected", () => {
+    render(
+      <Table data={items} columns={[{ key: "name", renderHeaderControls: () => <input aria-label="Search names" /> }]} />,
+    )
+    expect(header("name")?.draggable).toBe(true)
+    // jsdom has no PointerEvent; the type is what the handlers listen for.
+    fireEvent.pointerDown(screen.getByRole("textbox", { name: "Search names" }))
+    expect(header("name")?.draggable).toBe(false)
+    act(() => {
+      window.dispatchEvent(new Event("pointerup"))
+    })
+    expect(header("name")?.draggable).toBe(true)
+  })
+
+  it("draws no slot when there is nothing to draw", () => {
+    render(<Table data={items} columns={[{ key: "name", renderHeaderControls: () => null }]} />)
+    expect(header("name")?.querySelector(".tpz-th-controls")).toBeNull()
+    expect(header("name")?.dataset["controls"]).toBeUndefined()
+  })
+
+  it("is rendered on a server, and hydrates", () => {
+    const element = (
+      <Table data={items} columns={[{ key: "name", renderHeaderControls: () => <button type="button">Pick</button> }]} />
+    )
+    const html = renderToString(element)
+    expect(html).toContain('<button type="button">Pick</button>')
+    expect(html).toContain('data-controls="true"')
+
+    const container = document.createElement("div")
+    container.innerHTML = html
+    document.body.append(container)
+    const problems: unknown[] = []
+    const spy = vi.spyOn(console, "error").mockImplementation((...args) => problems.push(args))
+    act(() => {
+      hydrateRoot(container, element)
+    })
+    spy.mockRestore()
+    expect(problems).toEqual([])
+    container.remove()
+  })
+
+  it("passes the automated accessibility checks", async () => {
+    const { container } = render(
+      <Table
+        data={items}
+        columns={[{ key: "name", renderHeaderControls: () => <input aria-label="Search names" /> }, "amount"]}
+      />,
+    )
     const results = await axe.run(container, { rules: { "color-contrast": { enabled: false }, region: { enabled: false } } })
     expect(results.violations.map((violation) => violation.id)).toEqual([])
   })

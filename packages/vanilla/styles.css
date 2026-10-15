@@ -656,6 +656,27 @@
   white-space: nowrap;
 }
 
+/*
+  A column's own controls (`renderHeaderControls`): between the sort control
+  and the menu, taking the header's spare width while the text keeps to its
+  own. Not a handle for moving the column, so not its grab cursor, and not
+  the header's weight — a search box's text is ordinary text.
+*/
+.tpz-th-controls {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 0.25rem;
+  padding-inline-end: 0.25rem;
+  cursor: auto;
+  font-weight: 400;
+}
+
+.tpz-th[data-controls="true"] .tpz-th-button {
+  flex: 0 1 auto;
+}
+
 .tpz-th-marker {
   flex: none;
   opacity: 0.85;
